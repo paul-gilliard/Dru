@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Suivi statistiques{% endblock %}
+{% block content %}
+<h2>Suivi statistiques</h2>
+
+<!-- {% include 'coach_nav.html' %} -->
+
+<div class="card">
+  <h3>Sélection athlete</h3>
+  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <select id="stats-athlete-select">
+      <option value="">— choisir un athlete —</option>
+      {% for a in athletes %}
+      <option value="{{ a.id }}">{{ a.username }}</option>
+      {% endfor %}
+    </select>
+
+    <label style="display:flex; align-items:center; gap:8px; margin-left:12px;">
+      <input id="toggle-kcals" type="checkbox" checked> Kcals
+    </label>
+    <label style="display:flex; align-items:center; gap:8px;">
+      <input id="toggle-water" type="checkbox" checked> Eau
+    </label>
+    <label style="display:flex; align-items:center; gap:8px;">
+      <input id="toggle-sleep" type="checkbox"> Sommeil
+    </label>
+  </div>
+</div>
+
+<div class="card" style="margin-top:12px;">
+  <h3>Poids & journaux</h3>
+  <canvas id="chart-journal" height="160"></canvas>
+</div>
+
+<div class="card" style="margin-top:12px;">
+  <h3>Performances par exercice</h3>
+  <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+    <select id="stats-exercise-select">
+      <option value="">— choisir un exercice —</option>
+    </select>
+    <button id="clear-exercise" type="button" class="secondary">Effacer</button>
+  </div>
+  <canvas id="chart-performance" height="160"></canvas>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='js/coach_stats.js') }}"></script>
+{% endblock %}

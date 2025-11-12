@@ -1,0 +1,572 @@
+/* Reset / base */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #app { height: 100%; }
+body {
+  font-family: Inter, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #f6f7fb;
+  color: #17202a;
+  line-height: 1.45;
+  padding: 0;
+  margin: 0;
+}
+
+/* Layout */
+nav {
+  background: #ffffffcc;
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+nav ul {
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 16px;
+  list-style: none;
+}
+nav li { list-style: none; }
+nav a {
+  display: inline-block;
+  color: #0f172a;
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: background .15s ease, color .15s ease, transform .05s ease;
+}
+nav a:hover { background: rgba(15,23,42,0.06); transform: translateY(-1px); }
+
+/* Container */
+.container {
+  max-width: 1100px;
+  margin: 24px auto;
+  padding: 0 16px;
+}
+
+/* Cards */
+.card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(16,24,40,0.06);
+  padding: 18px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(15,23,42,0.04);
+}
+
+/* Forms */
+form div { margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+label { font-size: 0.9rem; color: #334155; }
+input[type="text"], input[type="password"], select, textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(15,23,42,0.08);
+  background: #fbfdff;
+  font-size: 0.95rem;
+  color: #0f172a;
+  transition: box-shadow .12s ease, border-color .12s ease;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: rgba(59,130,246,0.9);
+  box-shadow: 0 4px 18px rgba(59,130,246,0.08);
+}
+button {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(90deg,#2563eb,#4f46e5);
+  color: #fff;
+  font-weight: 700;
+  transition: transform .08s ease, box-shadow .12s ease, opacity .12s ease;
+}
+button:active { transform: translateY(1px); }
+button.secondary {
+  background: #eef2ff;
+  color: #3730a3;
+  font-weight: 600;
+}
+
+/* Table */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+thead th {
+  text-align: left;
+  padding: 10px 12px;
+  color: #0f172a;
+  font-weight: 700;
+  border-bottom: 1px solid rgba(15,23,42,0.06);
+}
+tbody td {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(15,23,42,0.04);
+  color: #111827;
+}
+tr:hover td { background: rgba(15,23,42,0.02); }
+
+/* Flash messages */
+.flashes {
+  list-style: none;
+  margin: 0 0 14px 0;
+  padding: 0;
+}
+.flashes li {
+  display: inline-block;
+  background: #fff7ed;
+  border: 1px solid rgba(245,166,35,0.2);
+  color: #92400e;
+  padding: 8px 12px;
+  border-radius: 10px;
+  margin-right: 8px;
+  font-weight: 600;
+}
+
+/* Header / Titles */
+h2 { margin-bottom: 14px; color: #0f172a; }
+h3 { margin-bottom: 10px; color: #0f172a; }
+
+/* Responsive layout for coach page: form + list side-by-side on wide screens */
+.coach-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 18px;
+}
+@media (min-width: 900px) {
+  .coach-grid { grid-template-columns: 360px 1fr; align-items: start; }
+}
+
+/* Small helpers */
+.meta { color: #616e7c; font-size: .9rem; }
+.kv { display:flex; gap:8px; align-items:center; }
+
+/* Footer spacing */
+footer { margin-top: 36px; padding: 24px 0; color: #68707a; text-align: center; }
+
+/* Accessibility: focus */
+a:focus, button:focus, input:focus, select:focus { box-shadow: 0 0 0 4px rgba(59,130,246,0.12); }
+
+/* Mobile nav: wrap links */
+@media (max-width: 600px) {
+  nav ul { flex-wrap: wrap; gap: 8px; padding: 10px; justify-content: center; }
+  nav a { padding: 8px 10px; font-size: .95rem; }
+  .container { margin-top: 12px; }
+  table thead { display: none; }
+  tbody td { display: block; width: 100%; padding: 10px 12px; }
+  tbody tr { margin-bottom: 12px; display: block; border-radius: 10px; background: #fff; box-shadow: 0 6px 14px rgba(16,24,40,0.04); }
+  tbody tr td { border-bottom: none; }
+}
+
+/* subtle utility classes */
+.text-muted { color: #68707a; font-size: .9rem; }
+.center { text-align:center; }
+
+/* Spécifique à l'éditeur de programme : lignes alternées et cards plus grandes */
+.programming-edit .day-row {
+  padding: 22px;
+  min-height: 320px;
+  box-shadow: none;
+  border: 1px solid rgba(15,23,42,0.04);
+  border-left: 4px solid transparent;
+}
+
+.programming-edit .day-row:nth-child(even) {
+  background: #eef9ff; /* teinte claire mais visible */
+  border-left-color: rgba(11,99,214,0.12); /* accent gauche */
+}
+
+.programming-edit .day-row:nth-child(odd) {
+  background: #ffffff;
+  border-left-color: rgba(15,23,42,0.02);
+}
+
+/* zone du tableau moins scrollable : augmente la limite */
+.programming-edit .table-wrap {
+  max-height: 800px; /* augmenté (anciennement 420px) pour réduire le scroll */
+  overflow: auto;
+  padding-right: 6px;
+}
+
+/* inputs dans l'éditeur */
+.programming-edit input[type="text"], .programming-edit input[type="number"] {
+  font-size: 0.95rem;
+  padding: 6px 8px;
+}
+
+/* bouton ajouter/supprimer alignés */
+.programming-edit .add-row, .programming-edit .remove-row {
+  border-radius: 8px;
+}
+
+/* Card full width on programming edit: break out of centered container (full-bleed) */
+.programming-edit-root {
+  width: 100vw;
+  max-width: 100vw;
+  box-sizing: border-box;
+  padding-left: 24px;
+  padding-right: 24px;
+  margin-left: calc(50% - 50vw); /* centre puis étend sur toute la largeur viewport */
+  margin-right: calc(50% - 50vw);
+  background: transparent;
+}
+
+/* Optionnel: augmenter l'espace interne de la grande card pour confort */
+.programming-edit-root > form {
+  max-width: 1400px; /* limite la largeur du contenu si écran très large */
+  margin: 0 auto;
+}
+
+/* Bouton Enregistrer plus visible */
+.save-program-btn {
+  background: linear-gradient(180deg, #ff6b35 0%, #e14f1a 100%); /* couleur chaude qui ressort */
+  color: #fff;
+  border: none;
+  padding: 14px 26px;
+  border-radius: 12px;
+  font-weight: 800;
+  font-size: 1.06rem;
+  min-width: 260px;
+  box-shadow: 0 10px 30px rgba(225,79,26,0.22);
+  cursor: pointer;
+  display: inline-block;
+  transition: transform .08s ease, box-shadow .08s ease, filter .08s ease;
+}
+.save-program-btn:hover {
+  transform: translateY(-3px);
+  filter: brightness(0.98);
+  box-shadow: 0 14px 36px rgba(225,79,26,0.28);
+}
+.save-program-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 6px 18px rgba(225,79,26,0.18);
+}
+
+/* Responsive : bouton occupe toute la largeur sur petits écrans pour bien le voir */
+@media (max-width: 720px) {
+  .save-program-btn {
+    width: 100%;
+    min-width: 0;
+    padding: 14px 16px;
+    font-size: 1rem;
+  }
+}
+
+/* Floating actions (left side) */
+.floating-actions {
+  position: fixed;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 1100;
+  pointer-events: auto;
+}
+
+/* Make floating buttons smaller but visible */
+.floating-actions .save-program-btn {
+  padding: 10px 14px;
+  min-width: 160px;
+  font-size: 0.98rem;
+  border-radius: 10px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+}
+
+/* cancel button style */
+.floating-actions .cancel-btn {
+  background: #f3f4f6;
+  color: #111827;
+  border: 1px solid rgba(15,23,42,0.06);
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  min-width: 160px;
+}
+
+/* spacing and layout for actions in program list */
+.action-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px; /* espace entre Éditer et Supprimer */
+}
+.action-group .edit-btn {
+  color: #0b63d6;
+  font-weight:700;
+  text-decoration: none;
+}
+.action-group .delete-btn {
+  background: #fff;
+  border: 1px solid rgba(15,23,42,0.06);
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight:700;
+}
+
+/* confirmation modal styles (matching other modal styles) */
+.confirm-modal { display:none; position:fixed; inset:0; z-index:1200; align-items:center; justify-content:center; }
+.confirm-modal[aria-hidden="false"] { display:flex; }
+.confirm-modal-backdrop { position:absolute; inset:0; background:rgba(0,0,0,0.35); }
+.confirm-modal-panel { position:relative; background:#fff; border-radius:10px; padding:16px; width:460px; max-width:94%; box-shadow:0 18px 40px rgba(0,0,0,0.3); z-index:2; }
+.confirm-modal-body { margin-bottom:12px; font-size:1rem; color:#0f172a; }
+.confirm-modal-actions { display:flex; gap:10px; justify-content:flex-end; }
+.confirm-yes { background:#ef4444; color:#fff; padding:8px 14px; border-radius:8px; border:none; cursor:pointer; font-weight:700; }
+.confirm-no { background:#e5e7eb; color:#111827; padding:8px 12px; border-radius:8px; border:none; cursor:pointer; font-weight:700; }
+
+/* ensure floating actions not obstruct form on small screens: move to bottom on narrow viewports */
+@media (max-width:720px) {
+  .floating-actions { left: 50%; bottom: 12px; top: auto; transform: translateX(-50%); flex-direction: row; }
+  .floating-actions .save-program-btn, .floating-actions .cancel-btn { min-width: 120px; font-size: 0.95rem; }
+}
+
+/* compact responsive grid for journal form */
+.grid-compact {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+@media (max-width: 640px) {
+  .grid-compact {
+    grid-template-columns: 1fr; /* stacked on mobile */
+  }
+}
+
+/* responsive table: horizontal scroll on small screens */
+.responsive-table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow-x: auto;
+  display: block;
+}
+.responsive-table thead {
+  display: table-header-group;
+}
+.responsive-table tbody {
+  display: table-row-group;
+}
+.responsive-table th, .responsive-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+
+/* modal styles already present; reuse those used previously for confirm-modal */
+
+/* keep buttons touch-friendly */
+.save-program-btn, .edit-entry-btn {
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+/* Grid de séances en cards */
+.program-block h4 { margin: 0 0 6px 0; font-size:1rem; }
+
+.session-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+/* card-link */
+.session-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  text-decoration: none;
+  color: inherit;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+  border: 1px solid rgba(15,23,42,0.06);
+  border-radius: 12px;
+  padding: 12px;
+  min-height: 92px;
+  box-shadow: 0 6px 18px rgba(2,6,23,0.04);
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+
+.session-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 14px 36px rgba(2,6,23,0.10);
+}
+
+/* top row: day + optional small badge */
+.session-card-top {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:6px;
+}
+.session-day {
+  font-weight:700;
+  color:#0b63d6;
+  background: rgba(11,99,214,0.08);
+  padding:6px 8px;
+  border-radius:8px;
+  font-size:0.88rem;
+}
+.session-badge {
+  font-size:0.82rem;
+  color:#111827;
+  background: rgba(0,0,0,0.04);
+  padding:4px 8px;
+  border-radius:8px;
+}
+
+/* body: name and meta */
+.session-name { font-size:1rem; font-weight:700; margin-bottom:6px; }
+.session-meta { font-size:0.88rem; color:#6b7280; }
+
+/* small screens: full width cards stacked */
+@media (max-width:640px) {
+  .session-grid { grid-template-columns: 1fr; }
+  .session-card { min-height:80px; padding:10px; }
+}
+
+/* athlete/performance mobile tweaks */
+@media (max-width: 720px) {
+  /* make perf form inputs full width stacked */
+  #perf-add-form div[style*="grid-template-columns"] {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 8px;
+  }
+
+  /* table -> card list on small screens */
+  #perf-entries-table { display: block; }
+  #perf-entries-table thead { display: none; }
+  #perf-entries-table tbody tr {
+    display: block;
+    margin-bottom: 12px;
+    padding: 10px;
+    border-radius: 10px;
+    background: #fff;
+    box-shadow: 0 6px 14px rgba(16,24,40,0.04);
+    border: 1px solid rgba(15,23,42,0.04);
+  }
+  #perf-entries-table tbody tr td {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    border-bottom: none;
+  }
+  #perf-entries-table tbody tr td.col-actions {
+    display:block;
+    margin-top:8px;
+    text-align:right;
+  }
+
+  /* session cards full width */
+  .session-grid { grid-template-columns: 1fr !important; }
+  .session-card { padding: 12px; min-height: 84px; }
+
+  /* modal panel narrower on mobile */
+  .confirm-modal-panel { width: 92%; padding: 12px; }
+}
+
+/* Vertical program days list (stacked) */
+.program-days-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.program-day-card {
+  background: #fff;
+  border: 1px solid rgba(15,23,42,0.05);
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 6px 18px rgba(2,6,23,0.03);
+}
+.program-day-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.program-day-header .day-left { display:flex; align-items:center; gap:8px; }
+.day-name { font-size:1rem; color:#0b63d6; }
+.session-small { font-size:0.95rem; color:#0f172a; }
+.program-day-body .day-exercises-table { width:100%; border-collapse: collapse; font-size:0.95rem; }
+.day-exercises-table th, .day-exercises-table td {
+  padding: 6px 8px;
+  border-top: 1px solid rgba(15,23,42,0.03);
+}
+.day-exercises-table thead th { text-align:left; font-weight:700; color:#374151; }
+
+/* Mobile: tighten spacing and readable font sizes */
+@media (max-width: 640px) {
+  .program-day-card { padding:10px; }
+  .day-name { font-size:0.98rem; }
+  .day-exercises-table th, .day-exercises-table td { padding:8px 6px; font-size:0.95rem; }
+}
+
+/* coach stats small tweaks */
+#chart-journal, #chart-performance { width:100%; max-width:100%; }
+#stats-athlete-select, #stats-exercise-select { padding:8px 10px; border-radius:8px; border:1px solid rgba(15,23,42,0.06); }
+
+/* coach navigation styles */
+.coach-tabs { margin-bottom: 14px; }
+.coach-tabs-list {
+  display:flex;
+  gap:10px;
+  list-style:none;
+  padding:0;
+  margin:0;
+  align-items:center;
+  flex-wrap:nowrap; /* force side-by-side */
+  overflow-x:auto;  /* allow scroll if screens are narrow */
+}
+
+/* tab link */
+.coach-tab {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 12px;
+  border-radius:10px;
+  text-decoration:none;
+  color: #0f172a;
+  background: rgba(255,255,255,0.6);
+  border: 1px solid transparent;
+  font-weight:600;
+  transition: all .12s ease;
+  box-shadow: 0 4px 10px rgba(2,6,23,0.03);
+}
+.coach-tab:hover {
+  transform: translateY(-3px);
+  border-color: rgba(15,23,42,0.06);
+}
+
+/* active state */
+.coach-tab.active {
+  background: linear-gradient(180deg,#0b63d6,#0858c0);
+  color: white;
+  box-shadow: 0 10px 30px rgba(11,99,214,0.12);
+  border-color: rgba(11,99,214,0.12);
+}
+
+/* small label tweaks for mobile */
+.coach-tab .tab-label { font-size: .95rem; }
+
+/* responsive: horizontal scroll on very small widths */
+@media (max-width: 640px) {
+  .coach-tabs-list {
+    display:flex;
+    overflow-x:auto;
+    -webkit-overflow-scrolling: touch;
+    gap:8px;
+    padding-bottom:6px;
+  }
+  .coach-tab { white-space:nowrap; padding:9px 14px; }
+}

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Flask Jinja App{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <nav>
+        <ul>
+            {# Si personne n'est connecté : n'afficher que le lien Login #}
+            {% if not (request.cookies.get('logged_in') or session.get('user_id')) %}
+                <li><a href="{{ url_for('login') }}">Login</a></li>
+            {% else %}
+                <li><a href="{{ url_for('home') }}">Home</a></li>
+
+                {# liens coach (affichés si rôle != athlete) #}
+                {% if session.get('role') != 'athlete' %}
+                <li><a href="{{ url_for('coach_availability') }}">Saisie availability</a></li>
+                <li><a href="{{ url_for('coach') }}">Création utilisateur</a></li>
+                <li><a href="{{ url_for('coach_programming') }}">Création programmation</a></li>
+                <li><a href="{{ url_for('coach_stats') }}">Suivi journal</a></li>
+                {% endif %}
+
+                {# lien athlete (si rôle != coach) #}
+                {% if session.get('role') != 'coach' %}
+                <li><a href="{{ url_for('athlete') }}">Athlete</a></li>
+                {% endif %}
+
+                <li class="text-muted">Salut, {{ request.cookies.get('username') or session.get('username') or 'Utilisateur' }}</li>
+                <li>
+                  <form method="post" action="{{ url_for('logout') }}" style="display:inline">
+                    <button type="submit" class="secondary">Déconnexion</button>
+                  </form>
+                </li>
+            {% endif %}
+        </ul>
+    </nav>
+    <div class="container">
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <ul class="flashes">
+                {% for message in messages %}
+                    <li>{{ message }}</li>
+                {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

@@ -1,0 +1,109 @@
+{% extends 'base.html' %}
+{% block title %}Création programmation{% endblock %}
+{% block content %}
+<h2>Programmation — Coach</h2>
+
+<!-- {% include 'coach_nav.html' %} -->
+
+<div class="card">
+  <h3>Nouveau programme</h3>
+  <form method="post" action="{{ url_for('coach_programming') }}">
+    <div>
+      <label for="athlete_id">Choisir un athlete</label>
+      <select id="athlete_id" name="athlete_id" required>
+        {% for a in athletes %}
+        <option value="{{ a.id }}">{{ a.username }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div>
+      <label for="name">Nom du programme</label>
+      <input id="name" name="name" type="text" required>
+    </div>
+    <div style="margin-top:12px;">
+      <button type="submit">Créer</button>
+    </div>
+  </form>
+</div>
+
+<div class="card" style="margin-top:14px;">
+  <h3>Programmes existants</h3>
+  {% if programs %}
+  <table>
+    <thead><tr><th>ID</th><th>Nom</th><th>Athlete</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for p in programs %}
+      <tr>
+        <td>{{ p.id }}</td>
+        <td>{{ p.name }}</td>
+        <td>{{ p.athlete.username }}</td>
+        <td>
+          <div class="action-group">
+            <a href="{{ url_for('coach_programming_edit', program_id=p.id) }}" class="edit-btn">Éditer</a>
+
+            <form method="post" action="{{ url_for('coach_programming_delete', program_id=p.id) }}" class="delete-form" data-program-name="{{ p.name }}">
+              <button type="submit" class="delete-btn secondary">Supprimer</button>
+            </form>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>Aucun programme</p>
+  {% endif %}
+</div>
+
+<!-- Confirmation modal for deletion -->
+<div id="delete-confirm-modal" class="confirm-modal" aria-hidden="true">
+  <div class="confirm-modal-backdrop"></div>
+  <div class="confirm-modal-panel" role="dialog" aria-modal="true">
+    <div class="confirm-modal-body">
+      <p id="delete-confirm-msg">Confirmez la suppression</p>
+    </div>
+    <div class="confirm-modal-actions">
+      <button id="delete-confirm-yes" class="confirm-yes">Supprimer</button>
+      <button id="delete-confirm-no" class="confirm-no">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function(){
+    const modal = document.getElementById('delete-confirm-modal');
+    const msgEl = document.getElementById('delete-confirm-msg');
+    const yesBtn = document.getElementById('delete-confirm-yes');
+    const noBtn = document.getElementById('delete-confirm-no');
+    const backdrop = modal.querySelector('.confirm-modal-backdrop');
+
+    let pendingForm = null;
+
+    document.querySelectorAll('.delete-form').forEach(form=>{
+      form.addEventListener('submit', function(e){
+        e.preventDefault();
+        pendingForm = form;
+        const name = form.getAttribute('data-program-name') || '';
+        msgEl.textContent = `Supprimer le programme "${name}" ? Cette action est définitive.`;
+        modal.setAttribute('aria-hidden', 'false');
+      });
+    });
+
+    function hide() {
+      modal.setAttribute('aria-hidden', 'true');
+      pendingForm = null;
+    }
+
+    yesBtn.addEventListener('click', function(){
+      if (pendingForm) pendingForm.submit();
+      hide();
+    });
+    noBtn.addEventListener('click', hide);
+    backdrop.addEventListener('click', hide);
+    window.addEventListener('keydown', function(e){
+      if (e.key === 'Escape' && modal.getAttribute('aria-hidden') === 'false') hide();
+    });
+  })();
+</script>
+
+{% endblock %}

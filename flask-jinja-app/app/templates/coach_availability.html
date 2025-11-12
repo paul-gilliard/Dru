@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Coach — Disponibilités (14 jours){% endblock %}
+{% block content %}
+<h2>Disponibilités — Coach</h2>
+
+<!-- {% include 'coach_nav.html' %} -->
+
+<div class="card">
+  <form method="post" action="{{ url_for('coach_availability') }}">
+    <div>
+      <label for="location">Lieu</label>
+      <select id="location" name="location">
+        {% for loc in locations %}
+        <option value="{{ loc }}" {% if loc==primary_location %}selected{% endif %}>{{ loc }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="margin-top:12px;">
+      <p class="meta">Choisissez une option par date : Matin / Après‑midi / Journée / Aucune.</p>
+      <div class="card" style="padding:12px;">
+        {% for row in calendar %}
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
+            <div style="flex:1;">
+              <strong>{{ row.date.strftime('%a %d %b %Y') }}</strong>
+              <div class="text-muted">{{ row.date.isoformat() }}</div>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <label><input type="radio" name="date_{{ row.date.isoformat() }}" value="none" {% if row.selected=='none' %}checked{% endif %}> Aucune</label>
+              <label><input type="radio" name="date_{{ row.date.isoformat() }}" value="morning" {% if row.selected=='morning' %}checked{% endif %}> Matin</label>
+              <label><input type="radio" name="date_{{ row.date.isoformat() }}" value="afternoon" {% if row.selected=='afternoon' %}checked{% endif %}> Aprem</label>
+              <label><input type="radio" name="date_{{ row.date.isoformat() }}" value="day" {% if row.selected=='day' %}checked{% endif %}> Journée</label>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <button type="submit">Enregistrer</button>
+      <a href="{{ url_for('coach') }}" class="secondary" style="margin-left:8px;">Retour gestion utilisateurs</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

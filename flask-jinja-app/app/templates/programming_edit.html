@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% block title %}Éditer programme — {{ program.name }}{% endblock %}
+{% block content %}
+<h2>Éditer : {{ program.name }} — {{ program.athlete.username }}</h2>
+
+<div class="card programming-edit-root">
+  <!-- form id important pour soumission depuis les boutons flottants -->
+  <form id="program-form" method="post" action="{{ url_for('coach_programming_edit', program_id=program.id) }}">
+    {# Affichage vertical : chaque jour sur sa ligne #}
+    <div class="programming-edit" style="display:flex; flex-direction:column; gap:12px;">
+      {% for day in range(7) %}
+      <div class="card day-row" style="padding:12px;">
+        <h4 style="margin-bottom:8px;">{{ ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][day] }}</h4>
+        <div>
+          <label>Nom séance</label>
+          <input type="text" name="session_name_{{ day }}" value="{{ sessions_by_day[day].session_name if sessions_by_day[day] else '' }}">
+        </div>
+
+        <div style="margin-top:8px;">
+          <div class="table-wrap">
+            <table style="width:100%; border-collapse:collapse;">
+              <thead><tr><th style="text-align:left; padding:6px;">Exercice</th><th style="width:48px; padding:6px;">S</th><th style="width:68px; padding:6px;">Rép</th><th style="width:68px; padding:6px;">Rest</th><th style="width:48px; padding:6px;">RIR</th><th style="width:68px; padding:6px;">Int</th><th style="width:80px; padding:6px;">Muscle</th><th style="padding:6px;">Rem</th><th style="width:36px;"></th></tr></thead>
+              <tbody id="tbody_day_{{ day }}">
+                {% if sessions_by_day[day] %}
+                  {% for ex in sessions_by_day[day].exercises %}
+                  <tr>
+                    <td><input name="ex_name_{{ day }}[]" value="{{ ex.name }}"></td>
+                    <td><input name="ex_sets_{{ day }}[]" value="{{ ex.sets }}"></td>
+                    <td><input name="ex_reps_{{ day }}[]" value="{{ ex.reps }}"></td>
+                    <td><input name="ex_rest_{{ day }}[]" value="{{ ex.rest }}"></td>
+                    <td><input name="ex_rir_{{ day }}[]" value="{{ ex.rir }}"></td>
+                    <td><input name="ex_int_{{ day }}[]" value="{{ ex.intensification }}"></td>
+                    <td><input name="ex_musc_{{ day }}[]" value="{{ ex.muscle }}"></td>
+                    <td><input name="ex_rem_{{ day }}[]" value="{{ ex.remark }}"></td>
+                    <td><button type="button" class="remove-row">✕</button></td>
+                  </tr>
+                  {% endfor %}
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top:8px;">
+            <button type="button" class="add-row" data-day="{{ day }}">+ Ajouter un exercice</button>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- kept local buttons as fallback -->
+    <!-- <div style="margin-top:12px;">
+      <button type="submit" class="save-program-btn">Enregistrer le programme</button>
+      <a href="{{ url_for('coach_programming') }}" class="secondary" style="margin-left:8px;">Retour</a>
+    </div> -->
+  </form>
+</div>
+
+<!-- Floating actions (always visible left) -->
+<div class="floating-actions" aria-hidden="false">
+  <button id="save-float" class="save-program-btn" title="Enregistrer le programme">Enregistrer</button>
+  <button id="cancel-float" class="cancel-btn" data-return-url="{{ url_for('coach_programming') }}" title="Ne pas enregistrer">J'enregistre pas mes modifs</button>
+</div>
+
+<!-- Confirmation modal (hidden by default) -->
+<div id="confirm-modal" class="confirm-modal" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="confirm-modal-backdrop"></div>
+  <div class="confirm-modal-panel" role="document">
+    <div class="confirm-modal-body">
+      <p id="confirm-message">Confirmez votre action</p>
+    </div>
+    <div class="confirm-modal-actions">
+      <button id="confirm-yes" class="confirm-yes">Confirmer</button>
+      <button id="confirm-no" class="confirm-no">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- Row template hidden -->
+<table style="display:none;">
+  <tbody id="row-template">
+    <tr>
+      <td><input name="__NAME__" value=""></td>
+      <td><input name="__SETS__" value=""></td>
+      <td><input name="__REPS__" value=""></td>
+      <td><input name="__REST__" value=""></td>
+      <td><input name="__RIR__" value=""></td>
+      <td><input name="__INT__" value=""></td>
+      <td><input name="__MUSC__" value=""></td>
+      <td><input name="__REM__" value=""></td>
+      <td><button type="button" class="remove-row">✕</button></td>
+    </tr>
+  </tbody>
+</table>
+
+<script src="{{ url_for('static', filename='js/programming.js') }}"></script>
+{% endblock %}

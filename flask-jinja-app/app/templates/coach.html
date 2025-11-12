@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block title %}Espace Coach{% endblock %}
+{% block content %}
+<h2>Gestion utilisateurs — Coach</h2>
+
+<!-- {% include 'coach_nav.html' %} -->
+
+<div class="coach-grid">
+  <div class="card">
+    <h3>Créer un utilisateur</h3>
+    <form method="post" action="{{ url_for('coach') }}">
+      <div>
+        <label for="username">Nom d'utilisateur</label>
+        <input id="username" name="username" type="text" required>
+      </div>
+      <div>
+        <label for="password">Mot de passe</label>
+        <input id="password" name="password" type="password" required>
+      </div>
+      <div>
+        <label for="role">Rôle</label>
+        <select id="role" name="role">
+          <option value="athlete">Athlete</option>
+          <option value="coach">Coach</option>
+        </select>
+      </div>
+      <button type="submit">Créer</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Utilisateurs existants</h3>
+    {% if users %}
+    <table>
+      <thead><tr><th>ID</th><th>Nom</th><th>Rôle</th></tr></thead>
+      <tbody>
+        {% for u in users %}
+        <tr><td>{{ u.id }}</td><td>{{ u.username }}</td><td>{{ u.role }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p>Aucun utilisateur</p>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}

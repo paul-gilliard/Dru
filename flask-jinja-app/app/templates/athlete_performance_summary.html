@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Résumé séance — {{ athlete.username }}{% endblock %}
+{% block content %}
+<h2>Résumé — {{ program_session.session_name or 'Séance' }} — {{ entry_date.strftime('%Y-%m-%d') }}</h2>
+
+<nav style="margin-bottom:12px; display:flex; gap:12px;">
+  <a href="{{ url_for('athlete') }}" class="kv">Programme</a>
+  <a href="{{ url_for('athlete_journal') }}" class="kv">Journal</a>
+  <a href="{{ url_for('athlete_performance') }}" class="kv">Entraînement</a>
+</nav>
+
+<div style="margin-top:8px; margin-bottom:12px;">
+  <a href="{{ url_for('athlete_performance_session', session_id=program_session.id) }}" class="secondary">← Retour à la séance</a>
+</div>
+
+<div class="card">
+  <h3>Informations</h3>
+  <p>Programme : {{ program_session.program.name }}</p>
+  <p>Jour : {{ ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][program_session.day_of_week] }}</p>
+</div>
+
+<div class="card" style="margin-top:12px;">
+  <h3>Entrées ({{ entries|length }})</h3>
+  {% if entries %}
+  <table>
+    <thead><tr><th>Exercice</th><th>Séries</th><th>Rép</th><th>Poids</th><th>Remarque</th></tr></thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td>{{ e.exercise }}</td>
+        <td class="center">{{ e.sets or '' }}</td>
+        <td class="center">{{ '%.1f'|format(e.reps) if e.reps is not none else '' }}</td>
+        <td class="center">{{ e.load or '' }}</td>
+        <td>{{ e.notes or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div style="margin-top:12px;">
+    <strong>Total séries :</strong> {{ total_sets }} &nbsp; • &nbsp;
+    <strong>Total répétitions (estimées) :</strong> {{ '%.1f'|format(total_reps) }} &nbsp; • &nbsp;
+    <strong>Total volume (kg·rep) :</strong> {{ '%.1f'|format(total_volume) }}
+  </div>
+  {% else %}
+    <p class="text-muted">Aucune entrée pour cette date.</p>
+  {% endif %}
+</div>
+{% endblock %}

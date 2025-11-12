@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}Programme — {{ athlete.username }}{% endblock %}
+{% block content %}
+<h2>Programme — {{ athlete.username }}</h2>
+
+<nav style="margin-bottom:12px; display:flex; gap:12px;">
+  <a href="{{ url_for('athlete') }}" class="kv" {% if request.path == url_for('athlete') %}style="font-weight:700;text-decoration:underline"{% endif %}>Programme</a>
+  <a href="{{ url_for('athlete_journal') }}" class="kv" {% if request.path.startswith(url_for('athlete_journal')) %}style="font-weight:700;text-decoration:underline"{% endif %}>Journal</a>
+  <a href="{{ url_for('athlete_performance') }}" class="kv" {% if request.path.startswith(url_for('athlete_performance')) %}style="font-weight:700;text-decoration:underline"{% endif %}>Entraînement</a>
+</nav>
+
+<div class="card" style="margin-bottom:12px;">
+  <h3>Programmes</h3>
+  {% if programs %}
+    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+      {% for p in programs %}
+        <a href="{{ url_for('athlete_program_view', program_id=p.id) }}" class="kv" style="{% if program and program.id==p.id %}font-weight:700;text-decoration:underline{% endif %}">{{ p.name }}</a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="text-muted">Aucun programme associé pour le moment.</p>
+  {% endif %}
+</div>
+
+{% if program %}
+<div class="card">
+  <h3>{{ program.name }} — semaine</h3>
+
+  <div class="program-days-list" style="margin-top:12px;">
+    {% for day in range(7) %}
+    {% set sd = sessions_by_day.get(day) %}
+    <div class="program-day-card">
+      <div class="program-day-header">
+        <div class="day-left">
+          <strong class="day-name">{{ ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][day] }}</strong>
+          {% if sd and sd.session and sd.session.session_name %}
+            <span class="session-small"> — {{ sd.session.session_name }}</span>
+          {% endif %}
+        </div>
+        <div class="day-right text-muted" style="font-size:.85rem;">
+          {% if sd and sd.exercises and sd.exercises|length > 0 %}
+            {{ sd.exercises|length }} ex.
+          {% else %}
+            <em>Pas de séance</em>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="program-day-body">
+        {% if sd and sd.exercises and sd.exercises|length > 0 %}
+        <table class="day-exercises-table">
+          <thead><tr><th>Ex</th><th>S</th><th>Rép</th><th>Rest</th></tr></thead>
+          <tbody>
+            {% for e in sd.exercises %}
+            <tr>
+              <td>{{ e.name }}</td>
+              <td class="center">{{ e.sets or '' }}</td>
+              <td class="center">{{ e.reps or '' }}</td>
+              <td class="center">{{ e.rest or '' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="card">
+  <p class="text-muted">Aucun programme sélectionné.</p>
+</div>
+{% endif %}
+
+{% endblock %}

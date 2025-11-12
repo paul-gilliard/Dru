@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}Accueil{% endblock %}
+{% block content %}
+<h2>Dispo Dru Biotech Mérignac Soleil</h2>
+
+<div class="card">
+  <h3>Prochaines disponibilités (14 jours)</h3>
+  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap:12px; margin-top:12px;">
+    {% for d in days %}
+    <div class="card" style="padding:10px;">
+      <strong>{{ d.strftime('%a %d %b') }}</strong>
+      <div style="margin-top:8px;">
+        {% if avail_map[d].day %}
+          <span style="display:inline-block; background:#dff3e6; color:#166534; padding:6px 8px; border-radius:8px; font-weight:700;">Journée</span>
+        {% else %}
+          {% if avail_map[d].morning %}
+            <span style="display:inline-block; background:#e6f2ff; color:#0b5ed7; padding:6px 8px; border-radius:8px; margin-right:6px; font-weight:700;">Matin</span>
+          {% endif %}
+          {% if avail_map[d].afternoon %}
+            <span style="display:inline-block; background:#fff7e6; color:#b45309; padding:6px 8px; border-radius:8px; font-weight:700;">Aprem</span>
+          {% endif %}
+          {% if not avail_map[d].morning and not avail_map[d].afternoon %}
+            <div class="text-muted">Aucune dispo</div>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<script>
+  window.PAGE_CONTEXT = {
+    is_coach: {{ 'true' if is_coach else 'false' }},
+    location: "{{ location }}",
+  };
+</script>
+<script src="{{ url_for('static', filename='js/calendar.js') }}"></script>
+{% endblock %}

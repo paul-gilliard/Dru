@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block title %}Calendrier{% endblock %}
+{% block content %}
+<h2>Calendrier - Gestion des disponibilités</h2>
+
+<div class="card">
+  <form method="post" action="{{ url_for('coach_calendar') }}">
+    <div>
+      <label for="location">Lieu</label>
+      <select id="location" name="location">
+        {% for loc in locations %}
+        <option value="{{ loc }}" {% if loc==primary_location %}selected{% endif %}>{{ loc }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div style="margin-top:12px;">
+      <p class="meta">Cochez matin/aprem pour chaque date puis Enregistrer.</p>
+      <div class="card" style="padding:12px;">
+        {% for row in calendar %}
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px;">
+            <div style="flex:1;">
+              <strong>{{ row.date.strftime('%a %d %b %Y') }}</strong>
+              <span class="text-muted"> — {{ row.date.isoformat() }}</span>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <label><input type="checkbox" name="date_{{ row.date.isoformat() }}_morning" {% if row.locations[primary_location].morning %}checked{% endif %}> Matin</label>
+              <label><input type="checkbox" name="date_{{ row.date.isoformat() }}_afternoon" {% if row.locations[primary_location].afternoon %}checked{% endif %}> Après-midi</label>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <button type="submit">Enregistrer</button>
+    </div>
+  </form>
+</div>
+{% endblock %}
