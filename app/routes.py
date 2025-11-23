@@ -268,7 +268,7 @@ def register_routes(app):
 
         if request.method == 'POST':
             # Save entire program: remove existing sessions/exercises and recreate from form arrays
-            # Form fields format: session_name_<day>, and for exercises arrays: ex_name_<day>[], ex_musc_<day>[], ex_series_<day>[], ex_rem_<day>[]
+            # Form fields format: session_name_<day>, and for exercises arrays: ex_name_<day>[], ex_series_<day>[], ex_rem_<day>[]
             # Clean old -- delete using ORM so SQLAlchemy applique la cascade et supprime les ExerciseEntry liées
             old_sessions = ProgramSession.query.filter_by(program_id=prog.id).all()
             for s in old_sessions:
@@ -279,7 +279,6 @@ def register_routes(app):
                 sess_name = request.form.get(f'session_name_{day}', '').strip()
                 # exercises come as lists (maybe empty)
                 ex_names = request.form.getlist(f'ex_name_{day}[]')
-                ex_musc = request.form.getlist(f'ex_musc_{day}[]')
                 ex_series = request.form.getlist(f'ex_series_{day}[]')
                 ex_rem = request.form.getlist(f'ex_rem_{day}[]')
 
@@ -292,6 +291,10 @@ def register_routes(app):
                         name = (name or '').strip()
                         if not name:
                             continue
+                        # Fetch muscle group from Exercise bank
+                        exercise = Exercise.query.filter_by(name=name).first()
+                        muscle = exercise.muscle_group if exercise else None
+                        
                         ee = ExerciseEntry(
                             session_id=ps.id,
                             position=position,
@@ -301,7 +304,7 @@ def register_routes(app):
                             rest=None,
                             rir=None,
                             intensification=None,
-                            muscle=(ex_musc[idx] if idx < len(ex_musc) else None),
+                            muscle=muscle,
                             remark=(ex_rem[idx] if idx < len(ex_rem) else None),
                             series_description=(ex_series[idx] if idx < len(ex_series) else None)
                         )

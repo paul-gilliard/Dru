@@ -31,7 +31,7 @@
                   </div>
                   <div style="margin-left:12px;">
                     <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Muscle</label>
-                    <input type="text" name="ex_musc_{{ day }}[]" value="{{ ex.muscle }}" placeholder="Pecs" style="width:100px; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem;">
+                    <div class="exercise-muscle" style="padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem; background:#f3f4f6; min-width:100px; text-align:center;">{{ ex.muscle or '—' }}</div>
                   </div>
                   <button type="button" class="delete-exercise btn-remove" style="margin-top:20px; background:#ef4444; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Supprimer</button>
                 </div>
@@ -85,6 +85,7 @@
 <div class="floating-actions" aria-hidden="false">
   <button id="save-float" class="save-program-btn" title="Enregistrer le programme">Enregistrer</button>
   <button id="cancel-float" class="cancel-btn" data-return-url="{{ url_for('coach_programming') }}" title="Ne pas enregistrer">Annuler</button>
+  <button id="recap-float" class="secondary" title="Voir le récapitulatif">Voir recap</button>
 </div>
 
 <!-- Confirmation modal (hidden by default) -->
@@ -97,6 +98,20 @@
     <div class="confirm-modal-actions">
       <button id="confirm-yes" class="confirm-yes">Confirmer</button>
       <button id="confirm-no" class="confirm-no">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- Recap modal -->
+<div id="recap-modal" class="confirm-modal" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="confirm-modal-backdrop"></div>
+  <div class="confirm-modal-panel" role="document" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+    <div class="confirm-modal-body">
+      <h3>Récapitulatif du programme</h3>
+      <div id="recap-content" style="margin-top: 16px;"></div>
+    </div>
+    <div class="confirm-modal-actions">
+      <button id="recap-close" class="confirm-no">Fermer</button>
     </div>
   </div>
 </div>
@@ -124,7 +139,7 @@
       </div>
       <div style="margin-left:12px;">
         <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Muscle</label>
-        <input type="text" name="__EX_MUSC__" placeholder="Pecs" style="width:100px; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem;">
+        <div class="exercise-muscle" style="padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem; background:#f3f4f6; min-width:100px; text-align:center;">—</div>
       </div>
       <button type="button" class="delete-exercise" style="margin-top:20px; background:#ef4444; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Supprimer</button>
     </div>

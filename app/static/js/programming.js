@@ -13,7 +13,6 @@ document.addEventListener('click', function(e){
       const name = field.getAttribute('name');
       field.setAttribute('name', name
         .replace('__EX_NAME__', `ex_name_${day}[]`)
-        .replace('__EX_MUSC__', `ex_musc_${day}[]`)
         .replace('__EX_REM__', `ex_rem_${day}[]`)
       );
     });
@@ -24,6 +23,7 @@ document.addEventListener('click', function(e){
     // Attach event listeners for this exercise
     const addSeriesBtn = clone.querySelector('.add-series');
     const deleteExerciseBtn = clone.querySelector('.delete-exercise');
+    const exerciseSelect = clone.querySelector('.exercise-select');
     
     addSeriesBtn.addEventListener('click', function(evt) {
       evt.preventDefault();
@@ -35,6 +35,11 @@ document.addEventListener('click', function(e){
     deleteExerciseBtn.addEventListener('click', function(evt) {
       evt.preventDefault();
       exerciseBlock.remove();
+    });
+    
+    // Add listener for exercise select change
+    exerciseSelect.addEventListener('change', function() {
+      updateMuscleName(this);
     });
     
     container.appendChild(clone);
@@ -76,6 +81,9 @@ document.addEventListener('click', function(e){
   }
 });
 
+// Store exercises data for muscle group lookup
+let exercisesDatabase = [];
+
 // Populate exercise selects with fetched exercises
 function populateExerciseSelects(container = null) {
   // Construct the API endpoint path
@@ -91,6 +99,7 @@ function populateExerciseSelects(container = null) {
     })
     .then(exercises => {
       console.log('Received exercises:', exercises);
+      exercisesDatabase = exercises; // Store for later lookup
       
       // Select all exercise-select elements (or just in container if provided)
       const selects = container 
@@ -112,12 +121,36 @@ function populateExerciseSelects(container = null) {
         // Restore selected value if any
         if (currentValue) {
           select.value = currentValue;
+          // Also update muscle display for existing exercises
+          updateMuscleName(select);
         }
       });
     })
     .catch(err => {
       console.error('Erreur chargement exercices:', err);
     });
+}
+
+// Update muscle display when exercise is selected
+function updateMuscleName(select) {
+  const exerciseBlock = select.closest('.exercise-block');
+  if (!exerciseBlock) return;
+  
+  const muscleDiv = exerciseBlock.querySelector('.exercise-muscle');
+  const exerciseName = select.value;
+  
+  if (!exerciseName) {
+    muscleDiv.textContent = '—';
+    return;
+  }
+  
+  // Find exercise in database
+  const exercise = exercisesDatabase.find(ex => ex.name === exerciseName);
+  if (exercise) {
+    muscleDiv.textContent = exercise.muscle_group || '—';
+  } else {
+    muscleDiv.textContent = '—';
+  }
 }
 
 function addSeriesRow(seriesItems) {
@@ -150,45 +183,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Populate all exercise selects on page load
   populateExerciseSelects();
-
-  const form = document.getElementById('program-form');
-  if (form) {
-    form.addEventListener('submit', function(e) {
-      // Build series descriptions from series grid data
-      document.querySelectorAll('.exercise-block').forEach(exerciseBlock => {
-        const day = exerciseBlock.getAttribute('data-day');
-        if (!day) return;
-        
-        const seriesRows = exerciseBlock.querySelectorAll('.series-row');
-        let seriesDescription = '';
-        
-        seriesRows.forEach((row, idx) => {
-          const reps = row.querySelector('input[placeholder="Reps"]')?.value || '';
-          const load = row.querySelector('input[placeholder="Poids"]')?.value || '';
-          const rest = row.querySelector('input[placeholder="Rest (s)"]')?.value || '';
-          const rir = row.querySelector('input[placeholder="RIR"]')?.value || '';
-          const Int = row.querySelector('input[placeholder="Int"]')?.value || '';
-          
-          // Build series line: "S1: 8 reps 100kg, Rest: 60s, RIR: 2, Int: 1"
-          let line = `S${idx + 1}:`;
-          if (reps) line += ` ${reps} reps`;
-          if (load) line += ` ${load}kg`;
-          if (rest) line += `, Rest: ${rest}s`;
-          if (rir) line += `, RIR: ${rir}`;
-          if (Int) line += `, Int: ${Int}`;
-          
-          seriesDescription += line + '\n';
-        });
-        
-        // We'll inject a hidden input with the series description
-        const hiddenInput = document.createElement('input');
-        hiddenInput.type = 'hidden';
-        hiddenInput.name = `ex_series_${day}[]`;
-        hiddenInput.value = seriesDescription.trim();
-        form.appendChild(hiddenInput);
-      });
+  
+  // Add change listeners to all exercise selects
+  document.querySelectorAll('.exercise-select').forEach(select => {
+    select.addEventListener('change', function() {
+      updateMuscleName(this);
     });
-  }
+  });
 });
 
 function parseSeriesDescription(row, description) {
@@ -221,6 +222,10 @@ function parseSeriesDescription(row, description) {
   const msgEl = document.getElementById('confirm-message');
   const yesBtn = document.getElementById('confirm-yes');
   const noBtn = document.getElementById('confirm-no');
+  
+  const recapModal = document.getElementById('recap-modal');
+  const recapContent = document.getElementById('recap-content');
+  const recapCloseBtn = document.getElementById('recap-close');
 
   let onConfirm = null;
 
@@ -233,10 +238,18 @@ function parseSeriesDescription(row, description) {
     modal.setAttribute('aria-hidden', 'true');
     onConfirm = null;
   }
+  
+  function showRecap() {
+    recapModal.setAttribute('aria-hidden', 'false');
+  }
+  function hideRecap() {
+    recapModal.setAttribute('aria-hidden', 'true');
+  }
 
   // floating buttons
   const saveFloat = document.getElementById('save-float');
   const cancelFloat = document.getElementById('cancel-float');
+  const recapFloat = document.getElementById('recap-float');
   const form = document.getElementById('program-form');
 
   if (saveFloat) {
@@ -311,6 +324,17 @@ function parseSeriesDescription(row, description) {
     });
   }
 
+  if (recapFloat) {
+    recapFloat.addEventListener('click', function(){
+      generateRecap();
+      showRecap();
+    });
+  }
+
+  if (recapCloseBtn) {
+    recapCloseBtn.addEventListener('click', hideRecap);
+  }
+
   // modal buttons
   if (yesBtn) yesBtn.addEventListener('click', function(){
     if (typeof onConfirm === 'function') {
@@ -324,14 +348,56 @@ function parseSeriesDescription(row, description) {
     hideConfirm();
   });
 
-  // close modal on backdrop click
-  const backdrop = modal ? modal.querySelector('.confirm-modal-backdrop') : null;
-  if (backdrop) backdrop.addEventListener('click', hideConfirm);
+  // close modals on backdrop click
+  const backdrop1 = modal ? modal.querySelector('.confirm-modal-backdrop') : null;
+  const backdrop2 = recapModal ? recapModal.querySelector('.confirm-modal-backdrop') : null;
+  if (backdrop1) backdrop1.addEventListener('click', hideConfirm);
+  if (backdrop2) backdrop2.addEventListener('click', hideRecap);
 
   // escape key
   window.addEventListener('keydown', function(e){
-    if (e.key === 'Escape' && modal && modal.getAttribute('aria-hidden') === 'false') {
-      hideConfirm();
+    if (e.key === 'Escape') {
+      if (modal && modal.getAttribute('aria-hidden') === 'false') {
+        hideConfirm();
+      }
+      if (recapModal && recapModal.getAttribute('aria-hidden') === 'false') {
+        hideRecap();
+      }
     }
   });
+  
+  // Generate recap content
+  function generateRecap() {
+    let html = '';
+    const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    
+    for (let day = 0; day < 7; day++) {
+      const dayContainer = document.getElementById(`exercises_day_${day}`);
+      const exerciseBlocks = dayContainer ? dayContainer.querySelectorAll('.exercise-block') : [];
+      
+      if (exerciseBlocks.length === 0) continue;
+      
+      html += `<div style="margin-bottom: 20px;">`;
+      html += `<h4 style="color: #0b63d6; margin-bottom: 8px;">${days[day]}</h4>`;
+      html += `<ul style="margin: 0; padding-left: 20px;">`;
+      
+      exerciseBlocks.forEach(block => {
+        const select = block.querySelector('.exercise-select');
+        const muscleDiv = block.querySelector('.exercise-muscle');
+        const exerciseName = select ? select.value : '—';
+        const muscleName = muscleDiv ? muscleDiv.textContent : '—';
+        
+        html += `<li><strong>${exerciseName}</strong> <em style="color: #666;">(${muscleName})</em></li>`;
+      });
+      
+      html += `</ul>`;
+      html += `</div>`;
+    }
+    
+    if (!html) {
+      html = '<p style="color: #999; font-style: italic;">Aucun exercice programmé</p>';
+    }
+    
+    recapContent.innerHTML = html;
+  }
 })();
