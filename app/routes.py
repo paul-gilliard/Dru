@@ -268,7 +268,7 @@ def register_routes(app):
 
         if request.method == 'POST':
             # Save entire program: remove existing sessions/exercises and recreate from form arrays
-            # Form fields format: session_name_<day>, and for exercises arrays: ex_name_<day>[], ex_sets_<day>[], etc.
+            # Form fields format: session_name_<day>, and for exercises arrays: ex_name_<day>[], ex_musc_<day>[], ex_series_<day>[], ex_rem_<day>[]
             # Clean old -- delete using ORM so SQLAlchemy applique la cascade et supprime les ExerciseEntry liées
             old_sessions = ProgramSession.query.filter_by(program_id=prog.id).all()
             for s in old_sessions:
@@ -279,12 +279,8 @@ def register_routes(app):
                 sess_name = request.form.get(f'session_name_{day}', '').strip()
                 # exercises come as lists (maybe empty)
                 ex_names = request.form.getlist(f'ex_name_{day}[]')
-                ex_sets = request.form.getlist(f'ex_sets_{day}[]')
-                ex_reps = request.form.getlist(f'ex_reps_{day}[]')
-                ex_rest = request.form.getlist(f'ex_rest_{day}[]')
-                ex_rir = request.form.getlist(f'ex_rir_{day}[]')
-                ex_inten = request.form.getlist(f'ex_int_{day}[]')
                 ex_musc = request.form.getlist(f'ex_musc_{day}[]')
+                ex_series = request.form.getlist(f'ex_series_{day}[]')
                 ex_rem = request.form.getlist(f'ex_rem_{day}[]')
 
                 if sess_name or any(n.strip() for n in ex_names):
@@ -300,13 +296,14 @@ def register_routes(app):
                             session_id=ps.id,
                             position=position,
                             name=name,
-                            sets=int(ex_sets[idx]) if ex_sets and idx < len(ex_sets) and ex_sets[idx].isdigit() else None,
-                            reps=(ex_reps[idx] if idx < len(ex_reps) else None),
-                            rest=(ex_rest[idx] if idx < len(ex_rest) else None),
-                            rir=(ex_rir[idx] if idx < len(ex_rir) else None),
-                            intensification=(ex_inten[idx] if idx < len(ex_inten) else None),
+                            sets=None,  # no longer used individually
+                            reps=None,
+                            rest=None,
+                            rir=None,
+                            intensification=None,
                             muscle=(ex_musc[idx] if idx < len(ex_musc) else None),
-                            remark=(ex_rem[idx] if idx < len(ex_rem) else None)
+                            remark=(ex_rem[idx] if idx < len(ex_rem) else None),
+                            series_description=(ex_series[idx] if idx < len(ex_series) else None)
                         )
                         db.session.add(ee)
                         position += 1
@@ -495,12 +492,13 @@ def register_routes(app):
                 flash('Nom d\'exercice requis')
                 return redirect(url_for('athlete_performance_session', session_id=session_id))
 
-            sets = None
+            series_number = None
             try:
-                s = request.form.get('sets')
-                sets = int(s) if s not in (None,'') else None
+                sn = request.form.get('series_number')
+                series_number = int(sn) if sn not in (None,'') else None
             except Exception:
-                sets = None
+                series_number = None
+            
             reps = _to_float_none(request.form.get('reps'))
             load = None
             try:
@@ -515,7 +513,7 @@ def register_routes(app):
                 entry_date=entry_date,
                 program_session_id=ps.id,
                 exercise=exercise,
-                sets=sets,
+                series_number=series_number,
                 reps=reps,
                 load=load,
                 notes=notes
@@ -525,8 +523,8 @@ def register_routes(app):
             flash('Performance enregistrée')
             return redirect(url_for('athlete_performance_session', session_id=session_id))
 
-        # GET : lister exercices de la séance (ProgramSession.exercises) et les performances liées (tri décroissant)
-        session_exercises = [e.name for e in sorted(ps.exercises, key=lambda x: x.position)]
+        # GET : lister exercices de la séance avec leurs séries
+        session_exercises = sorted(ps.exercises, key=lambda x: x.position)
         perf_entries = PerformanceEntry.query.filter_by(athlete_id=user.id, program_session_id=ps.id).order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.created_at.desc()).all()
         return render_template('athlete_performance_session.html', athlete=user, program_session=ps, session_exercises=session_exercises, perf_entries=perf_entries)
 
@@ -542,7 +540,7 @@ def register_routes(app):
             'id': e.id,
             'entry_date': e.entry_date.isoformat(),
             'exercise': e.exercise,
-            'sets': e.sets,
+            'series_number': e.series_number,
             'reps': e.reps,
             'load': e.load,
             'notes': e.notes,
@@ -566,10 +564,10 @@ def register_routes(app):
             return redirect(url_for('athlete_performance_session', session_id=e.program_session_id or 0))
         e.exercise = (request.form.get('exercise') or '').strip()
         try:
-            s = request.form.get('sets')
-            e.sets = int(s) if s not in (None,'') else None
+            sn = request.form.get('series_number')
+            e.series_number = int(sn) if sn not in (None,'') else None
         except Exception:
-            e.sets = None
+            e.series_number = None
         e.reps = _to_float_none(request.form.get('reps'))
         try:
             l = request.form.get('load')
@@ -613,9 +611,9 @@ def register_routes(app):
         ).order_by(PerformanceEntry.created_at.asc()).all()
 
         # basic aggregates
-        total_sets = sum(e.sets or 0 for e in entries)
-        total_reps = sum((e.reps or 0) * (e.sets or 1) for e in entries)
-        total_volume = sum((e.load or 0) * (e.reps or 0) * (e.sets or 1) for e in entries)
+        total_sets = sum(1 for e in entries if e.series_number)  # count entries with series_number
+        total_reps = sum((e.reps or 0) for e in entries)
+        total_volume = sum((e.load or 0) * (e.reps or 0) for e in entries)
 
         return render_template('athlete_performance_summary.html',
                                athlete=user,

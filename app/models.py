@@ -86,9 +86,24 @@ class ExerciseEntry(db.Model):
     intensification = db.Column(db.String(64), nullable=True)
     muscle = db.Column(db.String(64), nullable=True)
     remark = db.Column(db.Text, nullable=True)
+    series_description = db.Column(db.Text, nullable=True)  # ex: "S1: 8 reps 100kg\nS2: 6 reps 120kg\nS3: 4 reps 140kg"
 
     def __repr__(self):
         return f'<Exercise {self.name} ({self.session_id})>'
+    
+    def get_series_list(self):
+        """Parse series_description and return list of series"""
+        if not self.series_description:
+            return []
+        lines = self.series_description.strip().split('\n')
+        series = []
+        for i, line in enumerate(lines, 1):
+            series.append({
+                'number': i,
+                'description': line.strip(),
+                'text': f'Série {i}: {line.strip()}'
+            })
+        return series
 
 class JournalEntry(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -125,7 +140,7 @@ class PerformanceEntry(db.Model):
     entry_date = db.Column(db.Date, nullable=False, index=True)
     program_session_id = db.Column(db.Integer, db.ForeignKey('program_session.id'), nullable=True)
     exercise = db.Column(db.String(192), nullable=False)
-    sets = db.Column(db.Integer, nullable=True)
+    series_number = db.Column(db.Integer, nullable=True)  # numéro de la série (1, 2, 3, etc.)
     reps = db.Column(db.Float, nullable=True)  # now float (ex: 6.5)
     load = db.Column(db.Float, nullable=True)  # poids
     rpe = db.Column(db.Integer, nullable=True)
@@ -136,7 +151,7 @@ class PerformanceEntry(db.Model):
     program_session = db.relationship('ProgramSession', backref='performance_entries', foreign_keys=[program_session_id])
 
     def __repr__(self):
-        return f'<PerformanceEntry {self.exercise} on {self.entry_date}>'
+        return f'<PerformanceEntry {self.exercise} series {self.series_number} on {self.entry_date}>'
 
 def create_default_admin():
     """

@@ -6,16 +6,12 @@ document.addEventListener('click', function(e){
     
     const map = {
       '__NAME__': `ex_name_${day}[]`,
-      '__SETS__': `ex_sets_${day}[]`,
-      '__REPS__': `ex_reps_${day}[]`,
-      '__REST__': `ex_rest_${day}[]`,
-      '__RIR__': `ex_rir_${day}[]`,
-      '__INT__': `ex_int_${day}[]`,
       '__MUSC__': `ex_musc_${day}[]`,
+      '__SERIES__': `ex_series_${day}[]`,
       '__REM__': `ex_rem_${day}[]`
     };
     
-    template.querySelectorAll('input, select').forEach((el)=>{
+    template.querySelectorAll('input, select, textarea').forEach((el)=>{
       const pname = el.getAttribute('name');
       for (const key in map) {
         if (pname === key) {

@@ -49,7 +49,7 @@ document.addEventListener('DOMContentLoaded', function(){
       document.getElementById('edit-entry-id').value = data.id;
       document.getElementById('edit-entry-date').value = data.entry_date || '';
       document.getElementById('edit-exercise').value = data.exercise || '';
-      document.getElementById('edit-sets').value = data.sets ?? '';
+      document.getElementById('edit-series-number').value = data.series_number ?? '';
       document.getElementById('edit-reps').value = (data.reps !== null && data.reps !== undefined) ? String(data.reps) : '';
       document.getElementById('edit-load').value = data.load ?? '';
       document.getElementById('edit-notes').value = data.notes || '';

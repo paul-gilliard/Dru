@@ -23,12 +23,12 @@
   <h3>Entrées ({{ entries|length }})</h3>
   {% if entries %}
   <table>
-    <thead><tr><th>Exercice</th><th>Séries</th><th>Rép</th><th>Poids</th><th>Remarque</th></tr></thead>
+    <thead><tr><th>Exercice</th><th>Série</th><th>Rép</th><th>Poids</th><th>Remarque</th></tr></thead>
     <tbody>
       {% for e in entries %}
       <tr>
         <td>{{ e.exercise }}</td>
-        <td class="center">{{ e.sets or '' }}</td>
+        <td class="center">{{ e.series_number or '—' }}</td>
         <td class="center">{{ '%.1f'|format(e.reps) if e.reps is not none else '' }}</td>
         <td class="center">{{ e.load or '' }}</td>
         <td>{{ e.notes or '' }}</td>
