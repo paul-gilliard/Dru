@@ -38,6 +38,9 @@ document.addEventListener('click', function(e){
     });
     
     container.appendChild(clone);
+    
+    // Fill the newly created exercise select with exercise options
+    populateExerciseSelects(exerciseBlock);
   }
 
   // Add new series row
@@ -73,6 +76,38 @@ document.addEventListener('click', function(e){
   }
 });
 
+// Populate exercise selects with fetched exercises
+function populateExerciseSelects(container = null) {
+  fetch('{{ url_for("coach_exercises_json") }}')
+    .then(response => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    })
+    .then(exercises => {
+      // Select all exercise-select elements (or just in container if provided)
+      const selects = container 
+        ? container.querySelectorAll('.exercise-select')
+        : document.querySelectorAll('.exercise-select');
+      
+      selects.forEach(select => {
+        const currentValue = select.getAttribute('data-value') || select.value;
+        
+        // Build options
+        let html = '<option value="">-- Sélectionner un exercice --</option>';
+        exercises.forEach(ex => {
+          html += `<option value="${ex.name}">${ex.name} (${ex.muscle_group})</option>`;
+        });
+        select.innerHTML = html;
+        
+        // Restore selected value if any
+        if (currentValue) {
+          select.value = currentValue;
+        }
+      });
+    })
+    .catch(err => console.error('Erreur chargement exercices:', err));
+}
+
 function addSeriesRow(seriesItems) {
   const template = document.getElementById('series-template');
   const clone = template.content.cloneNode(true);
@@ -100,6 +135,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const desc = row.getAttribute('data-series-description');
     parseSeriesDescription(row, desc);
   });
+
+  // Populate all exercise selects on page load
+  populateExerciseSelects();
 
   const form = document.getElementById('program-form');
   if (form) {

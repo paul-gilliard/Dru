@@ -156,44 +156,6 @@
   </div>
 </template>
 
-<script>
-// Charger les exercices disponibles et remplir les selects
-document.addEventListener('DOMContentLoaded', function() {
-  fetch('{{ url_for("coach_exercises_json") }}')
-    .then(response => {
-      if (!response.ok) {
-        console.error('Erreur:', response.status, response.statusText);
-        throw new Error(`HTTP ${response.status}`);
-      }
-      return response.json();
-    })
-    .then(exercises => {
-      // Remplir tous les selects avec les options d'exercices
-      document.querySelectorAll('.exercise-select').forEach(select => {
-        const currentValue = select.getAttribute('data-value') || select.value;
-        
-        select.innerHTML = '<option value="">-- Sélectionner un exercice --</option>';
-        exercises.forEach(ex => {
-          const option = document.createElement('option');
-          option.value = ex.name;
-          option.textContent = `${ex.name} (${ex.muscle_group})`;
-          select.appendChild(option);
-        });
-        
-        // Restaurer la valeur sélectionnée
-        if (currentValue) {
-          select.value = currentValue;
-        }
-      });
-    })
-    .catch(err => {
-      console.error('Erreur chargement exercices:', err);
-      document.querySelectorAll('.exercise-select').forEach(select => {
-        select.innerHTML = '<option value="">⚠️ Erreur chargement</option>';
-      });
-    });
-});
-</script>
 
 <script src="{{ url_for('static', filename='js/programming.js') }}"></script>
 {% endblock %}
