@@ -779,10 +779,13 @@ def register_routes(app):
     @app.route('/coach/exercises.json')
     def coach_exercises_json():
         """API pour récupérer les exercices (pour le select dynamique)"""
-        if 'user_id' not in session or session.get('role') != 'coach':
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
             return jsonify({'error': 'forbidden'}), 403
         
-        from app.models import Exercise
         exercises = Exercise.query.order_by(Exercise.name).all()
         return jsonify([ex.to_dict() for ex in exercises])
 

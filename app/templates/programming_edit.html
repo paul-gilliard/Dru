@@ -160,7 +160,13 @@
 // Charger les exercices disponibles et remplir les selects
 document.addEventListener('DOMContentLoaded', function() {
   fetch('{{ url_for("coach_exercises_json") }}')
-    .then(response => response.json())
+    .then(response => {
+      if (!response.ok) {
+        console.error('Erreur:', response.status, response.statusText);
+        throw new Error(`HTTP ${response.status}`);
+      }
+      return response.json();
+    })
     .then(exercises => {
       // Remplir tous les selects avec les options d'exercices
       document.querySelectorAll('.exercise-select').forEach(select => {
@@ -180,7 +186,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
       });
     })
-    .catch(err => console.error('Erreur chargement exercices:', err));
+    .catch(err => {
+      console.error('Erreur chargement exercices:', err);
+      document.querySelectorAll('.exercise-select').forEach(select => {
+        select.innerHTML = '<option value="">⚠️ Erreur chargement</option>';
+      });
+    });
 });
 </script>
 
