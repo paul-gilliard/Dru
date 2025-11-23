@@ -23,7 +23,7 @@
           <div class="exercises-container" id="exercises_day_{{ day }}" style="display:flex; flex-direction:column; gap:20px;">
             {% if sessions_by_day[day] %}
               {% for ex in sessions_by_day[day].exercises %}
-              <div class="exercise-block" data-exercise-id="{{ ex.id }}" style="border:1px solid rgba(15,23,42,0.1); border-radius:10px; padding:14px; background:#f9fafb;">
+              <div class="exercise-block" data-exercise-id="{{ ex.id }}" data-day="{{ day }}" style="border:1px solid rgba(15,23,42,0.1); border-radius:10px; padding:14px; background:#f9fafb;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                   <div style="flex:1;">
                     <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Exercice</label>
@@ -47,13 +47,13 @@
                     {% set series_list = ex.get_series_list() %}
                     {% if series_list %}
                       {% for s in series_list %}
-                      <div class="series-row" style="display:grid; grid-template-columns: 60px 80px 80px 80px 60px 80px auto; gap:8px; align-items:center;">
+                      <div class="series-row" style="display:grid; grid-template-columns: 60px 80px 80px 80px 60px 80px auto; gap:8px; align-items:center;" data-series-description="{{ s.description }}">
                         <div><label style="font-size:0.85rem; color:#666;">S{{ s.number }}</label></div>
-                        <div><input type="number" placeholder="Reps" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
-                        <div><input type="number" placeholder="Poids" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
-                        <div><input type="number" placeholder="Rest (s)" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
-                        <div><input type="number" placeholder="RIR" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
-                        <div><input type="text" placeholder="Int" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+                        <div><input type="text" placeholder="Reps" value="" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+                        <div><input type="number" placeholder="Poids" value="" step="0.5" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+                        <div><input type="number" placeholder="Rest (s)" value="" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+                        <div><input type="number" placeholder="RIR" value="" step="0.5" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+                        <div><input type="text" placeholder="Int" value="" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
                         <button type="button" class="delete-series" style="background:#ef4444; color:white; padding:6px 10px; border-radius:4px; border:none; cursor:pointer; font-size:0.85rem; font-weight:600;">✕</button>
                       </div>
                       {% endfor %}

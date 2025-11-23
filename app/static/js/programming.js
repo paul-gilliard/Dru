@@ -93,8 +93,14 @@ function updateSeriesNumbers(seriesItems) {
   });
 }
 
-// Override form submission to build series_description from grid data
+// Parse existing series descriptions and load into inputs
 document.addEventListener('DOMContentLoaded', function() {
+  // Parse existing series data from series-description attribute
+  document.querySelectorAll('.series-row[data-series-description]').forEach(row => {
+    const desc = row.getAttribute('data-series-description');
+    parseSeriesDescription(row, desc);
+  });
+
   const form = document.getElementById('program-form');
   if (form) {
     form.addEventListener('submit', function(e) {
@@ -124,11 +130,6 @@ document.addEventListener('DOMContentLoaded', function() {
           seriesDescription += line + '\n';
         });
         
-        // Create hidden input for series_description if needed, or use hidden field
-        // For now, we'll create a FormData-like approach by modifying how we send
-        // Actually, we need to add hidden inputs for the backend to parse correctly
-        // The backend expects ex_series_<day>[] to contain the series description
-        
         // We'll inject a hidden input with the series description
         const hiddenInput = document.createElement('input');
         hiddenInput.type = 'hidden';
@@ -139,6 +140,28 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 });
+
+function parseSeriesDescription(row, description) {
+  // Example: "S1: 8 reps 100kg, Rest: 60s, RIR: 2, Int: 1"
+  // Extract: reps, load, rest, rir, intensification
+  const repsMatch = description.match(/(\d+)\s*reps/i);
+  const loadMatch = description.match(/(\d+(?:\.\d+)?)\s*kg/i);
+  const restMatch = description.match(/Rest:\s*(\d+)/i);
+  const rirMatch = description.match(/RIR:\s*([\d.]+)/i);
+  const intMatch = description.match(/Int:\s*(\d+)/i);
+
+  const repsInput = row.querySelector('input[placeholder="Reps"]');
+  const loadInput = row.querySelector('input[placeholder="Poids"]');
+  const restInput = row.querySelector('input[placeholder="Rest (s)"]');
+  const rirInput = row.querySelector('input[placeholder="RIR"]');
+  const intInput = row.querySelector('input[placeholder="Int"]');
+
+  if (repsMatch && repsInput) repsInput.value = repsMatch[1];
+  if (loadMatch && loadInput) loadInput.value = loadMatch[1];
+  if (restMatch && restInput) restInput.value = restMatch[1];
+  if (rirMatch && rirInput) rirInput.value = rirMatch[1];
+  if (intMatch && intInput) intInput.value = intMatch[1];
+}
 
 // Confirmation modal helpers
 (function(){
