@@ -268,7 +268,7 @@ def register_routes(app):
 
         if request.method == 'POST':
             # Save entire program: remove existing sessions/exercises and recreate from form arrays
-            # Form fields format: session_name_<day>, and for exercises arrays: ex_name_<day>[], ex_series_<day>[], ex_rem_<day>[]
+            # Form fields format: session_name_<day>, and for exercises arrays: ex_name_<day>[], ex_series_<day>[], ex_main_<day>[], ex_rem_<day>[]
             # Clean old -- delete using ORM so SQLAlchemy applique la cascade et supprime les ExerciseEntry liées
             old_sessions = ProgramSession.query.filter_by(program_id=prog.id).all()
             for s in old_sessions:
@@ -280,6 +280,7 @@ def register_routes(app):
                 # exercises come as lists (maybe empty)
                 ex_names = request.form.getlist(f'ex_name_{day}[]')
                 ex_series = request.form.getlist(f'ex_series_{day}[]')
+                ex_main = request.form.getlist(f'ex_main_{day}[]')
                 ex_rem = request.form.getlist(f'ex_rem_{day}[]')
 
                 if sess_name or any(n.strip() for n in ex_names):
@@ -295,6 +296,14 @@ def register_routes(app):
                         exercise = Exercise.query.filter_by(name=name).first()
                         muscle = exercise.muscle_group if exercise else None
                         
+                        # Parse main_series
+                        main_series_val = None
+                        try:
+                            ms = ex_main[idx] if idx < len(ex_main) else None
+                            main_series_val = int(ms) if ms and ms.strip() else None
+                        except (ValueError, IndexError, TypeError):
+                            main_series_val = None
+                        
                         ee = ExerciseEntry(
                             session_id=ps.id,
                             position=position,
@@ -306,7 +315,8 @@ def register_routes(app):
                             intensification=None,
                             muscle=muscle,
                             remark=(ex_rem[idx] if idx < len(ex_rem) else None),
-                            series_description=(ex_series[idx] if idx < len(ex_series) else None)
+                            series_description=(ex_series[idx] if idx < len(ex_series) else None),
+                            main_series=main_series_val
                         )
                         db.session.add(ee)
                         position += 1

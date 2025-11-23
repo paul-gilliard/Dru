@@ -87,6 +87,7 @@ class ExerciseEntry(db.Model):
     muscle = db.Column(db.String(64), nullable=True)
     remark = db.Column(db.Text, nullable=True)
     series_description = db.Column(db.Text, nullable=True)  # ex: "S1: 8 reps 100kg\nS2: 6 reps 120kg\nS3: 4 reps 140kg"
+    main_series = db.Column(db.Integer, nullable=True)  # numéro de la série principale (1, 2, 3, etc.)
 
     def __repr__(self):
         return f'<Exercise {self.name} ({self.session_id})>'
@@ -101,7 +102,8 @@ class ExerciseEntry(db.Model):
             series.append({
                 'number': i,
                 'description': line.strip(),
-                'text': f'Série {i}: {line.strip()}'
+                'text': f'Série {i}: {line.strip()}',
+                'is_main': i == self.main_series
             })
         return series
 

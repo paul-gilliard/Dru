@@ -73,6 +73,21 @@ document.addEventListener('click', function(e){
     exerciseBlock.remove();
   }
 
+  // Handle main series checkbox (only one per exercise)
+  if (e.target.matches('.series-main-checkbox')) {
+    const seriesRow = e.target.closest('.series-row');
+    const seriesItems = seriesRow.closest('.series-items');
+    
+    if (e.target.checked) {
+      // Uncheck all other checkboxes in this exercise
+      seriesItems.querySelectorAll('.series-main-checkbox').forEach(cb => {
+        if (cb !== e.target) {
+          cb.checked = false;
+        }
+      });
+    }
+  }
+
   // Remove row (legacy support)
   if (e.target.matches('.remove-row, .btn-remove')) {
     e.preventDefault();
@@ -178,7 +193,14 @@ document.addEventListener('DOMContentLoaded', function() {
   // Parse existing series data from series-description attribute
   document.querySelectorAll('.series-row[data-series-description]').forEach(row => {
     const desc = row.getAttribute('data-series-description');
+    const isMain = row.getAttribute('data-is-main') === 'true';
     parseSeriesDescription(row, desc);
+    
+    // Check the main series checkbox if applicable
+    if (isMain) {
+      const checkbox = row.querySelector('.series-main-checkbox');
+      if (checkbox) checkbox.checked = true;
+    }
   });
 
   // Populate all exercise selects on page load
@@ -193,27 +215,23 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function parseSeriesDescription(row, description) {
-  // Example: "S1: 8 reps 100kg, Rest: 60s, RIR: 2, Int: 1"
-  // Extract: reps, load, rest, rir, intensification
+  // Example: "S1: 8 reps, Rest: 0.5min, RIR: 2"
+  // Extract: reps, rest, rir
   const repsMatch = description.match(/(\d+)\s*reps/i);
-  const loadMatch = description.match(/(\d+(?:\.\d+)?)\s*kg/i);
-  const restMatch = description.match(/Rest:\s*(\d+)/i);
+  const restMatch = description.match(/Rest:\s*([\d.]+)\s*min/i);
   const rirMatch = description.match(/RIR:\s*([\d.]+)/i);
-  const intMatch = description.match(/Int:\s*(\d+)/i);
 
   // Find inputs within the row
   const inputs = row.querySelectorAll('input');
-  if (inputs.length < 5) {
-    console.warn('parseSeriesDescription: expected at least 5 inputs, found', inputs.length);
+  if (inputs.length < 3) {
+    console.warn('parseSeriesDescription: expected at least 3 inputs, found', inputs.length);
     return;
   }
 
-  // inputs are: Reps, Poids, Rest, RIR, Int (in order from grid template)
+  // inputs are: Reps, Rest, RIR (in order from grid template)
   if (repsMatch) inputs[0].value = repsMatch[1];
-  if (loadMatch) inputs[1].value = loadMatch[1];
-  if (restMatch) inputs[2].value = restMatch[1];
-  if (rirMatch) inputs[3].value = rirMatch[1];
-  if (intMatch) inputs[4].value = intMatch[1];
+  if (restMatch) inputs[1].value = restMatch[1];
+  if (rirMatch) inputs[2].value = rirMatch[1];
 }
 
 // Confirmation modal helpers
@@ -256,54 +274,67 @@ function parseSeriesDescription(row, description) {
     saveFloat.addEventListener('click', function(){
       showConfirm('Enregistrer le programme ? Toutes les modifications seront sauvegardées.', function(){
         // Remove any existing series hidden inputs first
-        const existingInputs = form.querySelectorAll('input[name*="ex_series_"][type="hidden"]');
+        const existingInputs = form.querySelectorAll('input[name*="ex_series_"][type="hidden"], input[name*="ex_main_"][type="hidden"]');
         existingInputs.forEach(input => input.remove());
         
         // Build series descriptions from series grid data BEFORE submit
         const seriesByDay = {};
+        const mainSeriesByDay = {};
         document.querySelectorAll('.exercise-block').forEach(exerciseBlock => {
           const day = exerciseBlock.getAttribute('data-day');
           if (!day) return;
           
           if (!seriesByDay[day]) seriesByDay[day] = [];
+          if (!mainSeriesByDay[day]) mainSeriesByDay[day] = [];
           
           const seriesRows = exerciseBlock.querySelectorAll('.series-row');
           let seriesDescription = '';
+          let mainSeriesNumber = null;
           
           seriesRows.forEach((row, idx) => {
             const reps = row.querySelector('input[placeholder="Reps"]')?.value || '';
-            const load = row.querySelector('input[placeholder="Poids"]')?.value || '';
-            const rest = row.querySelector('input[placeholder="Rest (s)"]')?.value || '';
+            const rest = row.querySelector('input[placeholder="Rest (min)"]')?.value || '';
             const rir = row.querySelector('input[placeholder="RIR"]')?.value || '';
-            const Int = row.querySelector('input[placeholder="Int"]')?.value || '';
+            const isMain = row.querySelector('.series-main-checkbox')?.checked || false;
             
-            // Build series line: "S1: 8 reps 100kg, Rest: 60s, RIR: 2, Int: 1"
+            // Build series line: "S1: 8 reps, Rest: 0.5min, RIR: 2"
             let line = `S${idx + 1}:`;
             if (reps) line += ` ${reps} reps`;
-            if (load) line += ` ${load}kg`;
-            if (rest) line += `, Rest: ${rest}s`;
+            if (rest) line += `, Rest: ${rest}min`;
             if (rir) line += `, RIR: ${rir}`;
-            if (Int) line += `, Int: ${Int}`;
             
             seriesDescription += line + '\n';
+            
+            if (isMain) {
+              mainSeriesNumber = idx + 1;
+            }
           });
           
           seriesByDay[day].push(seriesDescription.trim());
+          mainSeriesByDay[day].push(mainSeriesNumber);
         });
         
-        // Create hidden inputs for all series data
+        // Create hidden inputs for all series data and main series
         for (const day in seriesByDay) {
-          seriesByDay[day].forEach(seriesDesc => {
+          seriesByDay[day].forEach((seriesDesc, idx) => {
             const hiddenInput = document.createElement('input');
             hiddenInput.type = 'hidden';
             hiddenInput.name = `ex_series_${day}[]`;
             hiddenInput.value = seriesDesc;
             form.appendChild(hiddenInput);
+            
+            // Add main series number
+            const mainInput = document.createElement('input');
+            mainInput.type = 'hidden';
+            mainInput.name = `ex_main_${day}[]`;
+            mainInput.value = mainSeriesByDay[day][idx] || '';
+            form.appendChild(mainInput);
           });
         }
         
         // Debug log
         console.log('Series data to submit:', seriesByDay);
+        console.log('Main series:', mainSeriesByDay);
         
         // submit form
         if (form) {
