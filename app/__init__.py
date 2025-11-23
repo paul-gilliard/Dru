@@ -18,7 +18,16 @@ def create_app():
     
     # Créer les tables au démarrage si elles n'existent pas
     with app.app_context():
+        # En production, supprimer et recréer les tables si nécessaire
+        # (à utiliser une seule fois lors du nettoyage)
+        if os.environ.get('RECREATE_DB') == 'true':
+            print("⚠️ Dropping all tables...")
+            db.drop_all()
+            print("✓ Dropped")
+        
+        print("Creating database tables...")
         db.create_all()
+        print("✓ Database tables created")
         
         # Créer l'utilisateur admin par défaut s'il n'existe pas
         from app.models import User
@@ -36,4 +45,5 @@ def create_app():
     routes.register_routes(app)
     
     return app
+
 
