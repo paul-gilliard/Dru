@@ -7,11 +7,7 @@ from config import Config
 db = SQLAlchemy()
 migrate = Migrate()
 
-# Global app reference - will be set by create_app()
-app = None
-
 def create_app():
-    global app
     app = Flask(__name__)
     
     # Charger la configuration depuis config.py
@@ -22,5 +18,6 @@ def create_app():
     
     # Import routes after app is created to avoid circular imports
     from app import routes
+    routes.register_routes(app)
     
     return app
