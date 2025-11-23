@@ -269,6 +269,25 @@ a:focus, button:focus, input:focus, select:focus { box-shadow: 0 0 0 4px rgba(59
   text-align: center;
 }
 
+.programming-table textarea {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(15,23,42,0.1);
+  background: #ffffff;
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.programming-table textarea:focus {
+  outline: none;
+  border-color: rgba(11,99,214,0.6);
+  box-shadow: 0 0 0 3px rgba(11,99,214,0.1);
+}
+
 /* Boutons dans la table */
 .programming-table .btn-remove {
   width: 100%;
@@ -550,7 +569,101 @@ a:focus, button:focus, input:focus, select:focus { box-shadow: 0 0 0 4px rgba(59
   border-bottom: 1px solid rgba(0,0,0,0.06);
 }
 
-/* modal styles already present; reuse those used previously for confirm-modal */
+/* Modal styles: centered popup */
+.confirm-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 9999;
+}
+
+.confirm-modal[aria-hidden="false"] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.confirm-modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(3px);
+}
+
+.confirm-modal-panel {
+  position: relative;
+  z-index: 10000;
+  background: white;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: 24px;
+  max-width: 420px;
+  width: 90%;
+  animation: slideUp 0.2s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.confirm-modal-body {
+  margin-bottom: 20px;
+  font-size: 1rem;
+  color: #0f172a;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.confirm-yes, .confirm-no {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.95rem;
+  transition: all 0.12s ease;
+}
+
+.confirm-yes {
+  background: linear-gradient(180deg, #ff6b35 0%, #e14f1a 100%);
+  color: white;
+  box-shadow: 0 4px 12px rgba(225, 79, 26, 0.2);
+}
+
+.confirm-yes:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(225, 79, 26, 0.3);
+}
+
+.confirm-no {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+}
+
+.confirm-no:hover {
+  background: #e5e7eb;
+  border-color: rgba(15, 23, 42, 0.2);
+}
 
 /* Grid de séances en cards */
 .program-block h4 { margin: 0 0 6px 0; font-size:1rem; }

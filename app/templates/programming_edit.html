@@ -23,14 +23,14 @@
             <table class="programming-table">
               <thead>
                 <tr>
-                  <th style="text-align:left;">Exercice</th>
-                  <th style="width:50px;">Séries</th>
-                  <th style="width:60px;">Rép</th>
-                  <th style="width:70px;">Rest (s)</th>
-                  <th style="width:45px;">RIR</th>
-                  <th style="width:60px;">Int</th>
-                  <th style="width:70px;">Muscle</th>
-                  <th style="width:80px;">Remarque</th>
+                  <th style="text-align:left; width:120px;">Exercice</th>
+                  <th style="width:70px;">Séries</th>
+                  <th style="width:80px;">Rép</th>
+                  <th style="width:90px;">Rest (s)</th>
+                  <th style="width:60px;">RIR</th>
+                  <th style="width:80px;">Int</th>
+                  <th style="width:90px;">Muscle</th>
+                  <th style="width:140px;">Remarque</th>
                   <th style="width:40px;"></th>
                 </tr>
               </thead>
@@ -39,13 +39,13 @@
                   {% for ex in sessions_by_day[day].exercises %}
                   <tr>
                     <td><select name="ex_name_{{ day }}[]" class="exercise-select" data-value="{{ ex.name or '' }}"><option>-- Sélectionner --</option></select></td>
-                    <td><input type="number" name="ex_sets_{{ day }}[]" value="{{ ex.sets }}" min="1" max="20"></td>
-                    <td><input type="number" name="ex_reps_{{ day }}[]" value="{{ ex.reps }}" min="1" max="100" placeholder="5-10"></td>
-                    <td><input type="number" name="ex_rest_{{ day }}[]" value="{{ ex.rest }}" min="0" max="300" placeholder="60"></td>
-                    <td><input type="number" name="ex_rir_{{ day }}[]" value="{{ ex.rir }}" min="0" max="10" placeholder="2"></td>
-                    <td><input type="text" name="ex_int_{{ day }}[]" value="{{ ex.intensification }}" placeholder="70%"></td>
-                    <td><input type="text" name="ex_musc_{{ day }}[]" value="{{ ex.muscle }}" placeholder="Auto"></td>
-                    <td><input type="text" name="ex_rem_{{ day }}[]" value="{{ ex.remark }}" placeholder="Notes..."></td>
+                    <td><input type="number" name="ex_sets_{{ day }}[]" value="{{ ex.sets }}" min="1" max="20" style="font-size:1.1rem; padding:10px 8px;"></td>
+                    <td><input type="number" name="ex_reps_{{ day }}[]" value="{{ ex.reps }}" min="1" max="100" placeholder="5-10" style="font-size:1.1rem; padding:10px 8px;"></td>
+                    <td><input type="number" name="ex_rest_{{ day }}[]" value="{{ ex.rest }}" min="0" max="300" placeholder="60" style="font-size:1.1rem; padding:10px 8px;"></td>
+                    <td><input type="number" name="ex_rir_{{ day }}[]" value="{{ ex.rir }}" min="0" max="10" placeholder="2" style="font-size:1.1rem; padding:10px 8px;"></td>
+                    <td><input type="text" name="ex_int_{{ day }}[]" value="{{ ex.intensification }}" placeholder="70%" style="font-size:1.1rem; padding:10px 8px;"></td>
+                    <td><input type="text" name="ex_musc_{{ day }}[]" value="{{ ex.muscle }}" placeholder="Auto" style="font-size:1.1rem; padding:10px 8px;"></td>
+                    <td><textarea name="ex_rem_{{ day }}[]" placeholder="Notes..." style="font-size:1rem; padding:8px; min-height:80px; resize:vertical;">{{ ex.remark }}</textarea></td>
                     <td><button type="button" class="remove-row btn-remove">✕</button></td>
                   </tr>
                   {% endfor %}
@@ -88,13 +88,13 @@
   <tbody id="row-template">
     <tr>
       <td><select name="__NAME__" class="exercise-select" data-value=""><option>-- Sélectionner --</option></select></td>
-      <td><input type="number" name="__SETS__" value="" min="1" max="20"></td>
-      <td><input type="number" name="__REPS__" value="" min="1" max="100" placeholder="5-10"></td>
-      <td><input type="number" name="__REST__" value="" min="0" max="300" placeholder="60"></td>
-      <td><input type="number" name="__RIR__" value="" min="0" max="10" placeholder="2"></td>
-      <td><input type="text" name="__INT__" value="" placeholder="70%"></td>
-      <td><input type="text" name="__MUSC__" value="" placeholder="Auto"></td>
-      <td><input type="text" name="__REM__" value="" placeholder="Notes..."></td>
+      <td><input type="number" name="__SETS__" value="" min="1" max="20" style="font-size:1.1rem; padding:10px 8px;"></td>
+      <td><input type="number" name="__REPS__" value="" min="1" max="100" placeholder="5-10" style="font-size:1.1rem; padding:10px 8px;"></td>
+      <td><input type="number" name="__REST__" value="" min="0" max="300" placeholder="60" style="font-size:1.1rem; padding:10px 8px;"></td>
+      <td><input type="number" name="__RIR__" value="" min="0" max="10" placeholder="2" style="font-size:1.1rem; padding:10px 8px;"></td>
+      <td><input type="text" name="__INT__" value="" placeholder="70%" style="font-size:1.1rem; padding:10px 8px;"></td>
+      <td><input type="text" name="__MUSC__" value="" placeholder="Auto" style="font-size:1.1rem; padding:10px 8px;"></td>
+      <td><textarea name="__REM__" placeholder="Notes..." style="font-size:1rem; padding:8px; min-height:80px; resize:vertical;"></textarea></td>
       <td><button type="button" class="remove-row btn-remove">✕</button></td>
     </tr>
   </tbody>
