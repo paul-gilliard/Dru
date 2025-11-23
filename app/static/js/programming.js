@@ -200,17 +200,19 @@ function parseSeriesDescription(row, description) {
   const rirMatch = description.match(/RIR:\s*([\d.]+)/i);
   const intMatch = description.match(/Int:\s*(\d+)/i);
 
-  const repsInput = row.querySelector('input[placeholder="Reps"]');
-  const loadInput = row.querySelector('input[placeholder="Poids"]');
-  const restInput = row.querySelector('input[placeholder="Rest (s)"]');
-  const rirInput = row.querySelector('input[placeholder="RIR"]');
-  const intInput = row.querySelector('input[placeholder="Int"]');
+  // Find inputs within the row
+  const inputs = row.querySelectorAll('input');
+  if (inputs.length < 5) {
+    console.warn('parseSeriesDescription: expected at least 5 inputs, found', inputs.length);
+    return;
+  }
 
-  if (repsMatch && repsInput) repsInput.value = repsMatch[1];
-  if (loadMatch && loadInput) loadInput.value = loadMatch[1];
-  if (restMatch && restInput) restInput.value = restMatch[1];
-  if (rirMatch && rirInput) rirInput.value = rirMatch[1];
-  if (intMatch && intInput) intInput.value = intMatch[1];
+  // inputs are: Reps, Poids, Rest, RIR, Int (in order from grid template)
+  if (repsMatch) inputs[0].value = repsMatch[1];
+  if (loadMatch) inputs[1].value = loadMatch[1];
+  if (restMatch) inputs[2].value = restMatch[1];
+  if (rirMatch) inputs[3].value = rirMatch[1];
+  if (intMatch) inputs[4].value = intMatch[1];
 }
 
 // Confirmation modal helpers
@@ -240,6 +242,56 @@ function parseSeriesDescription(row, description) {
   if (saveFloat) {
     saveFloat.addEventListener('click', function(){
       showConfirm('Enregistrer le programme ? Toutes les modifications seront sauvegardées.', function(){
+        // Remove any existing series hidden inputs first
+        const existingInputs = form.querySelectorAll('input[name*="ex_series_"][type="hidden"]');
+        existingInputs.forEach(input => input.remove());
+        
+        // Build series descriptions from series grid data BEFORE submit
+        const seriesByDay = {};
+        document.querySelectorAll('.exercise-block').forEach(exerciseBlock => {
+          const day = exerciseBlock.getAttribute('data-day');
+          if (!day) return;
+          
+          if (!seriesByDay[day]) seriesByDay[day] = [];
+          
+          const seriesRows = exerciseBlock.querySelectorAll('.series-row');
+          let seriesDescription = '';
+          
+          seriesRows.forEach((row, idx) => {
+            const reps = row.querySelector('input[placeholder="Reps"]')?.value || '';
+            const load = row.querySelector('input[placeholder="Poids"]')?.value || '';
+            const rest = row.querySelector('input[placeholder="Rest (s)"]')?.value || '';
+            const rir = row.querySelector('input[placeholder="RIR"]')?.value || '';
+            const Int = row.querySelector('input[placeholder="Int"]')?.value || '';
+            
+            // Build series line: "S1: 8 reps 100kg, Rest: 60s, RIR: 2, Int: 1"
+            let line = `S${idx + 1}:`;
+            if (reps) line += ` ${reps} reps`;
+            if (load) line += ` ${load}kg`;
+            if (rest) line += `, Rest: ${rest}s`;
+            if (rir) line += `, RIR: ${rir}`;
+            if (Int) line += `, Int: ${Int}`;
+            
+            seriesDescription += line + '\n';
+          });
+          
+          seriesByDay[day].push(seriesDescription.trim());
+        });
+        
+        // Create hidden inputs for all series data
+        for (const day in seriesByDay) {
+          seriesByDay[day].forEach(seriesDesc => {
+            const hiddenInput = document.createElement('input');
+            hiddenInput.type = 'hidden';
+            hiddenInput.name = `ex_series_${day}[]`;
+            hiddenInput.value = seriesDesc;
+            form.appendChild(hiddenInput);
+          });
+        }
+        
+        // Debug log
+        console.log('Series data to submit:', seriesByDay);
+        
         // submit form
         if (form) {
           // disable buttons to prevent multiple submit
