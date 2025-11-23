@@ -24,9 +24,55 @@
 
 {% if program %}
 <div class="card">
-  <h3>{{ program.name }} — semaine</h3>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+    <h3 style="margin:0;">{{ program.name }}</h3>
+    <span class="session-badge" style="font-size:0.9rem; padding:6px 12px; background:#f3f4f6; color:#0b63d6; border-radius:6px; font-weight:600;">{{ sessions_by_day|length }} séances</span>
+  </div>
 
-  <div class="program-days-list" style="margin-top:12px;">
+  <!-- Program summary -->
+  <div style="padding:14px; background:#f9fafb; border-left:4px solid #0b63d6; border-radius:6px; margin-bottom:20px;">
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:14px;">
+      {% set total_exercises = 0 %}
+      {% set total_series = 0 %}
+      {% set muscle_groups = {} %}
+      
+      {% for day in range(7) %}
+        {% set sd = sessions_by_day.get(day) %}
+        {% if sd and sd.exercises %}
+          {% for ex in sd.exercises %}
+            {% set total_exercises = total_exercises + 1 %}
+            {% set series_list = ex.get_series_list() %}
+            {% set total_series = total_series + (series_list|length) %}
+            {% if ex.muscle %}
+              {% if ex.muscle not in muscle_groups %}
+                {% set _ = muscle_groups.update({ex.muscle: 0}) %}
+              {% endif %}
+              {% set _ = muscle_groups.update({ex.muscle: muscle_groups[ex.muscle] + (series_list|length)}) %}
+            {% endif %}
+          {% endfor %}
+        {% endif %}
+      {% endfor %}
+      
+      <div>
+        <div style="font-size:2rem; font-weight:700; color:#0b63d6;">{{ total_exercises }}</div>
+        <div style="font-size:0.85rem; color:#666; font-weight:500;">Exercices</div>
+      </div>
+      <div>
+        <div style="font-size:2rem; font-weight:700; color:#0b63d6;">{{ total_series }}</div>
+        <div style="font-size:0.85rem; color:#666; font-weight:500;">Séries totales</div>
+      </div>
+      {% for muscle, count in muscle_groups.items() %}
+      <div>
+        <div style="font-size:1.3rem; font-weight:700; color:#0b63d6;">{{ count }}</div>
+        <div style="font-size:0.85rem; color:#666; font-weight:500;">{{ muscle }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <h3 style="margin-bottom:12px; color:#0b63d6; font-size:1rem;">Semaine d'entraînement</h3>
+
+  <div class="program-days-list" style="margin-top:12px; display:grid; gap:12px;">
     {% for day in range(7) %}
     {% set sd = sessions_by_day.get(day) %}
     <div class="program-day-card">
