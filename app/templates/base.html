@@ -17,10 +17,11 @@
 
                 {# liens coach (affichés si rôle != athlete) #}
                 {% if session.get('role') != 'athlete' %}
-                <li><a href="{{ url_for('coach_availability') }}">Saisie availability</a></li>
+                <li><a href="{{ url_for('coach_availability') }}">Saisie Dispo boutique</a></li>
                 <li><a href="{{ url_for('coach') }}">Création utilisateur</a></li>
                 <li><a href="{{ url_for('coach_programming') }}">Création programmation</a></li>
-                <li><a href="{{ url_for('coach_stats') }}">Suivi journal</a></li>
+                <li><a href="{{ url_for('coach_exercises') }}">Banque exercice</a></li>
+                <li><a href="{{ url_for('coach_stats') }}">Suivi Athlete</a></li>
                 {% endif %}
 
                 {# lien athlete (si rôle != coach) #}
