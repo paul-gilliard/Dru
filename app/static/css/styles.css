@@ -175,39 +175,221 @@ a:focus, button:focus, input:focus, select:focus { box-shadow: 0 0 0 4px rgba(59
 
 /* Spécifique à l'éditeur de programme : lignes alternées et cards plus grandes */
 .programming-edit .day-row {
-  padding: 22px;
-  min-height: 320px;
-  box-shadow: none;
-  border: 1px solid rgba(15,23,42,0.04);
+  padding: 20px;
+  min-height: auto;
+  box-shadow: 0 2px 8px rgba(15,23,42,0.04);
+  border: 1px solid rgba(15,23,42,0.08);
+  border-radius: 12px;
   border-left: 4px solid transparent;
+  background: #ffffff;
 }
 
 .programming-edit .day-row:nth-child(even) {
-  background: #eef9ff; /* teinte claire mais visible */
-  border-left-color: rgba(11,99,214,0.12); /* accent gauche */
+  background: #f9fafb;
+  border-left-color: rgba(11,99,214,0.3);
 }
 
 .programming-edit .day-row:nth-child(odd) {
   background: #ffffff;
-  border-left-color: rgba(15,23,42,0.02);
+  border-left-color: rgba(15,23,42,0.1);
 }
 
-/* zone du tableau moins scrollable : augmente la limite */
+/* Programming table styling */
+.programming-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.programming-table thead th {
+  background: rgba(15,23,42,0.02);
+  padding: 10px 8px;
+  text-align: left;
+  font-weight: 700;
+  color: #374151;
+  border-bottom: 2px solid rgba(15,23,42,0.1);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.programming-table tbody tr {
+  border-bottom: 1px solid rgba(15,23,42,0.05);
+  transition: background 0.1s ease;
+}
+
+.programming-table tbody tr:hover {
+  background: rgba(11,99,214,0.03);
+}
+
+.programming-table tbody td {
+  padding: 8px;
+  vertical-align: middle;
+}
+
+/* Select et inputs dans la table */
+.programming-table select,
+.programming-table input {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(15,23,42,0.1);
+  background: #ffffff;
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.programming-table select:focus,
+.programming-table input:focus {
+  outline: none;
+  border-color: rgba(11,99,214,0.6);
+  box-shadow: 0 0 0 3px rgba(11,99,214,0.1);
+}
+
+.programming-table select {
+  min-height: 36px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath fill='%23111827' d='M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 18px;
+  padding-right: 30px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+.programming-table input[type="number"],
+.programming-table input[type="text"] {
+  font-size: 0.9rem;
+}
+
+.programming-table input[type="number"] {
+  text-align: center;
+}
+
+/* Boutons dans la table */
+.programming-table .btn-remove {
+  width: 100%;
+  padding: 8px;
+  min-width: 0;
+  background: #ef4444;
+  color: white;
+  font-weight: 700;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.programming-table .btn-remove:hover {
+  background: #dc2626;
+}
+
+.programming-table .btn-remove:active {
+  transform: scale(0.98);
+}
+
+/* Wrapper pour le tableau scrollable */
+.table-wrap {
+  max-height: 800px;
+  overflow-y: auto;
+  border-radius: 8px;
+  border: 1px solid rgba(15,23,42,0.06);
+  background: #ffffff;
+}
+
+.table-wrap::-webkit-scrollbar {
+  width: 8px;
+}
+
+.table-wrap::-webkit-scrollbar-track {
+  background: rgba(15,23,42,0.02);
+  border-radius: 4px;
+}
+
+.table-wrap::-webkit-scrollbar-thumb {
+  background: rgba(15,23,42,0.15);
+  border-radius: 4px;
+}
+
+.table-wrap::-webkit-scrollbar-thumb:hover {
+  background: rgba(15,23,42,0.25);
+}
+
+/* Formulaire inline pour nom de la séance */
+.form-row-horizontal {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.form-group-inline {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group-inline label {
+  font-weight: 600;
+  color: #374151;
+  font-size: 0.9rem;
+}
+
+.form-group-inline input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(15,23,42,0.1);
+  background: #fbfdff;
+  font-size: 0.95rem;
+  color: #0f172a;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.form-group-inline input:focus {
+  outline: none;
+  border-color: rgba(11,99,214,0.6);
+  box-shadow: 0 0 0 3px rgba(11,99,214,0.08);
+}
+
+/* Bouton ajouter exercice */
+.btn-add-exercise {
+  background: linear-gradient(135deg, #0b63d6 0%, #0858c0 100%);
+  color: white;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.1s ease, box-shadow 0.15s ease;
+  font-size: 0.95rem;
+}
+
+.btn-add-exercise:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(11,99,214,0.2);
+}
+
+.btn-add-exercise:active {
+  transform: translateY(0);
+}
+
+/* Zone du tableau moins scrollable : augmente la limite */
 .programming-edit .table-wrap {
   max-height: 800px; /* augmenté (anciennement 420px) pour réduire le scroll */
   overflow: auto;
-  padding-right: 6px;
+  padding-right: 0px;
 }
 
 /* inputs dans l'éditeur */
 .programming-edit input[type="text"], .programming-edit input[type="number"] {
   font-size: 0.95rem;
   padding: 6px 8px;
-}
-
-/* bouton ajouter/supprimer alignés */
-.programming-edit .add-row, .programming-edit .remove-row {
-  border-radius: 8px;
 }
 
 /* Card full width on programming edit: break out of centered container (full-bleed) */
@@ -220,6 +402,8 @@ a:focus, button:focus, input:focus, select:focus { box-shadow: 0 0 0 4px rgba(59
   margin-left: calc(50% - 50vw); /* centre puis étend sur toute la largeur viewport */
   margin-right: calc(50% - 50vw);
   background: transparent;
+  box-shadow: none;
+  border: none;
 }
 
 /* Optionnel: augmenter l'espace interne de la grande card pour confort */
@@ -278,59 +462,62 @@ a:focus, button:focus, input:focus, select:focus { box-shadow: 0 0 0 4px rgba(59
 
 /* Make floating buttons smaller but visible */
 .floating-actions .save-program-btn {
-  padding: 10px 14px;
-  min-width: 160px;
+  padding: 12px 16px;
+  min-width: 180px;
   font-size: 0.98rem;
   border-radius: 10px;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+  background: linear-gradient(180deg, #ff6b35 0%, #e14f1a 100%);
+  color: white;
+  border: none;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.floating-actions .save-program-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.2);
 }
 
 /* cancel button style */
 .floating-actions .cancel-btn {
-  background: #f3f4f6;
+  background: #ffffff;
   color: #111827;
-  border: 1px solid rgba(15,23,42,0.06);
-  padding: 8px 12px;
+  border: 1.5px solid rgba(15,23,42,0.2);
+  padding: 10px 14px;
   border-radius: 10px;
   cursor: pointer;
   font-weight: 700;
-  min-width: 160px;
+  min-width: 180px;
+  font-size: 0.95rem;
+  transition: all 0.12s ease;
 }
 
-/* spacing and layout for actions in program list */
-.action-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px; /* espace entre Éditer et Supprimer */
+.floating-actions .cancel-btn:hover {
+  background: #f3f4f6;
+  border-color: rgba(15,23,42,0.3);
+  transform: translateY(-2px);
 }
-.action-group .edit-btn {
-  color: #0b63d6;
-  font-weight:700;
-  text-decoration: none;
-}
-.action-group .delete-btn {
-  background: #fff;
-  border: 1px solid rgba(15,23,42,0.06);
-  padding: 6px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight:700;
-}
-
-/* confirmation modal styles (matching other modal styles) */
-.confirm-modal { display:none; position:fixed; inset:0; z-index:1200; align-items:center; justify-content:center; }
-.confirm-modal[aria-hidden="false"] { display:flex; }
-.confirm-modal-backdrop { position:absolute; inset:0; background:rgba(0,0,0,0.35); }
-.confirm-modal-panel { position:relative; background:#fff; border-radius:10px; padding:16px; width:460px; max-width:94%; box-shadow:0 18px 40px rgba(0,0,0,0.3); z-index:2; }
-.confirm-modal-body { margin-bottom:12px; font-size:1rem; color:#0f172a; }
-.confirm-modal-actions { display:flex; gap:10px; justify-content:flex-end; }
-.confirm-yes { background:#ef4444; color:#fff; padding:8px 14px; border-radius:8px; border:none; cursor:pointer; font-weight:700; }
-.confirm-no { background:#e5e7eb; color:#111827; padding:8px 12px; border-radius:8px; border:none; cursor:pointer; font-weight:700; }
 
 /* ensure floating actions not obstruct form on small screens: move to bottom on narrow viewports */
 @media (max-width:720px) {
-  .floating-actions { left: 50%; bottom: 12px; top: auto; transform: translateX(-50%); flex-direction: row; }
-  .floating-actions .save-program-btn, .floating-actions .cancel-btn { min-width: 120px; font-size: 0.95rem; }
+  .floating-actions {
+    left: 50%;
+    bottom: 16px;
+    top: auto;
+    transform: translateX(-50%);
+    flex-direction: row;
+    gap: 8px;
+    z-index: 1100;
+  }
+  
+  .floating-actions .save-program-btn,
+  .floating-actions .cancel-btn {
+    min-width: 140px;
+    font-size: 0.9rem;
+    padding: 10px 12px;
+  }
 }
 
 /* compact responsive grid for journal form */
@@ -364,12 +551,6 @@ a:focus, button:focus, input:focus, select:focus { box-shadow: 0 0 0 4px rgba(59
 }
 
 /* modal styles already present; reuse those used previously for confirm-modal */
-
-/* keep buttons touch-friendly */
-.save-program-btn, .edit-entry-btn {
-  padding: 8px 12px;
-  border-radius: 8px;
-}
 
 /* Grid de séances en cards */
 .program-block h4 { margin: 0 0 6px 0; font-size:1rem; }

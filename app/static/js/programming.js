@@ -1,8 +1,9 @@
 document.addEventListener('click', function(e){
-  if (e.target.matches('.add-row')) {
+  if (e.target.matches('.add-row, .btn-add-exercise')) {
     const day = e.target.getAttribute('data-day');
     const tbody = document.getElementById('tbody_day_' + day);
     const template = document.getElementById('row-template').querySelector('tr').cloneNode(true);
+    
     const map = {
       '__NAME__': `ex_name_${day}[]`,
       '__SETS__': `ex_sets_${day}[]`,
@@ -13,19 +14,22 @@ document.addEventListener('click', function(e){
       '__MUSC__': `ex_musc_${day}[]`,
       '__REM__': `ex_rem_${day}[]`
     };
-    template.querySelectorAll('input').forEach((inp)=>{
-      const pname = inp.getAttribute('name');
+    
+    template.querySelectorAll('input, select').forEach((el)=>{
+      const pname = el.getAttribute('name');
       for (const key in map) {
         if (pname === key) {
-          inp.setAttribute('name', map[key]);
+          el.setAttribute('name', map[key]);
           break;
         }
       }
     });
+    
     tbody.appendChild(template);
   }
 
-  if (e.target.matches('.remove-row')) {
+  if (e.target.matches('.remove-row, .btn-remove')) {
+    e.preventDefault();
     const tr = e.target.closest('tr');
     if (tr) tr.remove();
   }
