@@ -19,34 +19,60 @@
         </div>
 
         <div style="margin-top:14px;">
-          <div class="table-wrap">
-            <table class="programming-table">
-              <thead>
-                <tr>
-                  <th style="text-align:left; width:140px;">Exercice</th>
-                  <th style="width:100px;">Muscle</th>
-                  <th style="width:200px;">Description des séries</th>
-                  <th style="width:140px;">Remarque générale</th>
-                  <th style="width:40px;"></th>
-                </tr>
-              </thead>
-              <tbody id="tbody_day_{{ day }}">
-                {% if sessions_by_day[day] %}
-                  {% for ex in sessions_by_day[day].exercises %}
-                  <tr>
-                    <td><select name="ex_name_{{ day }}[]" class="exercise-select" data-value="{{ ex.name or '' }}"><option>-- Sélectionner --</option></select></td>
-                    <td><input type="text" name="ex_musc_{{ day }}[]" value="{{ ex.muscle }}" placeholder="Pecs" style="font-size:1rem; padding:8px;"></td>
-                    <td><textarea name="ex_series_{{ day }}[]" placeholder="S1: 8 reps 100kg&#10;S2: 6 reps 120kg&#10;S3: 4 reps 140kg" style="font-size:0.95rem; padding:8px; min-height:100px; resize:vertical; font-family:monospace;">{{ ex.series_description }}</textarea></td>
-                    <td><textarea name="ex_rem_{{ day }}[]" placeholder="Notes..." style="font-size:0.95rem; padding:8px; min-height:100px; resize:vertical;">{{ ex.remark }}</textarea></td>
-                    <td><button type="button" class="remove-row btn-remove">✕</button></td>
-                  </tr>
-                  {% endfor %}
-                {% endif %}
-              </tbody>
-            </table>
+          <h5 style="margin-bottom:12px; color:#374151;">{{ ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'][day] }}</h5>
+          <div class="exercises-container" id="exercises_day_{{ day }}" style="display:flex; flex-direction:column; gap:20px;">
+            {% if sessions_by_day[day] %}
+              {% for ex in sessions_by_day[day].exercises %}
+              <div class="exercise-block" data-exercise-id="{{ ex.id }}" style="border:1px solid rgba(15,23,42,0.1); border-radius:10px; padding:14px; background:#f9fafb;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <div style="flex:1;">
+                    <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Exercice</label>
+                    <select name="ex_name_{{ day }}[]" class="exercise-select" data-value="{{ ex.name or '' }}" style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem;" required><option>-- Sélectionner --</option></select>
+                  </div>
+                  <div style="margin-left:12px;">
+                    <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Muscle</label>
+                    <input type="text" name="ex_musc_{{ day }}[]" value="{{ ex.muscle }}" placeholder="Pecs" style="width:100px; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem;">
+                  </div>
+                  <button type="button" class="delete-exercise btn-remove" style="margin-top:20px; background:#ef4444; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Supprimer</button>
+                </div>
+
+                <!-- Séries pour cet exercice -->
+                <div class="series-list" style="margin-bottom:12px;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <label style="font-weight:600; color:#374151; font-size:0.95rem;">Séries</label>
+                    <button type="button" class="add-series" data-exercise-id="{{ ex.id }}" data-day="{{ day }}" style="background:#0b63d6; color:white; padding:6px 12px; border-radius:6px; border:none; cursor:pointer; font-size:0.9rem; font-weight:600;">+ Ajouter série</button>
+                  </div>
+
+                  <div class="series-items" style="display:flex; flex-direction:column; gap:8px;">
+                    {% set series_list = ex.get_series_list() %}
+                    {% if series_list %}
+                      {% for s in series_list %}
+                      <div class="series-row" style="display:grid; grid-template-columns: 60px 80px 80px 80px 60px 80px auto; gap:8px; align-items:center;">
+                        <div><label style="font-size:0.85rem; color:#666;">S{{ s.number }}</label></div>
+                        <div><input type="number" placeholder="Reps" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+                        <div><input type="number" placeholder="Poids" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+                        <div><input type="number" placeholder="Rest (s)" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+                        <div><input type="number" placeholder="RIR" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+                        <div><input type="text" placeholder="Int" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+                        <button type="button" class="delete-series" style="background:#ef4444; color:white; padding:6px 10px; border-radius:4px; border:none; cursor:pointer; font-size:0.85rem; font-weight:600;">✕</button>
+                      </div>
+                      {% endfor %}
+                    {% endif %}
+                  </div>
+                </div>
+
+                <!-- Remarque générale -->
+                <div>
+                  <label style="font-size:0.9rem; font-weight:600; color:#374151;">Remarque générale</label>
+                  <textarea name="ex_rem_{{ day }}[]" placeholder="Notes..." style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.9rem; min-height:60px; resize:vertical;">{{ ex.remark }}</textarea>
+                </div>
+              </div>
+              {% endfor %}
+            {% endif %}
           </div>
+
           <div style="margin-top:12px;">
-            <button type="button" class="add-row btn-add-exercise" data-day="{{ day }}">+ Ajouter un exercice</button>
+            <button type="button" class="add-exercise btn-add-exercise" data-day="{{ day }}" style="background:#0b63d6; color:white; padding:10px 16px; border-radius:8px; border:none; cursor:pointer; font-weight:700; font-size:0.95rem;">+ Ajouter un exercice</button>
           </div>
         </div>
       </div>
@@ -87,6 +113,48 @@
     </tr>
   </tbody>
 </table>
+
+<!-- Exercise and series templates (hidden) -->
+<template id="exercise-template">
+  <div class="exercise-block" style="border:1px solid rgba(15,23,42,0.1); border-radius:10px; padding:14px; background:#f9fafb;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <div style="flex:1;">
+        <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Exercice</label>
+        <select name="__EX_NAME__" class="exercise-select" style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem;" required><option>-- Sélectionner --</option></select>
+      </div>
+      <div style="margin-left:12px;">
+        <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Muscle</label>
+        <input type="text" name="__EX_MUSC__" placeholder="Pecs" style="width:100px; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem;">
+      </div>
+      <button type="button" class="delete-exercise" style="margin-top:20px; background:#ef4444; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Supprimer</button>
+    </div>
+
+    <div class="series-list" style="margin-bottom:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <label style="font-weight:600; color:#374151; font-size:0.95rem;">Séries</label>
+        <button type="button" class="add-series" style="background:#0b63d6; color:white; padding:6px 12px; border-radius:6px; border:none; cursor:pointer; font-size:0.9rem; font-weight:600;">+ Ajouter série</button>
+      </div>
+      <div class="series-items" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+
+    <div>
+      <label style="font-size:0.9rem; font-weight:600; color:#374151;">Remarque générale</label>
+      <textarea name="__EX_REM__" placeholder="Notes..." style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.9rem; min-height:60px; resize:vertical;"></textarea>
+    </div>
+  </div>
+</template>
+
+<template id="series-template">
+  <div class="series-row" style="display:grid; grid-template-columns: 60px 80px 80px 80px 60px 80px auto; gap:8px; align-items:center;">
+    <div><label style="font-size:0.85rem; color:#666;" class="series-number">S1</label></div>
+    <div><input type="text" name="__SERIES_REPS__" placeholder="Reps" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+    <div><input type="number" name="__SERIES_LOAD__" placeholder="Poids" step="0.5" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+    <div><input type="number" name="__SERIES_REST__" placeholder="Rest (s)" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+    <div><input type="number" name="__SERIES_RIR__" placeholder="RIR" step="0.5" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+    <div><input type="text" name="__SERIES_INT__" placeholder="Int" style="width:100%; padding:6px; font-size:0.9rem; border-radius:4px; border:1px solid rgba(15,23,42,0.1);"></div>
+    <button type="button" class="delete-series" style="background:#ef4444; color:white; padding:6px 10px; border-radius:4px; border:none; cursor:pointer; font-size:0.85rem; font-weight:600;">✕</button>
+  </div>
+</template>
 
 <script>
 // Charger les exercices disponibles et remplir les selects

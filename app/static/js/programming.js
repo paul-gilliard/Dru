@@ -1,33 +1,142 @@
 document.addEventListener('click', function(e){
-  if (e.target.matches('.add-row, .btn-add-exercise')) {
+  // Add new exercise
+  if (e.target.matches('.add-exercise, .btn-add-exercise')) {
     const day = e.target.getAttribute('data-day');
-    const tbody = document.getElementById('tbody_day_' + day);
-    const template = document.getElementById('row-template').querySelector('tr').cloneNode(true);
+    const container = document.getElementById(`exercises_day_${day}`);
+    const template = document.getElementById('exercise-template');
+    const clone = template.content.cloneNode(true);
     
-    const map = {
-      '__NAME__': `ex_name_${day}[]`,
-      '__MUSC__': `ex_musc_${day}[]`,
-      '__SERIES__': `ex_series_${day}[]`,
-      '__REM__': `ex_rem_${day}[]`
-    };
-    
-    template.querySelectorAll('input, select, textarea').forEach((el)=>{
-      const pname = el.getAttribute('name');
-      for (const key in map) {
-        if (pname === key) {
-          el.setAttribute('name', map[key]);
-          break;
-        }
-      }
+    // Update field names with day number
+    const exerciseBlock = clone.querySelector('.exercise-block');
+    const fields = clone.querySelectorAll('[name*="__"]');
+    fields.forEach(field => {
+      const name = field.getAttribute('name');
+      field.setAttribute('name', name
+        .replace('__EX_NAME__', `ex_name_${day}[]`)
+        .replace('__EX_MUSC__', `ex_musc_${day}[]`)
+        .replace('__EX_REM__', `ex_rem_${day}[]`)
+      );
     });
     
-    tbody.appendChild(template);
+    // Store day on exercise block for later reference
+    exerciseBlock.setAttribute('data-day', day);
+    
+    // Attach event listeners for this exercise
+    const addSeriesBtn = clone.querySelector('.add-series');
+    const deleteExerciseBtn = clone.querySelector('.delete-exercise');
+    
+    addSeriesBtn.addEventListener('click', function(evt) {
+      evt.preventDefault();
+      const seriesList = exerciseBlock.querySelector('.series-list');
+      const seriesItems = seriesList.querySelector('.series-items');
+      addSeriesRow(seriesItems);
+    });
+    
+    deleteExerciseBtn.addEventListener('click', function(evt) {
+      evt.preventDefault();
+      exerciseBlock.remove();
+    });
+    
+    container.appendChild(clone);
   }
 
+  // Add new series row
+  if (e.target.matches('.add-series')) {
+    e.preventDefault();
+    const seriesList = e.target.closest('.series-list');
+    const seriesItems = seriesList.querySelector('.series-items');
+    addSeriesRow(seriesItems);
+  }
+
+  // Delete series row
+  if (e.target.matches('.delete-series')) {
+    e.preventDefault();
+    const seriesRow = e.target.closest('.series-row');
+    seriesRow.remove();
+    // Update series numbers
+    const seriesItems = seriesRow.closest('.series-items');
+    updateSeriesNumbers(seriesItems);
+  }
+
+  // Delete exercise
+  if (e.target.matches('.delete-exercise')) {
+    e.preventDefault();
+    const exerciseBlock = e.target.closest('.exercise-block');
+    exerciseBlock.remove();
+  }
+
+  // Remove row (legacy support)
   if (e.target.matches('.remove-row, .btn-remove')) {
     e.preventDefault();
     const tr = e.target.closest('tr');
     if (tr) tr.remove();
+  }
+});
+
+function addSeriesRow(seriesItems) {
+  const template = document.getElementById('series-template');
+  const clone = template.content.cloneNode(true);
+  
+  // Count existing series to auto-increment
+  const seriesCount = seriesItems.querySelectorAll('.series-row').length + 1;
+  const label = clone.querySelector('.series-number');
+  label.textContent = `S${seriesCount}`;
+  
+  seriesItems.appendChild(clone);
+}
+
+function updateSeriesNumbers(seriesItems) {
+  const rows = seriesItems.querySelectorAll('.series-row');
+  rows.forEach((row, index) => {
+    const label = row.querySelector('.series-number');
+    label.textContent = `S${index + 1}`;
+  });
+}
+
+// Override form submission to build series_description from grid data
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('program-form');
+  if (form) {
+    form.addEventListener('submit', function(e) {
+      // Build series descriptions from series grid data
+      document.querySelectorAll('.exercise-block').forEach(exerciseBlock => {
+        const day = exerciseBlock.getAttribute('data-day');
+        if (!day) return;
+        
+        const seriesRows = exerciseBlock.querySelectorAll('.series-row');
+        let seriesDescription = '';
+        
+        seriesRows.forEach((row, idx) => {
+          const reps = row.querySelector('input[placeholder="Reps"]')?.value || '';
+          const load = row.querySelector('input[placeholder="Poids"]')?.value || '';
+          const rest = row.querySelector('input[placeholder="Rest (s)"]')?.value || '';
+          const rir = row.querySelector('input[placeholder="RIR"]')?.value || '';
+          const Int = row.querySelector('input[placeholder="Int"]')?.value || '';
+          
+          // Build series line: "S1: 8 reps 100kg, Rest: 60s, RIR: 2, Int: 1"
+          let line = `S${idx + 1}:`;
+          if (reps) line += ` ${reps} reps`;
+          if (load) line += ` ${load}kg`;
+          if (rest) line += `, Rest: ${rest}s`;
+          if (rir) line += `, RIR: ${rir}`;
+          if (Int) line += `, Int: ${Int}`;
+          
+          seriesDescription += line + '\n';
+        });
+        
+        // Create hidden input for series_description if needed, or use hidden field
+        // For now, we'll create a FormData-like approach by modifying how we send
+        // Actually, we need to add hidden inputs for the backend to parse correctly
+        // The backend expects ex_series_<day>[] to contain the series description
+        
+        // We'll inject a hidden input with the series description
+        const hiddenInput = document.createElement('input');
+        hiddenInput.type = 'hidden';
+        hiddenInput.name = `ex_series_${day}[]`;
+        hiddenInput.value = seriesDescription.trim();
+        form.appendChild(hiddenInput);
+      });
+    });
   }
 });
 

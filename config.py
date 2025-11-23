@@ -24,12 +24,6 @@ class Config:
 class DevelopmentConfig(Config):
     """Configuration pour le développement local (XAMPP)"""
     DEBUG = True
-    DB_USER = 'root'
-    DB_PASSWORD = 'rAUKjGexXYHKnTWkZPtTPoLuKXuOZVhy'
-    DB_HOST = 'mysql.railway.internal'
-    DB_PORT = '3306'
-    DB_NAME = 'railway'
-    SQLALCHEMY_DATABASE_URI = f'mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
 
 
 class ProductionConfig(Config):
