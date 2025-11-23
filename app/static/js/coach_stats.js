@@ -16,6 +16,8 @@ document.addEventListener('DOMContentLoaded', function(){
     options: { interaction:{mode:'index',intersect:false}, scales:{ y:{type:'linear',position:'left'}, y_kcals:{display:false,position:'right'} } }
   });
 
+  let performanceChart = null;
+
   async function loadJournal(athleteId){
     const res = await fetch(`/coach/stats/athlete/${athleteId}/journal.json`);
     if (!res.ok) return;
@@ -61,6 +63,7 @@ document.addEventListener('DOMContentLoaded', function(){
     document.getElementById('other-series-table').querySelector('tbody').innerHTML = '';
     document.getElementById('main-series-container').style.display = 'none';
     document.getElementById('other-series-container').style.display = 'none';
+    document.getElementById('perf-chart-container').style.display = 'none';
   }
 
   function renderExercise(ex){
@@ -68,6 +71,7 @@ document.addEventListener('DOMContentLoaded', function(){
     
     const mainSeriesContainer = document.getElementById('main-series-container');
     const otherSeriesContainer = document.getElementById('other-series-container');
+    const perfChartContainer = document.getElementById('perf-chart-container');
     const mainTableBody = document.getElementById('main-series-table').querySelector('tbody');
     const otherTableBody = document.getElementById('other-series-table').querySelector('tbody');
     
@@ -89,8 +93,13 @@ document.addEventListener('DOMContentLoaded', function(){
         `;
         mainTableBody.appendChild(tr);
       });
+      
+      // Create performance chart for main series
+      createPerformanceChart(data.main_series);
+      perfChartContainer.style.display = 'block';
     } else {
       mainSeriesContainer.style.display = 'none';
+      perfChartContainer.style.display = 'none';
     }
     
     // Render other series
@@ -112,6 +121,62 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   }
 
+  function createPerformanceChart(mainSeriesData){
+    const perfCtx = document.getElementById('chart-performance').getContext('2d');
+    
+    // Destroy old chart if exists
+    if (performanceChart) {
+      performanceChart.destroy();
+    }
+    
+    const labels = mainSeriesData.map(d => d.date);
+    const reps = mainSeriesData.map(d => d.reps !== null ? d.reps : null);
+    const load = mainSeriesData.map(d => d.load !== null ? d.load : null);
+    
+    performanceChart = new Chart(perfCtx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Reps',
+            data: reps,
+            borderColor: '#0b63d6',
+            backgroundColor: 'rgba(11, 99, 214, 0.1)',
+            tension: 0.2,
+            yAxisID: 'y',
+            pointBackgroundColor: '#0b63d6'
+          },
+          {
+            label: 'Poids (kg)',
+            data: load,
+            borderColor: '#ef4444',
+            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+            tension: 0.2,
+            yAxisID: 'y1',
+            pointBackgroundColor: '#ef4444'
+          }
+        ]
+      },
+      options: {
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          y: {
+            type: 'linear',
+            position: 'left',
+            title: { display: true, text: 'Reps' }
+          },
+          y1: {
+            type: 'linear',
+            position: 'right',
+            title: { display: true, text: 'Poids (kg)' },
+            grid: { drawOnChartArea: false }
+          }
+        }
+      }
+    });
+  }
+
   athleteSelect.addEventListener('change', async function(){
     const id = this.value;
     if (!id) return;
@@ -124,6 +189,7 @@ document.addEventListener('DOMContentLoaded', function(){
     if (!ex) { 
       document.getElementById('main-series-container').style.display = 'none';
       document.getElementById('other-series-container').style.display = 'none';
+      document.getElementById('perf-chart-container').style.display = 'none';
       return; 
     }
     renderExercise(ex);
@@ -133,6 +199,7 @@ document.addEventListener('DOMContentLoaded', function(){
     exSelect.value = '';
     document.getElementById('main-series-container').style.display = 'none';
     document.getElementById('other-series-container').style.display = 'none';
+    document.getElementById('perf-chart-container').style.display = 'none';
   });
 
   [toggleKcals, toggleWater, toggleSleep].forEach(el=>{
