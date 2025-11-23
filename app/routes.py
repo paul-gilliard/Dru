@@ -688,26 +688,65 @@ def register_routes(app):
             ex = e.exercise or 'Autre'
             d = e.entry_date.isoformat()
             if ex not in payload:
-                payload[ex] = {}
-            if d not in payload[ex]:
-                payload[ex][d] = []
-            payload[ex][d].append({
+                payload[ex] = {'main': {}, 'other': {}}
+            
+            # Determine if this is a main series entry
+            is_main = False
+            if e.program_session_id and e.series_number:
+                # Find the ExerciseEntry to check if this series_number is the main one
+                ps = e.program_session
+                if ps:
+                    ex_entries = [ex_entry for ex_entry in ps.exercises if ex_entry.name == ex]
+                    if ex_entries:
+                        ex_entry = ex_entries[0]
+                        is_main = (ex_entry.main_series == e.series_number)
+            
+            # Route to appropriate bucket
+            bucket = 'main' if is_main else 'other'
+            if d not in payload[ex][bucket]:
+                payload[ex][bucket][d] = []
+            
+            payload[ex][bucket][d].append({
                 'reps': e.reps,
                 'load': e.load,
                 'series_number': e.series_number,
                 'notes': e.notes,
                 'session_id': e.program_session_id
             })
-        # convert to a friendly structure: { exercise: [ { date, avg_load, avg_reps, count } ... ] }
+        
+        # convert to friendly structure
         out = {}
-        for ex, bydate in payload.items():
-            series = []
-            for d in sorted(bydate.keys()):
-                items = bydate[d]
+        for ex, data in payload.items():
+            out[ex] = {
+                'main_series': [],
+                'other_series': []
+            }
+            
+            # Process main series
+            for d in sorted(data['main'].keys()):
+                items = data['main'][d]
+                # For main series, show exact values (not average, as there should be only one)
+                if items:
+                    item = items[0]  # Should be only one per day
+                    out[ex]['main_series'].append({
+                        'date': d,
+                        'reps': item.get('reps'),
+                        'load': item.get('load'),
+                        'count': len(items)
+                    })
+            
+            # Process other series
+            for d in sorted(data['other'].keys()):
+                items = data['other'][d]
                 avg_load = sum((it.get('load') or 0) for it in items) / (len(items) or 1)
                 avg_reps = sum((it.get('reps') or 0) for it in items) / (len(items) or 1)
-                series.append({'date': d, 'avg_load': avg_load, 'avg_reps': avg_reps, 'count': len(items)})
-            out[ex] = series
+                out[ex]['other_series'].append({
+                    'date': d,
+                    'avg_load': avg_load,
+                    'avg_reps': avg_reps,
+                    'count': len(items)
+                })
+        
         return jsonify(out)
 
     # ============ EXERCISE BANK ROUTES ============

@@ -1,7 +1,6 @@
 document.addEventListener('DOMContentLoaded', function(){
   const athleteSelect = document.getElementById('stats-athlete-select');
   const chartJournalCtx = document.getElementById('chart-journal').getContext('2d');
-  const chartPerfCtx = document.getElementById('chart-performance').getContext('2d');
   const exSelect = document.getElementById('stats-exercise-select');
   const clearEx = document.getElementById('clear-exercise');
   const toggleKcals = document.getElementById('toggle-kcals');
@@ -15,12 +14,6 @@ document.addEventListener('DOMContentLoaded', function(){
       // optional datasets pushed later
     ] },
     options: { interaction:{mode:'index',intersect:false}, scales:{ y:{type:'linear',position:'left'}, y_kcals:{display:false,position:'right'} } }
-  });
-
-  let perfChart = new Chart(chartPerfCtx, {
-    type: 'line',
-    data: { labels: [], datasets: [] },
-    options: { interaction:{mode:'index',intersect:false}, scales:{ y:{type:'linear'} } }
   });
 
   async function loadJournal(athleteId){
@@ -60,27 +53,63 @@ document.addEventListener('DOMContentLoaded', function(){
     perfCache = data;
     // populate exercise select
     exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
-    Object.keys(data).forEach(ex=>{
+    Object.keys(data).sort().forEach(ex=>{
       const opt = document.createElement('option'); opt.value = ex; opt.textContent = ex; exSelect.appendChild(opt);
     });
-    // clear chart
-    perfChart.data.labels = [];
-    perfChart.data.datasets = [];
-    perfChart.update();
+    // clear tables
+    document.getElementById('main-series-table').querySelector('tbody').innerHTML = '';
+    document.getElementById('other-series-table').querySelector('tbody').innerHTML = '';
+    document.getElementById('main-series-container').style.display = 'none';
+    document.getElementById('other-series-container').style.display = 'none';
   }
 
   function renderExercise(ex){
     if (!perfCache || !perfCache[ex]) return;
-    const series = perfCache[ex];
-    const labels = series.map(s=>s.date);
-    const avgLoad = series.map(s=> s.avg_load === null ? null : Number(s.avg_load.toFixed(2)));
-    const avgReps = series.map(s=> s.avg_reps === null ? null : Number(s.avg_reps.toFixed(2)));
-    perfChart.data.labels = labels;
-    perfChart.data.datasets = [
-      { label: `${ex} — charge moyenne (kg)`, data: avgLoad, borderColor:'#0b63d6', tension:0.2 },
-      { label: `${ex} — reps moy.`, data: avgReps, borderColor:'#ef4444', tension:0.2 }
-    ];
-    perfChart.update();
+    
+    const mainSeriesContainer = document.getElementById('main-series-container');
+    const otherSeriesContainer = document.getElementById('other-series-container');
+    const mainTableBody = document.getElementById('main-series-table').querySelector('tbody');
+    const otherTableBody = document.getElementById('other-series-table').querySelector('tbody');
+    
+    mainTableBody.innerHTML = '';
+    otherTableBody.innerHTML = '';
+    
+    const data = perfCache[ex];
+    
+    // Render main series
+    if (data.main_series && data.main_series.length > 0) {
+      mainSeriesContainer.style.display = 'block';
+      data.main_series.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #e5e7eb';
+        tr.innerHTML = `
+          <td style="padding:12px;">${row.date}</td>
+          <td style="padding:12px; text-align:center;">${row.reps !== null ? row.reps : '—'}</td>
+          <td style="padding:12px; text-align:center;">${row.load !== null ? row.load.toFixed(1) : '—'}</td>
+        `;
+        mainTableBody.appendChild(tr);
+      });
+    } else {
+      mainSeriesContainer.style.display = 'none';
+    }
+    
+    // Render other series
+    if (data.other_series && data.other_series.length > 0) {
+      otherSeriesContainer.style.display = 'block';
+      data.other_series.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #e5e7eb';
+        tr.innerHTML = `
+          <td style="padding:12px;">${row.date}</td>
+          <td style="padding:12px; text-align:center;">${row.avg_reps !== null ? row.avg_reps.toFixed(1) : '—'}</td>
+          <td style="padding:12px; text-align:center;">${row.avg_load !== null ? row.avg_load.toFixed(1) : '—'}</td>
+          <td style="padding:12px; text-align:center;">${row.count}</td>
+        `;
+        otherTableBody.appendChild(tr);
+      });
+    } else {
+      otherSeriesContainer.style.display = 'none';
+    }
   }
 
   athleteSelect.addEventListener('change', async function(){
@@ -92,13 +121,18 @@ document.addEventListener('DOMContentLoaded', function(){
 
   exSelect.addEventListener('change', function(){
     const ex = this.value;
-    if (!ex) { perfChart.data.labels=[]; perfChart.data.datasets=[]; perfChart.update(); return; }
+    if (!ex) { 
+      document.getElementById('main-series-container').style.display = 'none';
+      document.getElementById('other-series-container').style.display = 'none';
+      return; 
+    }
     renderExercise(ex);
   });
 
   clearEx.addEventListener('click', function(){
     exSelect.value = '';
-    perfChart.data.labels=[]; perfChart.data.datasets=[]; perfChart.update();
+    document.getElementById('main-series-container').style.display = 'none';
+    document.getElementById('other-series-container').style.display = 'none';
   });
 
   [toggleKcals, toggleWater, toggleSleep].forEach(el=>{
