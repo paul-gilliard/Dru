@@ -26,44 +26,60 @@
 <div class="card">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
     <h3 style="margin:0;">{{ program.name }}</h3>
-    <span class="session-badge" style="font-size:0.9rem; padding:6px 12px; background:#f3f4f6; color:#0b63d6; border-radius:6px; font-weight:600;">{{ sessions_by_day|length }} séances</span>
+    <span class="session-badge" style="font-size:0.9rem; padding:6px 12px; background:#f3f4f6; color:#0b63d6; border-radius:6px; font-weight:600;">
+      {% set active_days = 0 %}
+      {% for day in range(7) %}
+        {% if sessions_by_day.get(day) and sessions_by_day.get(day).exercises|length > 0 %}
+          {% set active_days = active_days + 1 %}
+        {% endif %}
+      {% endfor %}
+      {{ active_days }} séances
+    </span>
   </div>
 
   <!-- Program summary -->
   <div style="padding:14px; background:#f9fafb; border-left:4px solid #0b63d6; border-radius:6px; margin-bottom:20px;">
     <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:14px;">
-      {% set total_exercises = 0 %}
-      {% set total_series = 0 %}
-      {% set muscle_groups = {} %}
+      {% set all_exercises = [] %}
+      {% set all_series = [] %}
+      {% set muscle_counts = {} %}
       
       {% for day in range(7) %}
         {% set sd = sessions_by_day.get(day) %}
         {% if sd and sd.exercises %}
           {% for ex in sd.exercises %}
-            {% set total_exercises = total_exercises + 1 %}
+            {% set _ = all_exercises.append(ex) %}
             {% set series_list = ex.get_series_list() %}
-            {% set total_series = total_series + (series_list|length) %}
+            {% for s in series_list %}
+              {% set _ = all_series.append(s) %}
+            {% endfor %}
             {% if ex.muscle %}
-              {% if ex.muscle not in muscle_groups %}
-                {% set _ = muscle_groups.update({ex.muscle: 0}) %}
+              {% if ex.muscle not in muscle_counts %}
+                {% set _ = muscle_counts.update({ex.muscle: []}) %}
               {% endif %}
-              {% set _ = muscle_groups.update({ex.muscle: muscle_groups[ex.muscle] + (series_list|length)}) %}
+              {% set _ = muscle_counts[ex.muscle].append(ex) %}
             {% endif %}
           {% endfor %}
         {% endif %}
       {% endfor %}
       
       <div>
-        <div style="font-size:2rem; font-weight:700; color:#0b63d6;">{{ total_exercises }}</div>
+        <div style="font-size:2rem; font-weight:700; color:#0b63d6;">{{ all_exercises|length }}</div>
         <div style="font-size:0.85rem; color:#666; font-weight:500;">Exercices</div>
       </div>
       <div>
-        <div style="font-size:2rem; font-weight:700; color:#0b63d6;">{{ total_series }}</div>
+        <div style="font-size:2rem; font-weight:700; color:#0b63d6;">{{ all_series|length }}</div>
         <div style="font-size:0.85rem; color:#666; font-weight:500;">Séries totales</div>
       </div>
-      {% for muscle, count in muscle_groups.items() %}
+      {% for muscle, exs in muscle_counts.items() %}
       <div>
-        <div style="font-size:1.3rem; font-weight:700; color:#0b63d6;">{{ count }}</div>
+        <div style="font-size:1.3rem; font-weight:700; color:#0b63d6;">
+          {% set muscle_series = 0 %}
+          {% for e in exs %}
+            {% set muscle_series = muscle_series + (e.get_series_list()|length) %}
+          {% endfor %}
+          {{ muscle_series }}
+        </div>
         <div style="font-size:0.85rem; color:#666; font-weight:500;">{{ muscle }}</div>
       </div>
       {% endfor %}
@@ -75,38 +91,53 @@
   <div class="program-days-list" style="margin-top:12px; display:grid; gap:12px;">
     {% for day in range(7) %}
     {% set sd = sessions_by_day.get(day) %}
-    <div class="program-day-card">
-      <div class="program-day-header">
-        <div class="day-left">
-          <strong class="day-name">{{ ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][day] }}</strong>
-          {% if sd and sd.session and sd.session.session_name %}
-            <span class="session-small"> — {{ sd.session.session_name }}</span>
-          {% endif %}
-        </div>
-        <div class="day-right text-muted" style="font-size:.85rem;">
-          {% if sd and sd.exercises and sd.exercises|length > 0 %}
-            {{ sd.exercises|length }} ex.
-          {% else %}
-            <em>Pas de séance</em>
-          {% endif %}
+    <div class="program-day-card" style="border:1px solid rgba(15,23,42,0.1); border-radius:8px; overflow:hidden;">
+      <div class="program-day-header" style="padding:12px; background:#f3f4f6; border-bottom:1px solid rgba(15,23,42,0.1);">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <strong class="day-name" style="font-size:1rem; color:#0b63d6;">{{ ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'][day] }}</strong>
+            {% if sd and sd.session and sd.session.session_name %}
+              <span style="color:#666; font-size:0.9rem;"> — {{ sd.session.session_name }}</span>
+            {% endif %}
+          </div>
+          <div style="text-align:right;">
+            {% if sd and sd.exercises and sd.exercises|length > 0 %}
+              <span style="font-weight:600; color:#0b63d6;">{{ sd.exercises|length }} exercice{{ 's' if sd.exercises|length > 1 else '' }}</span>
+            {% else %}
+              <span style="color:#999; font-style:italic; font-size:0.9rem;">Repos</span>
+            {% endif %}
+          </div>
         </div>
       </div>
 
-      <div class="program-day-body">
+      <div class="program-day-body" style="padding:12px;">
         {% if sd and sd.exercises and sd.exercises|length > 0 %}
-        <table class="day-exercises-table">
-          <thead><tr><th>Ex</th><th>S</th><th>Rép</th><th>Rest</th></tr></thead>
-          <tbody>
-            {% for e in sd.exercises %}
-            <tr>
-              <td>{{ e.name }}</td>
-              <td class="center">{{ e.sets or '' }}</td>
-              <td class="center">{{ e.reps or '' }}</td>
-              <td class="center">{{ e.rest or '' }}</td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          {% for e in sd.exercises %}
+          <div style="padding:10px; background:#f9fafb; border-left:3px solid #0b63d6; border-radius:4px;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+              <div>
+                <strong style="font-size:0.95rem; color:#0b63d6;">{{ e.name }}</strong>
+                {% if e.muscle %}
+                  <span style="color:#666; font-size:0.85rem; margin-left:8px;">{{ e.muscle }}</span>
+                {% endif %}
+              </div>
+              {% set series_count = e.get_series_list()|length %}
+              <span style="background:#0b63d6; color:white; padding:4px 8px; border-radius:4px; font-size:0.8rem; font-weight:600;">{{ series_count }}S</span>
+            </div>
+            {% set series_list = e.get_series_list() %}
+            {% if series_list %}
+              <div style="font-size:0.85rem; color:#666; margin-top:6px;">
+                {% for s in series_list %}
+                  <div>{{ s.text }}</div>
+                {% endfor %}
+              </div>
+            {% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% else %}
+          <p style="color:#999; font-style:italic; text-align:center; margin:0;">Pas de séance programmée</p>
         {% endif %}
       </div>
     </div>
