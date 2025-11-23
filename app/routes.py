@@ -668,7 +668,7 @@ def register_routes(app):
         user = User.query.get(session['user_id'])
         if not user or user.role != 'coach':
             return jsonify({'error':'forbidden'}), 403
-        # gather performance entries for athlete, grouped by exercise and session date
+        # gather performance entries for athlete, grouped by exercise and date
         entries = PerformanceEntry.query.filter_by(athlete_id=athlete_id).order_by(PerformanceEntry.entry_date.asc()).all()
         payload = {}
         for e in entries:
@@ -679,13 +679,13 @@ def register_routes(app):
             if d not in payload[ex]:
                 payload[ex][d] = []
             payload[ex][d].append({
-                'sets': e.sets,
                 'reps': e.reps,
                 'load': e.load,
+                'series_number': e.series_number,
                 'notes': e.notes,
                 'session_id': e.program_session_id
             })
-        # convert to a friendly structure: { exercise: [ { date, avg_load, avg_reps, total_sets, count } ... ] }
+        # convert to a friendly structure: { exercise: [ { date, avg_load, avg_reps, count } ... ] }
         out = {}
         for ex, bydate in payload.items():
             series = []
@@ -693,8 +693,7 @@ def register_routes(app):
                 items = bydate[d]
                 avg_load = sum((it.get('load') or 0) for it in items) / (len(items) or 1)
                 avg_reps = sum((it.get('reps') or 0) for it in items) / (len(items) or 1)
-                total_sets = sum((it.get('sets') or 0) for it in items)
-                series.append({'date': d, 'avg_load': avg_load, 'avg_reps': avg_reps, 'total_sets': total_sets, 'count': len(items)})
+                series.append({'date': d, 'avg_load': avg_load, 'avg_reps': avg_reps, 'count': len(items)})
             out[ex] = series
         return jsonify(out)
 
