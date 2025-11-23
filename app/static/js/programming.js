@@ -78,16 +78,26 @@ document.addEventListener('click', function(e){
 
 // Populate exercise selects with fetched exercises
 function populateExerciseSelects(container = null) {
-  fetch('{{ url_for("coach_exercises_json") }}')
+  // Construct the API endpoint path
+  const apiUrl = '/coach/exercises.json';
+  
+  console.log('Fetching exercises from:', apiUrl);
+  
+  fetch(apiUrl)
     .then(response => {
+      console.log('Response status:', response.status);
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       return response.json();
     })
     .then(exercises => {
+      console.log('Received exercises:', exercises);
+      
       // Select all exercise-select elements (or just in container if provided)
       const selects = container 
         ? container.querySelectorAll('.exercise-select')
         : document.querySelectorAll('.exercise-select');
+      
+      console.log('Found', selects.length, 'exercise-select elements');
       
       selects.forEach(select => {
         const currentValue = select.getAttribute('data-value') || select.value;
@@ -105,7 +115,9 @@ function populateExerciseSelects(container = null) {
         }
       });
     })
-    .catch(err => console.error('Erreur chargement exercices:', err));
+    .catch(err => {
+      console.error('Erreur chargement exercices:', err);
+    });
 }
 
 function addSeriesRow(seriesItems) {
