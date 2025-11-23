@@ -1,7 +1,7 @@
 from flask import render_template, request, redirect, url_for, flash, session, abort, jsonify
 from werkzeug.routing import BuildError
 from app import db
-from app.models import User, JournalEntry, PerformanceEntry, ProgramSession, Availability, Program, ExerciseEntry
+from app.models import User, JournalEntry, PerformanceEntry, ProgramSession, Availability, Program, ExerciseEntry, Exercise, MUSCLE_GROUPS
 from datetime import date, datetime, timedelta
 
 def register_routes(app):
@@ -728,7 +728,6 @@ def register_routes(app):
             flash(f'Exercice "{name}" créé')
             return redirect(url_for('coach_exercises'))
 
-        from app.models import Exercise, MUSCLE_GROUPS
         exercises = Exercise.query.order_by(Exercise.muscle_group, Exercise.name).all()
         return render_template('coach_exercises.html', exercises=exercises, muscle_groups=MUSCLE_GROUPS)
 
