@@ -700,6 +700,95 @@ def register_routes(app):
             out[ex] = series
         return jsonify(out)
 
+    # ============ EXERCISE BANK ROUTES ============
+    @app.route('/coach/exercises', methods=['GET', 'POST'])
+    def coach_exercises():
+        """Liste et création des exercices"""
+        forbidden = _require_coach()
+        if forbidden:
+            return forbidden
+
+        if request.method == 'POST':
+            name = (request.form.get('name') or '').strip()
+            muscle_group = request.form.get('muscle_group', '').strip()
+            
+            if not name or not muscle_group:
+                flash('Nom et groupe musculaire requis')
+                return redirect(url_for('coach_exercises'))
+            
+            # Vérifier si l'exercice existe déjà
+            existing = Exercise.query.filter_by(name=name).first()
+            if existing:
+                flash('Cet exercice existe déjà')
+                return redirect(url_for('coach_exercises'))
+            
+            ex = Exercise(name=name, muscle_group=muscle_group)
+            db.session.add(ex)
+            db.session.commit()
+            flash(f'Exercice "{name}" créé')
+            return redirect(url_for('coach_exercises'))
+
+        from app.models import Exercise, MUSCLE_GROUPS
+        exercises = Exercise.query.order_by(Exercise.muscle_group, Exercise.name).all()
+        return render_template('coach_exercises.html', exercises=exercises, muscle_groups=MUSCLE_GROUPS)
+
+    @app.route('/coach/exercises/<int:exercise_id>/edit', methods=['GET', 'POST'])
+    def coach_exercises_edit(exercise_id):
+        """Édition d'un exercice"""
+        forbidden = _require_coach()
+        if forbidden:
+            return forbidden
+
+        from app.models import Exercise, MUSCLE_GROUPS
+        ex = Exercise.query.get_or_404(exercise_id)
+
+        if request.method == 'POST':
+            name = (request.form.get('name') or '').strip()
+            muscle_group = request.form.get('muscle_group', '').strip()
+            
+            if not name or not muscle_group:
+                flash('Nom et groupe musculaire requis')
+                return redirect(url_for('coach_exercises_edit', exercise_id=exercise_id))
+            
+            # Vérifier doublon (autre exercice avec le même nom)
+            existing = Exercise.query.filter_by(name=name).first()
+            if existing and existing.id != ex.id:
+                flash('Un autre exercice a déjà ce nom')
+                return redirect(url_for('coach_exercises_edit', exercise_id=exercise_id))
+            
+            ex.name = name
+            ex.muscle_group = muscle_group
+            db.session.commit()
+            flash('Exercice mis à jour')
+            return redirect(url_for('coach_exercises'))
+
+        return render_template('coach_exercises_edit.html', exercise=ex, muscle_groups=MUSCLE_GROUPS)
+
+    @app.route('/coach/exercises/<int:exercise_id>/delete', methods=['POST'])
+    def coach_exercises_delete(exercise_id):
+        """Suppression d'un exercice"""
+        forbidden = _require_coach()
+        if forbidden:
+            return forbidden
+
+        from app.models import Exercise
+        ex = Exercise.query.get_or_404(exercise_id)
+        name = ex.name
+        db.session.delete(ex)
+        db.session.commit()
+        flash(f'Exercice "{name}" supprimé')
+        return redirect(url_for('coach_exercises'))
+
+    @app.route('/coach/exercises.json')
+    def coach_exercises_json():
+        """API pour récupérer les exercices (pour le select dynamique)"""
+        if 'user_id' not in session or session.get('role') != 'coach':
+            return jsonify({'error': 'forbidden'}), 403
+        
+        from app.models import Exercise
+        exercises = Exercise.query.order_by(Exercise.name).all()
+        return jsonify([ex.to_dict() for ex in exercises])
+
     @app.context_processor
     def inject_now():
         # expose now() utilisable dans les templates : {{ now().date() }} ou {{ now().isoformat() }}
@@ -712,6 +801,7 @@ def register_routes(app):
             # l'onglet "Création utilisateur" utilise la route /coach (page principale coach)
             'create_user' : {'url': '/coach',               'endpoint': 'coach',              'label': 'Création utilisateur'},
             'programming' : {'url': '/coach/programming',  'endpoint': 'coach_programming',  'label': 'Création programmation'},
+            'exercises'   : {'url': '/coach/exercises',    'endpoint': 'coach_exercises',    'label': 'Banque d\'exercices'},
             'stats'       : {'url': '/coach/stats',         'endpoint': 'coach_stats',        'label': 'Suivi journal'},
         }
         return {'coach_nav_items_static': items}

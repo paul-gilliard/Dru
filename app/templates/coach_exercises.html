@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Banque d'Exercices{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Banque d'Exercices</h1>
+
+    <!-- Formulaire de création -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Ajouter un nouvel exercice</h5>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('coach_exercises') }}">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="name" class="form-label">Nom de l'exercice</label>
+                        <input type="text" class="form-control" id="name" name="name" required>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="muscle_group" class="form-label">Groupe musculaire</label>
+                        <select class="form-select" id="muscle_group" name="muscle_group" required>
+                            <option value="">-- Sélectionner --</option>
+                            {% for group in muscle_groups %}
+                            <option value="{{ group }}">{{ group }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary mt-3">Ajouter l'exercice</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Liste des exercices -->
+    <div class="card">
+        <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0">Exercices existants ({{ exercises|length }})</h5>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Nom</th>
+                        <th>Groupe musculaire</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if exercises %}
+                        {% for exercise in exercises %}
+                        <tr>
+                            <td>{{ exercise.name }}</td>
+                            <td>
+                                <span class="badge bg-info">{{ exercise.muscle_group }}</span>
+                            </td>
+                            <td>
+                                <a href="{{ url_for('coach_exercises_edit', exercise_id=exercise.id) }}" class="btn btn-sm btn-warning">
+                                    ✏️ Éditer
+                                </a>
+                                <form method="POST" action="{{ url_for('coach_exercises_delete', exercise_id=exercise.id) }}" style="display: inline;">
+                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Confirmer la suppression ?')">
+                                        🗑️ Supprimer
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted py-3">Aucun exercice créé</td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

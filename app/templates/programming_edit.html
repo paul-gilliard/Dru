@@ -24,7 +24,7 @@
                 {% if sessions_by_day[day] %}
                   {% for ex in sessions_by_day[day].exercises %}
                   <tr>
-                    <td><input name="ex_name_{{ day }}[]" value="{{ ex.name }}"></td>
+                    <td><select name="ex_name_{{ day }}[]" class="exercise-select"></select></td>
                     <td><input name="ex_sets_{{ day }}[]" value="{{ ex.sets }}"></td>
                     <td><input name="ex_reps_{{ day }}[]" value="{{ ex.reps }}"></td>
                     <td><input name="ex_rest_{{ day }}[]" value="{{ ex.rest }}"></td>
@@ -79,7 +79,7 @@
 <table style="display:none;">
   <tbody id="row-template">
     <tr>
-      <td><input name="__NAME__" value=""></td>
+      <td><select name="__NAME__" class="exercise-select"></select></td>
       <td><input name="__SETS__" value=""></td>
       <td><input name="__REPS__" value=""></td>
       <td><input name="__REST__" value=""></td>
@@ -91,6 +91,50 @@
     </tr>
   </tbody>
 </table>
+
+<script>
+// Charger les exercices disponibles et remplir les selects
+document.addEventListener('DOMContentLoaded', function() {
+  fetch('{{ url_for("coach_exercises_json") }}')
+    .then(response => response.json())
+    .then(exercises => {
+      // Récupérer les valeurs sélectionnées existantes
+      const selectedExercises = {};
+      document.querySelectorAll('.exercise-select').forEach(select => {
+        const currentValue = select.name;
+        // Pour les exercices existants, chercher la valeur dans le DOM
+        const tr = select.closest('tr');
+        if (tr) {
+          const inputs = tr.querySelectorAll('input');
+          // La valeur sélectionnée est stockée dans le premier input du row template
+          const currentExerciseName = select.dataset.value || '';
+          if (currentExerciseName) selectedExercises[select.name] = currentExerciseName;
+        }
+      });
+
+      // Remplir tous les selects avec les options d'exercices
+      document.querySelectorAll('.exercise-select').forEach(select => {
+        select.innerHTML = '<option value="">-- Sélectionner un exercice --</option>';
+        exercises.forEach(ex => {
+          const option = document.createElement('option');
+          option.value = ex.name;
+          option.textContent = `${ex.name} (${ex.muscle_group})`;
+          select.appendChild(option);
+        });
+      });
+
+      // Restaurer les valeurs sélectionnées
+      document.querySelectorAll('.exercise-select').forEach(select => {
+        // Chercher si une valeur était déjà stockée
+        const hiddenInput = select.parentElement.querySelector('input[type="hidden"]');
+        if (hiddenInput) {
+          select.value = hiddenInput.value;
+        }
+      });
+    })
+    .catch(err => console.error('Erreur chargement exercices:', err));
+});
+</script>
 
 <script src="{{ url_for('static', filename='js/programming.js') }}"></script>
 {% endblock %}

@@ -148,3 +148,36 @@ def create_default_admin():
         u.set_password('admin')
         db.session.add(u)
         db.session.commit()
+
+
+# Muscles groups disponibles
+MUSCLE_GROUPS = [
+    'ABDOS',
+    'BICEPS',
+    'DOS',
+    'EPAULES',
+    'ISCHIO',
+    'LEGS',
+    'MOLLET',
+    'PEC',
+    'QUAD'
+]
+
+
+class Exercise(db.Model):
+    """Banque d'exercices"""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(192), nullable=False, unique=True)
+    muscle_group = db.Column(db.String(64), nullable=False)  # Une des valeurs de MUSCLE_GROUPS
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Exercise {self.name} ({self.muscle_group})>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'muscle_group': self.muscle_group
+        }

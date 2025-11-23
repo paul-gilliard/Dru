@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Éditer Exercice{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1>Éditer l'exercice: {{ exercise.name }}</h1>
+
+    <div class="card">
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('coach_exercises_edit', exercise_id=exercise.id) }}">
+                <div class="mb-3">
+                    <label for="name" class="form-label">Nom de l'exercice</label>
+                    <input type="text" class="form-control" id="name" name="name" value="{{ exercise.name }}" required>
+                </div>
+
+                <div class="mb-3">
+                    <label for="muscle_group" class="form-label">Groupe musculaire</label>
+                    <select class="form-select" id="muscle_group" name="muscle_group" required>
+                        <option value="">-- Sélectionner --</option>
+                        {% for group in muscle_groups %}
+                        <option value="{{ group }}" {% if group == exercise.muscle_group %}selected{% endif %}>
+                            {{ group }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-success">💾 Enregistrer</button>
+                    <a href="{{ url_for('coach_exercises') }}" class="btn btn-secondary">Annuler</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
