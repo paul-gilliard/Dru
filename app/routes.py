@@ -852,6 +852,14 @@ def register_routes(app):
         exercises = Exercise.query.order_by(Exercise.name).all()
         return jsonify([ex.to_dict() for ex in exercises])
 
+    @app.route('/seed-exercises')
+    def seed_exercises_page():
+        """Page to seed exercises"""
+        forbidden = _require_coach()
+        if forbidden:
+            return forbidden
+        return render_template('seed_exercises.html')
+
     @app.route('/admin/seed-exercises', methods=['POST'])
     def admin_seed_exercises():
         """Admin route to seed exercise database - requires coach role"""
