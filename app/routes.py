@@ -852,6 +852,113 @@ def register_routes(app):
         exercises = Exercise.query.order_by(Exercise.name).all()
         return jsonify([ex.to_dict() for ex in exercises])
 
+    @app.route('/admin/seed-exercises', methods=['POST'])
+    def admin_seed_exercises():
+        """Admin route to seed exercise database - requires coach role"""
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            return jsonify({'error': 'forbidden'}), 403
+        
+        # Exercise data to insert
+        exercises_data = [
+            ("belt squat", "LEGS"),
+            ("crunch machine", "ABDOS"),
+            ("curl haltères alternés (coude sur banc)", "BICEPS"),
+            ("curl haltères alternés debout", "BICEPS"),
+            ("curl poulie", "BICEPS"),
+            ("curl pupitre (technogym)", "BICEPS"),
+            ("Dévelope militaire (techno)", "EPAULES"),
+            ("développé couché (hammer)", "PEC"),
+            ("développé couché haltères", "PEC"),
+            ("développé couché incliné haltères", "PEC"),
+            ("développé couché incliné machine guidée", "PEC"),
+            ("développé incliné (hammer)", "PEC"),
+            ("dips", "PEC"),
+            ("développé militaire barre debout", "EPAULES"),
+            ("développé militaire haltères", "EPAULES"),
+            ("développé militaire (hammer)", "EPAULES"),
+            ("développé militaire (technogym)", "EPAULES"),
+            ("dips machine (pure strength)", "TRICEPS"),
+            ("dips triceps (technogym)", "TRICEPS"),
+            ("extension triceps poulie haute", "TRICEPS"),
+            ("écarté pecs technogym", "PEC"),
+            ("élévation frontale poulie", "EPAULES"),
+            ("élévation latérale (hammer)", "EPAULES"),
+            ("élévation latérale poulie complète (hammer)", "EPAULES"),
+            ("élévation latérale poulies", "EPAULES"),
+            ("glutes harm raise", "ISCHIO"),
+            ("hack squat", "LEGS"),
+            ("leg curl", "ISCHIO"),
+            ("leg extension", "QUAD"),
+            ("magyc triceps", "TRICEPS"),
+            ("mollets assis", "MOLLET"),
+            ("mollets debout", "MOLLET"),
+            ("mollets jambes tendus", "MOLLET"),
+            ("relevé de genoux", "ABDOS"),
+            ("extension dos poulie", "DOS"),
+            ("rowing", "DOS"),
+            ("tirage horizontal", "DOS"),
+            ("tirage vertical hammer (trapèze)", "DOS"),
+            ("Tirage vertical hammer unilatéral", "DOS"),
+            ("tirage vertical poulie", "DOS"),
+            ("traction", "DOS"),
+            ("vis a vis haut de pecs", "PEC"),
+            ("fentes smith's machine", "LEGS"),
+            ("presse a cuisse", "LEGS"),
+            ("iso latéral leg press (hammer)", "LEGS"),
+            ("développé décliné haltères", "LEGS"),
+            ("rowing bucheron", "DOS"),
+            ("tirage horizontal unilatral (technogym)", "DOS"),
+            ("hip trust (hammer)", "LEGS"),
+            ("développé couché prise sérrée", "TRICEPS"),
+            ("adducteurs (machine)", "LEGS"),
+            ("abducteurs (machine)", "LEGS"),
+            ("fentes bulgare", "LEGS"),
+            ("extension hanche", "LEGS"),
+            ("soulevé de terre jambes tendus", "LEGS"),
+            ("tirage horizontal pure strengh", "DOS"),
+            ("élévation latérale panatta", "EPAULES"),
+            ("extension triceps poulie basse", "TRICEPS"),
+            ("crunch poulie", "ABDOS"),
+            ("pendulum squat", "LEGS"),
+        ]
+        
+        inserted = 0
+        skipped = 0
+        errors = []
+        
+        for name, muscle_group in exercises_data:
+            # Check if exercise already exists
+            existing = Exercise.query.filter_by(name=name).first()
+            if existing:
+                skipped += 1
+            else:
+                try:
+                    exercise = Exercise(name=name, muscle_group=muscle_group)
+                    db.session.add(exercise)
+                    inserted += 1
+                except Exception as e:
+                    errors.append(f"Error for {name}: {str(e)}")
+        
+        try:
+            db.session.commit()
+            return jsonify({
+                'success': True,
+                'inserted': inserted,
+                'skipped': skipped,
+                'errors': errors,
+                'message': f'Succès! {inserted} exercices insérés, {skipped} existants'
+            }), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({
+                'success': False,
+                'error': str(e)
+            }), 500
+
     @app.context_processor
     def inject_now():
         # expose now() utilisable dans les templates : {{ now().date() }} ou {{ now().isoformat() }}
