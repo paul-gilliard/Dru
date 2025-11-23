@@ -10,7 +10,8 @@ def create_app():
     app = Flask(__name__)
     
     # DATABASE_URL fournie par Railway (ou local .env)
-    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'mysql+pymysql://user:pass@localhost/dbname')
+    # Pour XAMPP: root sans password par défaut
+    app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'mysql+pymysql://root:@localhost/flask_app_db')
     app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-key-change-in-prod')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     

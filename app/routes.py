@@ -1,7 +1,7 @@
 from flask import render_template, request, redirect, url_for, flash, session, abort, jsonify
 from werkzeug.routing import BuildError
-from app import app, db
-from app.models import User, JournalEntry, PerformanceEntry, ProgramSession, Availability, Program
+from app import db, app
+from app.models import User, JournalEntry, PerformanceEntry, ProgramSession, Availability, Program, ExerciseEntry
 from datetime import date, datetime, timedelta
 
 def _require_coach():
