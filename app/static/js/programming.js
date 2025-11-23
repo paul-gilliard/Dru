@@ -370,6 +370,7 @@ function parseSeriesDescription(row, description) {
   function generateRecap() {
     let html = '';
     const days = ['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi', 'Dimanche'];
+    const muscleStats = {}; // Track series count by muscle group
     
     for (let day = 0; day < 7; day++) {
       const dayContainer = document.getElementById(`exercises_day_${day}`);
@@ -384,10 +385,21 @@ function parseSeriesDescription(row, description) {
       exerciseBlocks.forEach(block => {
         const select = block.querySelector('.exercise-select');
         const muscleDiv = block.querySelector('.exercise-muscle');
+        const seriesItems = block.querySelector('.series-items');
+        const seriesCount = seriesItems ? seriesItems.querySelectorAll('.series-row').length : 0;
+        
         const exerciseName = select ? select.value : '—';
         const muscleName = muscleDiv ? muscleDiv.textContent : '—';
         
-        html += `<li><strong>${exerciseName}</strong> <em style="color: #666;">(${muscleName})</em></li>`;
+        // Track muscle stats
+        if (muscleName && muscleName !== '—') {
+          if (!muscleStats[muscleName]) {
+            muscleStats[muscleName] = 0;
+          }
+          muscleStats[muscleName] += seriesCount;
+        }
+        
+        html += `<li><strong>${exerciseName}</strong> <em style="color: #666;">(${muscleName})</em> <span style="color: #0b63d6; font-weight: 600;">${seriesCount}S</span></li>`;
       });
       
       html += `</ul>`;
@@ -396,6 +408,22 @@ function parseSeriesDescription(row, description) {
     
     if (!html) {
       html = '<p style="color: #999; font-style: italic;">Aucun exercice programmé</p>';
+    } else {
+      // Add muscle summary at the bottom
+      html += `<div style="margin-top: 24px; padding-top: 16px; border-top: 2px solid rgba(15,23,42,0.1);">`;
+      html += `<h4 style="color: #374151; margin-bottom: 12px; font-weight: 600;">Résumé par muscle :</h4>`;
+      html += `<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px;">`;
+      
+      Object.keys(muscleStats).sort().forEach(muscle => {
+        const count = muscleStats[muscle];
+        html += `<div style="padding: 10px; background: #f3f4f6; border-radius: 6px; border-left: 4px solid #0b63d6;">`;
+        html += `<strong style="color: #0b63d6;">${muscle}</strong><br>`;
+        html += `<span style="color: #666; font-size: 0.9rem;">${count} séries</span>`;
+        html += `</div>`;
+      });
+      
+      html += `</div>`;
+      html += `</div>`;
     }
     
     recapContent.innerHTML = html;
