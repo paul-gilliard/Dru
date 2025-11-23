@@ -76,7 +76,7 @@
     </div>
   </form>
 
-  <script>
+<script>
     // Stocker les exercices avec leurs séries
     const exercisesData = {
       {% for ex in session_exercises %}
@@ -91,6 +91,9 @@
       }{{ "," if not loop.last else "" }}
       {% endfor %}
     };
+    
+    // Stocker les performances existantes pour détecter les doublons
+    window.PERF_ENTRIES = {{ perf_entries_json|tojson }};
     
     function updateSeriesDropdown() {
       const exerciseSelect = document.getElementById('perf-exercise');

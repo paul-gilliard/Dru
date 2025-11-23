@@ -539,7 +539,19 @@ def register_routes(app):
         # GET : lister exercices de la séance avec leurs séries
         session_exercises = sorted(ps.exercises, key=lambda x: x.position)
         perf_entries = PerformanceEntry.query.filter_by(athlete_id=user.id, program_session_id=ps.id).order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.created_at.desc()).all()
-        return render_template('athlete_performance_session.html', athlete=user, program_session=ps, session_exercises=session_exercises, perf_entries=perf_entries)
+        
+        # Préparer données JSON pour détecter doublons côté frontend
+        perf_entries_json = [
+            {
+                'id': p.id,
+                'entry_date': p.entry_date.isoformat() if p.entry_date else None,
+                'exercise': p.exercise,
+                'series_number': p.series_number
+            }
+            for p in perf_entries
+        ]
+        
+        return render_template('athlete_performance_session.html', athlete=user, program_session=ps, session_exercises=session_exercises, perf_entries=perf_entries, perf_entries_json=perf_entries_json)
 
     @app.route('/athlete/performance/entry/<int:entry_id>.json')
     def athlete_performance_entry_json(entry_id):

@@ -4,6 +4,9 @@ document.addEventListener('DOMContentLoaded', function(){
   const table = document.getElementById('perf-entries-table');
   const rows = table ? Array.from(table.querySelectorAll('tbody tr[data-entry-date]')) : [];
   const editModal = document.getElementById('perf-edit-modal');
+  const perfForm = document.getElementById('perf-add-form');
+  const exerciseSelect = document.getElementById('perf-exercise');
+  const seriesSelect = document.getElementById('perf-series');
 
   // set default date to today if empty
   if (dateInput && !dateInput.value) {
@@ -79,6 +82,32 @@ document.addEventListener('DOMContentLoaded', function(){
       editModal.setAttribute('aria-hidden','true');
     }
   });
+
+  // Detect duplicate performance entry (same date + exercise + series)
+  if (perfForm) {
+    perfForm.addEventListener('submit', function(e){
+      const formDate = dateInput.value;
+      const formExercise = exerciseSelect.value;
+      const formSeries = seriesSelect.value; // could be empty string for "all series"
+      
+      if (!formDate || !formExercise) return; // let browser validation handle
+      
+      // Find matching entry
+      const matchingEntry = (window.PERF_ENTRIES || []).find(entry => 
+        entry.entry_date === formDate &&
+        entry.exercise === formExercise &&
+        (entry.series_number === (formSeries ? parseInt(formSeries) : null) || 
+         (formSeries === '' && entry.series_number === null))
+      );
+      
+      if (matchingEntry) {
+        e.preventDefault();
+        if (confirm(`Une performance existe déjà pour ${formExercise} le ${formDate}${formSeries ? ' (série ' + formSeries + ')' : ''}.\n\nVoulez-vous modifier la performance existante à la place ?`)) {
+          openEdit(matchingEntry.id);
+        }
+      }
+    });
+  }
 
   // after successful edit the server redirects; optional: you could do AJAX submit and update row in DOM
 });
