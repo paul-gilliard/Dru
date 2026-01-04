@@ -298,15 +298,34 @@ def register_routes(app):
         # autoriser coachs à voir aussi (ou restreindre si nécessaire)
 
         sessions_by_day = {}
+        all_exercises = []
+        all_series = []
+        muscle_counts = {}
+        
         for s in prog.sessions:
             sessions_by_day[s.day_of_week] = {
                 'session': s,
                 'exercises': sorted(list(s.exercises), key=lambda e: getattr(e, 'position', 0))
             }
+            # Collect all exercises and series
+            for ex in s.exercises:
+                if ex not in all_exercises:
+                    all_exercises.append(ex)
+                series_list = ex.get_series_list() if hasattr(ex, 'get_series_list') else []
+                all_series.extend(series_list)
+                
+                # Count by muscle group
+                muscle = ex.muscle or 'Autre'
+                if muscle not in muscle_counts:
+                    muscle_counts[muscle] = []
+                if ex not in muscle_counts[muscle]:
+                    muscle_counts[muscle].append(ex)
 
         programs = Program.query.filter_by(athlete_id=prog.athlete_id).order_by(Program.created_at.desc()).all()
         athlete = User.query.get(prog.athlete_id)
-        return render_template('athlete_program.html', athlete=athlete, programs=programs, program=prog, sessions_by_day=sessions_by_day)
+        return render_template('athlete_program.html', athlete=athlete, programs=programs, program=prog, 
+                             sessions_by_day=sessions_by_day, all_exercises=all_exercises, 
+                             all_series=all_series, muscle_counts=muscle_counts)
 
     @app.route('/coach/availability', methods=['GET', 'POST'])
     def coach_availability():
