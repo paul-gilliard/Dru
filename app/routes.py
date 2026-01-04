@@ -128,15 +128,31 @@ def register_routes(app):
         
         username = user.username
         
-        # Supprimer tous les enregistrements WeeklyBilanMarking liés à cet utilisateur
-        # (comme coach_id ou athlete_id)
+        # Supprimer toutes les données liées à cet utilisateur dans cet ordre :
+        # 1. WeeklyBilanMarking
         WeeklyBilanMarking.query.filter(
             (WeeklyBilanMarking.coach_id == user_id) | 
             (WeeklyBilanMarking.athlete_id == user_id)
-        ).delete()
-        db.session.commit()
+        ).delete(synchronize_session=False)
         
-        # Maintenant supprimer l'utilisateur
+        # 2. Program (athlète uniquement si c'est un athlète)
+        Program.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
+        
+        # 3. JournalEntry
+        JournalEntry.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
+        
+        # 4. PerformanceEntry
+        PerformanceEntry.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
+        
+        # 5. MealPlan
+        MealPlan.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
+        
+        # 6. MealEntry (via les meal_plans)
+        meal_plan_ids = [mp.id for mp in MealPlan.query.filter_by(athlete_id=user_id).all()]
+        if meal_plan_ids:
+            MealEntry.query.filter(MealEntry.meal_plan_id.in_(meal_plan_ids)).delete(synchronize_session=False)
+        
+        # 7. Maintenant supprimer l'utilisateur
         db.session.delete(user)
         db.session.commit()
         flash(f'Utilisateur "{username}" a été supprimé')
