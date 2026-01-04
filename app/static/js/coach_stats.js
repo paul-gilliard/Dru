@@ -140,7 +140,11 @@ document.addEventListener('DOMContentLoaded', function(){
 
   let perfCache = null;
   async function loadPerformance(athleteId){
-    const res = await fetch(`/coach/stats/athlete/${athleteId}/performance.json`);
+    // Use program-specific endpoint if program is selected
+    const url = selectedProgramId 
+      ? `/coach/stats/athlete/${athleteId}/program/${selectedProgramId}/performance.json`
+      : `/coach/stats/athlete/${athleteId}/performance.json`;
+    const res = await fetch(url);
     if (!res.ok) return;
     let data = await res.json();
     
@@ -169,7 +173,11 @@ document.addEventListener('DOMContentLoaded', function(){
 
   async function loadTonnage(athleteId){
     try {
-      const res = await fetch(`/coach/stats/athlete/${athleteId}/tonnage-by-muscle.json`);
+      // Use program-specific endpoint if program is selected
+      const url = selectedProgramId 
+        ? `/coach/stats/athlete/${athleteId}/program/${selectedProgramId}/tonnage-by-muscle.json`
+        : `/coach/stats/athlete/${athleteId}/tonnage-by-muscle.json`;
+      const res = await fetch(url);
       if (!res.ok) {
         console.log('Tonnage load failed:', res.status);
         return;

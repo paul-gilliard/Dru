@@ -1223,6 +1223,106 @@ def register_routes(app):
             })
         return jsonify(data)
 
+    @app.route('/coach/stats/athlete/<int:athlete_id>/program/<int:program_id>/performance.json')
+    def coach_stats_athlete_program_performance(athlete_id, program_id):
+        """Get performance entries filtered by program"""
+        if 'user_id' not in session:
+            return jsonify({'error':'unauth'}), 401
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            return jsonify({'error':'forbidden'}), 403
+        
+        # Get program and verify it belongs to the athlete
+        program = Program.query.get_or_404(program_id)
+        if program.athlete_id != athlete_id:
+            return jsonify({'error':'forbidden'}), 403
+        
+        # Get all exercises in this program
+        program_exercises = set()
+        for session in program.sessions:
+            for ex_entry in session.exercises:
+                program_exercises.add(ex_entry.name)
+        
+        # Get performance entries only for exercises in this program
+        entries = PerformanceEntry.query.filter(
+            PerformanceEntry.athlete_id==athlete_id,
+            PerformanceEntry.exercise.in_(list(program_exercises)) if program_exercises else False
+        ).order_by(PerformanceEntry.entry_date.asc()).all()
+        
+        payload = {}
+        for e in entries:
+            ex = e.exercise or 'Autre'
+            d = e.entry_date.isoformat()
+            if ex not in payload:
+                payload[ex] = {'main': {}, 'other': {}}
+            
+            # Determine if this is a main series entry
+            is_main = False
+            if e.program_session_id and e.series_number:
+                # Find the ExerciseEntry to check if this series_number is the main one
+                ps = e.program_session
+                if ps:
+                    ex_entries = [ex_entry for ex_entry in ps.exercises if ex_entry.name == ex]
+                    if ex_entries:
+                        ex_entry = ex_entries[0]
+                        is_main = (ex_entry.main_series == e.series_number)
+            
+            # Route to appropriate bucket
+            bucket = 'main' if is_main else 'other'
+            if d not in payload[ex][bucket]:
+                payload[ex][bucket][d] = []
+            
+            payload[ex][bucket][d].append({
+                'reps': e.reps,
+                'load': e.load,
+                'series_number': e.series_number,
+                'notes': e.notes,
+                'session_id': e.program_session_id
+            })
+        
+        # convert to friendly structure
+        out = {}
+        for ex, data in payload.items():
+            # Get muscle group for this exercise
+            muscle_group = 'Autre'
+            if ex != 'Autre':
+                ex_record = Exercise.query.filter_by(name=ex).first()
+                if ex_record:
+                    muscle_group = ex_record.muscle_group
+            
+            out[ex] = {
+                'muscle_group': muscle_group,
+                'main_series': [],
+                'other_series': []
+            }
+            
+            # Process main series
+            for d in sorted(data['main'].keys()):
+                items = data['main'][d]
+                # For main series, show exact values (not average, as there should be only one)
+                if items:
+                    item = items[0]  # Should be only one per day
+                    out[ex]['main_series'].append({
+                        'date': d,
+                        'reps': item.get('reps'),
+                        'load': item.get('load'),
+                        'count': len(items)
+                    })
+            
+            # Process other series
+            for d in sorted(data['other'].keys()):
+                items = data['other'][d]
+                avg_load = sum((it.get('load') or 0) for it in items) / (len(items) or 1)
+                avg_reps = sum((it.get('reps') or 0) for it in items) / (len(items) or 1)
+                out[ex]['other_series'].append({
+                    'date': d,
+                    'avg_load': avg_load,
+                    'avg_reps': avg_reps,
+                    'count': len(items)
+                })
+        
+        return jsonify(out)
+
     @app.route('/coach/stats/athlete/<int:athlete_id>/performance.json')
     def coach_stats_athlete_performance(athlete_id):
         if 'user_id' not in session:
@@ -1305,6 +1405,77 @@ def register_routes(app):
                 })
         
         return jsonify(out)
+
+    @app.route('/coach/stats/athlete/<int:athlete_id>/program/<int:program_id>/tonnage-by-muscle.json')
+    def coach_stats_athlete_program_tonnage_by_muscle(athlete_id, program_id):
+        """Get tonnage (reps x weight) per muscle group over time, filtered by program"""
+        try:
+            if 'user_id' not in session:
+                return jsonify({'error':'unauth'}), 401
+            user = User.query.get(session['user_id'])
+            if not user or user.role != 'coach':
+                return jsonify({'error':'forbidden'}), 403
+            
+            # Get program and verify it belongs to the athlete
+            program = Program.query.get_or_404(program_id)
+            if program.athlete_id != athlete_id:
+                return jsonify({'error':'forbidden'}), 403
+            
+            # Get all exercises in this program
+            program_exercises = set()
+            for session in program.sessions:
+                for ex_entry in session.exercises:
+                    program_exercises.add(ex_entry.name)
+            
+            # Get performance entries only for exercises in this program
+            entries = PerformanceEntry.query.filter(
+                PerformanceEntry.athlete_id==athlete_id,
+                PerformanceEntry.exercise.in_(list(program_exercises)) if program_exercises else False
+            ).order_by(PerformanceEntry.entry_date.asc()).all()
+            
+            # Group by muscle_group and date
+            tonnage_data = {}
+            for e in entries:
+                if not e.exercise:
+                    continue
+                
+                # Get exercise to find muscle group
+                ex = Exercise.query.filter_by(name=e.exercise).first()
+                if not ex:
+                    continue
+                
+                muscle_group = ex.muscle_group
+                date_str = e.entry_date.isoformat()
+                
+                if muscle_group not in tonnage_data:
+                    tonnage_data[muscle_group] = {}
+                
+                if date_str not in tonnage_data[muscle_group]:
+                    tonnage_data[muscle_group][date_str] = {'tonnage': 0, 'count': 0}
+                
+                # Calculate tonnage: reps x weight
+                if e.reps and e.load:
+                    tonnage = e.reps * e.load
+                    tonnage_data[muscle_group][date_str]['tonnage'] += tonnage
+                    tonnage_data[muscle_group][date_str]['count'] += 1
+            
+            # Convert to friendly format
+            out = {}
+            for muscle_group in sorted(tonnage_data.keys()):
+                dates = sorted(tonnage_data[muscle_group].keys())
+                out[muscle_group] = [
+                    {
+                        'date': date_str,
+                        'tonnage': tonnage_data[muscle_group][date_str]['tonnage'],
+                        'count': tonnage_data[muscle_group][date_str]['count']
+                    }
+                    for date_str in dates
+                ]
+            
+            return jsonify(out)
+        except Exception as e:
+            print(f"Error in program tonnage route: {str(e)}")
+            return jsonify({'error': str(e)}), 500
 
     @app.route('/coach/stats/athlete/<int:athlete_id>/tonnage-by-muscle.json')
     def coach_stats_athlete_tonnage_by_muscle(athlete_id):
