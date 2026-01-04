@@ -1,74 +1,485 @@
 {% extends 'base.html' %}
 {% block title %}Séance — {{ program_session.session_name or 'Séance' }}{% endblock %}
 {% block content %}
-<h2>Séance — {{ program_session.session_name or 'Séance' }}</h2>
 
-<div class="card">
-  <h3>{{ ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][program_session.day_of_week] }}{% if program_session.session_name %} — {{ program_session.session_name }}{% endif %}</h3>
-  <p style="margin-bottom:8px;">Exercices proposés :</p>
-  <ul style="margin:0; padding-left:20px;">
-    {% for ex in session_exercises %}
-    <li><strong>{{ ex.name }}</strong> ({{ ex.muscle or 'Auto' }})
-      {% set series_list = ex.get_series_list() %}
-      {% if series_list %}
-        <ul style="margin:4px 0; padding-left:20px; font-size:0.95rem;">
-          {% for s in series_list %}
-          <li>{{ s.text }}</li>
-          {% endfor %}
-        </ul>
-      {% else %}
-        <em style="color:#999; font-size:0.9rem;">Pas de séries renseignées</em>
-      {% endif %}
-    </li>
-    {% endfor %}
-  </ul>
+<style>
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
 
-  <h4>Ajouter une performance (date par défaut aujourd'hui)</h4>
-  <form id="perf-add-form" method="post" action="{{ url_for('athlete_performance_session', session_id=program_session.id) }}">
-    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr)); gap:12px;">
-      <div>
-        <label>Date</label>
-        <input id="perf-entry-date" name="entry_date" type="date" value="{{ (now().date()|string) }}" required>
-      </div>
-      
-      <div>
-        <label>Exercice</label>
-        <select id="perf-exercise" name="exercise" required onchange="updateSeriesDropdown()">
-          <option value="">— choisir —</option>
-          {% for ex in session_exercises %}
-          <option value="{{ ex.name }}">{{ ex.name }} ({{ ex.muscle or 'Auto' }})</option>
-          {% endfor %}
-          <option value="Autre">Autre</option>
-        </select>
-      </div>
-      
-      <div>
-        <label>Série (numéro)</label>
-        <select id="perf-series" name="series_number">
-          <option value="">— toutes séries —</option>
-        </select>
-      </div>
-      
-      <div>
-        <label>Rép (ex: 6.5)</label>
-        <input name="reps" type="number" step="0.1" inputmode="decimal" placeholder="6">
-      </div>
-      
-      <div>
-        <label>Poids (kg)</label>
-        <input name="load" type="number" step="0.5" inputmode="decimal" placeholder="100">
-      </div>
-      
-      <div style="grid-column: 1 / -1;">
-        <label>Remarque</label>
-        <input name="notes" type="text" placeholder="Notes sur cette série...">
-      </div>
+    .session-container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+
+    .header-session {
+        text-align: center;
+        color: white;
+        margin-bottom: 30px;
+    }
+
+    .header-session h1 {
+        font-size: 2em;
+        font-weight: 700;
+        margin-bottom: 5px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .header-session p {
+        font-size: 1em;
+        opacity: 0.9;
+    }
+
+    /* Exercices de la séance */
+    .session-exercises {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .session-exercises h3 {
+        font-size: 1.2em;
+        color: #333;
+        margin-bottom: 20px;
+        font-weight: 700;
+    }
+
+    .exercise-list {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .exercise-item {
+        background: #f8f9fa;
+        border-left: 4px solid #667eea;
+        padding: 15px;
+        border-radius: 8px;
+    }
+
+    .exercise-name {
+        font-size: 1.05em;
+        font-weight: 700;
+        color: #333;
+        margin-bottom: 8px;
+    }
+
+    .exercise-muscle {
+        display: inline-block;
+        background: #e8eaf6;
+        color: #667eea;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.85em;
+        font-weight: 600;
+        margin-bottom: 10px;
+    }
+
+    .series-list {
+        font-size: 0.95em;
+        color: #666;
+        line-height: 1.6;
+        margin-top: 8px;
+    }
+
+    .series-list div {
+        margin-bottom: 5px;
+    }
+
+    /* Formulaire d'ajout */
+    .form-section {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .form-section h3 {
+        font-size: 1.2em;
+        color: #333;
+        margin-bottom: 20px;
+        font-weight: 700;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 15px;
+        margin-bottom: 15px;
+    }
+
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-group label {
+        font-weight: 600;
+        font-size: 0.95em;
+        color: #333;
+        margin-bottom: 6px;
+    }
+
+    .form-group input,
+    .form-group select {
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 1em;
+        font-family: inherit;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-full-width {
+        grid-column: 1 / -1;
+    }
+
+    .btn-add {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 1em;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .btn-add:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    }
+
+    /* Tableau des entrées */
+    .entries-section {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .entries-section h3 {
+        font-size: 1.2em;
+        color: #333;
+        margin-bottom: 20px;
+        font-weight: 700;
+    }
+
+    .table-wrapper {
+        overflow-x: auto;
+    }
+
+    .perf-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95em;
+    }
+
+    .perf-table thead {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .perf-table th {
+        padding: 12px;
+        text-align: left;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .perf-table td {
+        padding: 12px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .perf-table tbody tr:hover {
+        background: #f8f9fa;
+    }
+
+    .edit-btn {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 0.85em;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .edit-btn:hover {
+        background: #764ba2;
+        transform: translateY(-1px);
+    }
+
+    .summary-btn {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        float: right;
+        margin-top: 15px;
+    }
+
+    .summary-btn:hover {
+        background: #764ba2;
+        transform: translateY(-2px);
+    }
+
+    .no-entries {
+        color: #999;
+        font-style: italic;
+        text-align: center;
+        padding: 20px;
+    }
+
+    /* Modal */
+    .confirm-modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 1000;
+    }
+
+    .confirm-modal.active {
+        display: flex;
+    }
+
+    .confirm-modal-backdrop {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0,0,0,0.5);
+    }
+
+    .confirm-modal-panel {
+        position: relative;
+        background: white;
+        border-radius: 12px;
+        max-width: 600px;
+        width: 90%;
+        margin: auto;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    .confirm-modal-body {
+        padding: 25px;
+    }
+
+    .confirm-modal-body h3 {
+        color: #333;
+        margin-bottom: 20px;
+        font-weight: 700;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .header-session h1 {
+            font-size: 1.5em;
+        }
+
+        .form-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .perf-table {
+            font-size: 0.85em;
+        }
+
+        .perf-table th,
+        .perf-table td {
+            padding: 8px;
+        }
+    }
+</style>
+
+<div class="session-container">
+    <!-- En-tête -->
+    <div class="header-session">
+        <h1>🏋️ {{ program_session.session_name or 'Séance' }}</h1>
+        <p>{{ ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'][program_session.day_of_week] }}</p>
     </div>
 
-    <div style="margin-top:12px;">
-      <button type="submit" class="save-program-btn">Ajouter</button>
+    <!-- Exercices de la séance -->
+    <div class="session-exercises">
+        <h3>📋 Exercices prévus</h3>
+        <div class="exercise-list">
+            {% for ex in session_exercises %}
+            <div class="exercise-item">
+                <div class="exercise-name">{{ ex.name }}</div>
+                <span class="exercise-muscle">{{ ex.muscle or 'Auto' }}</span>
+                {% set series_list = ex.get_series_list() %}
+                {% if series_list %}
+                    <div class="series-list">
+                        {% for s in series_list %}
+                        <div>{{ s.text }}</div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div style="color: #999; font-style: italic; font-size: 0.9em;">Pas de séries renseignées</div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
     </div>
-  </form>
+
+    <!-- Formulaire d'ajout -->
+    <div class="form-section">
+        <h3>➕ Ajouter une performance</h3>
+        <form id="perf-add-form" method="post" action="{{ url_for('athlete_performance_session', session_id=program_session.id) }}">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label>Date</label>
+                    <input id="perf-entry-date" name="entry_date" type="date" value="{{ (now().date()|string) }}" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Exercice</label>
+                    <select id="perf-exercise" name="exercise" required onchange="updateSeriesDropdown()">
+                        <option value="">— Choisir —</option>
+                        {% for ex in session_exercises %}
+                        <option value="{{ ex.name }}">{{ ex.name }}</option>
+                        {% endfor %}
+                        <option value="Autre">Autre</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Série</label>
+                    <select id="perf-series" name="series_number">
+                        <option value="">— Toutes séries —</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Répétitions</label>
+                    <input name="reps" type="number" step="0.1" inputmode="decimal" placeholder="6">
+                </div>
+                
+                <div class="form-group">
+                    <label>Poids (kg)</label>
+                    <input name="load" type="number" step="0.5" inputmode="decimal" placeholder="100">
+                </div>
+                
+                <div class="form-group form-full-width">
+                    <label>Remarque</label>
+                    <input name="notes" type="text" placeholder="Notes sur cette série...">
+                </div>
+            </div>
+
+            <button type="submit" class="btn-add">Ajouter</button>
+        </form>
+    </div>
+
+    <!-- Entrées enregistrées -->
+    <div class="entries-section">
+        <h3>📊 Performances enregistrées</h3>
+        
+        {% if perf_entries %}
+            <div class="table-wrapper">
+                <table class="perf-table" id="perf-entries-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Exercice</th>
+                            <th>Série</th>
+                            <th>Rép</th>
+                            <th>Poids</th>
+                            <th>Remarque</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in perf_entries %}
+                        <tr data-entry-id="{{ p.id }}" data-entry-date="{{ p.entry_date.isoformat() }}">
+                            <td>{{ p.entry_date.strftime('%Y-%m-%d') }}</td>
+                            <td>{{ p.exercise }}</td>
+                            <td>{{ p.series_number or '—' }}</td>
+                            <td>{{ p.reps or '' }}</td>
+                            <td>{{ p.load or '' }}</td>
+                            <td>{{ p.notes or '' }}</td>
+                            <td>
+                                <button type="button" class="edit-btn edit-perf-btn" data-entry-id="{{ p.id }}">Modifier</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <button id="view-summary-btn" type="button" class="summary-btn">Voir le résumé</button>
+        {% else %}
+            <div class="no-entries">Aucune performance enregistrée pour cette séance.</div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Edit modal -->
+<div id="perf-edit-modal" class="confirm-modal" aria-hidden="true">
+    <div class="confirm-modal-backdrop"></div>
+    <div class="confirm-modal-panel" role="document">
+        <div class="confirm-modal-body">
+            <h3>Modifier performance</h3>
+            <form id="perf-edit-form" method="post" action="">
+                <input type="hidden" id="edit-entry-id" name="entry_id">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Date</label>
+                        <input id="edit-entry-date" name="entry_date" type="date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Exercice</label>
+                        <input id="edit-exercise" name="exercise" type="text" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Série (n°)</label>
+                        <input id="edit-series-number" name="series_number" type="number" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Rép</label>
+                        <input id="edit-reps" name="reps" type="number" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Poids (kg)</label>
+                        <input id="edit-load" name="load" type="number" step="0.5">
+                    </div>
+                    <div class="form-group form-full-width">
+                        <label>Remarque</label>
+                        <input id="edit-notes" name="notes" type="text">
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" id="perf-edit-cancel" class="btn-cancel">Annuler</button>
+                    <button id="perf-edit-save" type="submit" class="btn-add">Enregistrer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <script>
     // Stocker les exercices avec leurs séries
@@ -86,7 +497,6 @@
       {% endfor %}
     };
     
-    // Stocker les performances existantes pour détecter les doublons
     window.PERF_ENTRIES = {{ perf_entries_json|tojson }};
     
     function updateSeriesDropdown() {
@@ -94,8 +504,7 @@
       const seriesSelect = document.getElementById('perf-series');
       const selectedExercise = exerciseSelect.value;
       
-      // Réinitialiser le select des séries
-      seriesSelect.innerHTML = '<option value="">— toutes séries —</option>';
+      seriesSelect.innerHTML = '<option value="">— Toutes séries —</option>';
       
       if (selectedExercise && exercisesData[selectedExercise]) {
         const series = exercisesData[selectedExercise].series;
@@ -107,66 +516,24 @@
         });
       }
     }
-  </script>
-</div>
+</script>
 
-<div class="card" style="margin-top:12px;">
-  <h3>Entrées enregistrées pour cette séance</h3>
-  {% if perf_entries %}
-  <table id="perf-entries-table">
-    <thead><tr><th>Date</th><th>Exercice</th><th>Série</th><th>Rép</th><th>Poids</th><th>Remarque</th><th>Actions</th></tr></thead>
-    <tbody>
-      {% for p in perf_entries %}
-      <tr data-entry-id="{{ p.id }}" data-entry-date="{{ p.entry_date.isoformat() }}">
-        <td class="col-date">{{ p.entry_date.strftime('%Y-%m-%d') }}</td>
-        <td class="col-exercise">{{ p.exercise }}</td>
-        <td class="center col-series">{{ p.series_number or '—' }}</td>
-        <td class="center col-reps">{{ p.reps or '' }}</td>
-        <td class="center col-load">{{ p.load or '' }}</td>
-        <td class="col-notes">{{ p.notes or '' }}</td>
-        <td class="col-actions">
-          <button type="button" class="edit-perf-btn" data-entry-id="{{ p.id }}">Modifier</button>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<style>
+    .btn-cancel {
+        background: #ddd;
+        color: #333;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
 
-  <!-- bouton résumé déplacé ici -->
-  <div style="margin-top:12px; display:flex; justify-content:flex-end;">
-    <button id="view-summary-btn" type="button" class="secondary">Voir le résumé</button>
-  </div>
-
-  {% else %}
-    <p class="text-muted">Aucune performance enregistrée pour cette séance.</p>
-  {% endif %}
-</div>
-
-<!-- Edit modal for performance entry -->
-<div id="perf-edit-modal" class="confirm-modal" aria-hidden="true">
-  <div class="confirm-modal-backdrop"></div>
-  <div class="confirm-modal-panel" role="document">
-    <div class="confirm-modal-body">
-      <h3>Modifier performance</h3>
-      <form id="perf-edit-form" method="post" action="">
-        <input type="hidden" id="edit-entry-id" name="entry_id">
-        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap:12px;">
-          <div><label>Date</label><input id="edit-entry-date" name="entry_date" type="date" required></div>
-          <div><label>Exercice</label><input id="edit-exercise" name="exercise" type="text" required></div>
-          <div><label>Série (n°)</label><input id="edit-series-number" name="series_number" type="number" step="1"></div>
-          <div><label>Rép</label><input id="edit-reps" name="reps" type="number" step="0.1"></div>
-          <div><label>Poids (kg)</label><input id="edit-load" name="load" type="number" step="0.5"></div>
-          <div style="grid-column:1 / -1;"><label>Remarque</label><input id="edit-notes" name="notes" type="text"></div>
-        </div>
-
-        <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
-          <button id="perf-edit-save" type="submit" class="save-program-btn">Enregistrer</button>
-          <button type="button" id="perf-edit-cancel" class="confirm-no">Annuler</button>
-        </div>
-      </form>
-    </div>
-  </div>
-</div>
+    .btn-cancel:hover {
+        background: #ccc;
+    }
+</style>
 
 <script src="{{ url_for('static', filename='js/athlete_performance.js') }}"></script>
 {% endblock %}
