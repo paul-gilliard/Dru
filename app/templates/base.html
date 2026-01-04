@@ -179,6 +179,27 @@
             text-decoration: none;
             white-space: nowrap;
         }
+
+        /* Notification badge */
+        .nav-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #ef4444;
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            font-size: 0.75rem;
+            font-weight: 700;
+            margin-left: 6px;
+            position: relative;
+            top: -2px;
+        }
+
+        .nav-badge.hidden {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -208,7 +229,12 @@
                     <li><a href="{{ url_for('coach_programming') }}">📋 Programmes</a></li>
                     <li><a href="{{ url_for('coach_meal_plans') }}">🍽️ Plans Alimentaires</a></li>
                     <li><a href="{{ url_for('coach_stats') }}">📊 Suivi</a></li>
-                    <li><a href="{{ url_for('coach_weekly_summary') }}">📈 Easy Bilan Hebdo</a></li>
+                    <li>
+                        <a href="{{ url_for('coach_weekly_summary') }}">
+                            📈 Easy Bilan Hebdo
+                            <span class="nav-badge hidden" id="bilan-badge">0</span>
+                        </a>
+                    </li>
                     <li><a href="{{ url_for('coach_exercises') }}">💪 Exercices</a></li>
                     <li><a href="{{ url_for('coach_foods') }}">🍎 Aliments</a></li>
                     <li><a href="{{ url_for('coach') }}">👥 Utilisateurs</a></li>
@@ -242,6 +268,19 @@
         function toggleNavbar() {
             const menu = document.getElementById('navbar-menu');
             menu.classList.toggle('active');
+        }
+
+        // Update bilan badge count
+        function updateBilanBadge(count) {
+            const badge = document.getElementById('bilan-badge');
+            if (badge) {
+                if (count > 0) {
+                    badge.textContent = count;
+                    badge.classList.remove('hidden');
+                } else {
+                    badge.classList.add('hidden');
+                }
+            }
         }
 
         // Close menu when clicking a link on mobile

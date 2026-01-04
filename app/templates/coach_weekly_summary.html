@@ -472,6 +472,9 @@
                 
                 // Update card appearance
                 updateCardAppearance(athleteId, isChecked);
+                
+                // Update navbar badge count
+                updateBilanBadgeCount();
             } catch (error) {
                 console.error('Erreur:', error);
                 e.target.checked = !isChecked;
@@ -547,12 +550,22 @@
                     updateCardAppearance(parseInt(athleteId), true, expiresAt);
                 }
             }
+            
+            // Update navbar badge with count of unmarked athletes
+            updateBilanBadgeCount();
         } catch (error) {
             console.error('Erreur lors du chargement des marquages:', error);
         }
         
         // Load athlete data
         await loadAthletesSummary();
+    }
+
+    function updateBilanBadgeCount() {
+        const uncheckedCount = document.querySelectorAll('.bilan-checkbox:not(:checked)').length;
+        if (window.updateBilanBadge) {
+            window.updateBilanBadge(uncheckedCount);
+        }
     }
 
     document.addEventListener('DOMContentLoaded', initPage);
