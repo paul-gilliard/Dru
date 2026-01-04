@@ -28,6 +28,33 @@
 </div>
 
 <div class="card" style="margin-top:12px;">
+  <h3>Récapitulatif 7 derniers jours</h3>
+  <div id="summary-7days-container" style="display:none;">
+    <table style="width:100%; border-collapse:collapse;">
+      <tbody>
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding:12px; font-weight:600;">Poids</td>
+          <td style="padding:12px; text-align:center;"><span id="summary-weight">—</span></td>
+        </tr>
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding:12px; font-weight:600;">Kcals (moy.)</td>
+          <td style="padding:12px; text-align:center;"><span id="summary-kcals">—</span></td>
+        </tr>
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding:12px; font-weight:600;">Eau (moy.)</td>
+          <td style="padding:12px; text-align:center;"><span id="summary-water">—</span></td>
+        </tr>
+        <tr style="border-bottom: 1px solid #e5e7eb;">
+          <td style="padding:12px; font-weight:600;">Sommeil (moy.)</td>
+          <td style="padding:12px; text-align:center;"><span id="summary-sleep">—</span></td>
+        </tr>
+        <tbody id="summary-tonnage-body"></tbody>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" style="margin-top:12px;">
   <h3>Poids & journaux</h3>
   <canvas id="chart-journal" height="160"></canvas>
 </div>

@@ -825,6 +825,72 @@ def register_routes(app):
             print(f"Error in tonnage route: {str(e)}")
             return jsonify({'error': str(e)}), 500
 
+    @app.route('/coach/stats/athlete/<int:athlete_id>/summary-7days.json')
+    def coach_stats_athlete_summary_7days(athlete_id):
+        """Get 7-day summary for weight, kcals, water, sleep, and tonnage by muscle group"""
+        try:
+            if 'user_id' not in session:
+                return jsonify({'error':'unauth'}), 401
+            user = User.query.get(session['user_id'])
+            if not user or user.role != 'coach':
+                return jsonify({'error':'forbidden'}), 403
+            
+            today = datetime.utcnow().date()
+            seven_days_ago = today - timedelta(days=7)
+            
+            # Get journal entries for last 7 days
+            journal_entries = JournalEntry.query.filter(
+                JournalEntry.athlete_id==athlete_id,
+                JournalEntry.entry_date >= seven_days_ago
+            ).order_by(JournalEntry.entry_date.asc()).all()
+            
+            # Calculate averages and changes
+            if journal_entries:
+                first_day = journal_entries[0]
+                last_day = journal_entries[-1]
+                
+                weight_start = first_day.weight
+                weight_end = last_day.weight
+                kcals_values = [e.kcals for e in journal_entries if e.kcals]
+                water_values = [e.water_ml for e in journal_entries if e.water_ml]
+                sleep_values = [e.sleep_hours for e in journal_entries if e.sleep_hours]
+                
+                kcals_avg = sum(kcals_values) / len(kcals_values) if kcals_values else None
+                water_avg = sum(water_values) / len(water_values) if water_values else None
+                sleep_avg = sum(sleep_values) / len(sleep_values) if sleep_values else None
+            else:
+                weight_start = weight_end = kcals_avg = water_avg = sleep_avg = None
+            
+            # Calculate tonnage by muscle group for last 7 days
+            perf_entries = PerformanceEntry.query.filter(
+                PerformanceEntry.athlete_id==athlete_id,
+                PerformanceEntry.entry_date >= seven_days_ago
+            ).all()
+            
+            tonnage_by_muscle = {}
+            for e in perf_entries:
+                if not e.exercise or not e.reps or not e.load:
+                    continue
+                ex = Exercise.query.filter_by(name=e.exercise).first()
+                if not ex:
+                    continue
+                muscle_group = ex.muscle_group
+                if muscle_group not in tonnage_by_muscle:
+                    tonnage_by_muscle[muscle_group] = 0
+                tonnage_by_muscle[muscle_group] += e.reps * e.load
+            
+            return jsonify({
+                'weight_start': weight_start,
+                'weight_end': weight_end,
+                'kcals_avg': kcals_avg,
+                'water_avg': water_avg,
+                'sleep_avg': sleep_avg,
+                'tonnage_by_muscle': tonnage_by_muscle
+            })
+        except Exception as e:
+            print(f"Error in summary route: {str(e)}")
+            return jsonify({'error': str(e)}), 500
+
     # ============ EXERCISE BANK ROUTES ============
     @app.route('/coach/exercises', methods=['GET', 'POST'])
     def coach_exercises():

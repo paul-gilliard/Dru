@@ -93,7 +93,62 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   }
 
-  function renderTonnage(muscleGroup){
+  async function loadSummary(athleteId){
+    try {
+      const res = await fetch(`/coach/stats/athlete/${athleteId}/summary-7days.json`);
+      if (!res.ok) {
+        console.log('Summary load failed:', res.status);
+        return;
+      }
+      const data = await res.json();
+      
+      // Get arrow function based on change
+      const getArrow = (start, end) => {
+        if (!start || !end) return '—';
+        const change = end - start;
+        if (Math.abs(change) < 0.1) return '→';
+        return change > 0 ? '📈' : '📉';
+      };
+      
+      const formatValue = (val, decimals = 1) => {
+        if (val === null || val === undefined) return '—';
+        return Number(val).toFixed(decimals);
+      };
+      
+      // Update summary values
+      const weightArrow = getArrow(data.weight_start, data.weight_end);
+      const weightChange = data.weight_start && data.weight_end ? 
+        `${formatValue(data.weight_end)}kg ${weightArrow}` : '—';
+      document.getElementById('summary-weight').textContent = weightChange;
+      
+      const kcalsValue = data.kcals_avg ? `${formatValue(data.kcals_avg, 0)} cal` : '—';
+      document.getElementById('summary-kcals').textContent = kcalsValue;
+      
+      const waterValue = data.water_avg ? `${formatValue(data.water_avg, 0)} ml` : '—';
+      document.getElementById('summary-water').textContent = waterValue;
+      
+      const sleepValue = data.sleep_avg ? `${formatValue(data.sleep_avg, 1)} h` : '—';
+      document.getElementById('summary-sleep').textContent = sleepValue;
+      
+      // Fill tonnage rows
+      const tonnageBody = document.getElementById('summary-tonnage-body');
+      tonnageBody.innerHTML = '';
+      Object.keys(data.tonnage_by_muscle).sort().forEach(muscle => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #e5e7eb';
+        const tonnage = data.tonnage_by_muscle[muscle];
+        tr.innerHTML = `
+          <td style="padding:12px; font-weight:600;">${muscle} (tonnage)</td>
+          <td style="padding:12px; text-align:center;">${formatValue(tonnage, 0)}</td>
+        `;
+        tonnageBody.appendChild(tr);
+      });
+      
+      document.getElementById('summary-7days-container').style.display = 'block';
+    } catch (err) {
+      console.error('Error loading summary:', err);
+    }
+  }  function renderTonnage(muscleGroup){
     if (!tonnageCache || !tonnageCache[muscleGroup]) return;
     
     const tonnageData = tonnageCache[muscleGroup];
@@ -351,6 +406,7 @@ document.addEventListener('DOMContentLoaded', function(){
     await loadJournal(id);
     await loadPerformance(id);
     await loadTonnage(id);
+    await loadSummary(id);
   });
 
   muscleSelect.addEventListener('change', function(){
