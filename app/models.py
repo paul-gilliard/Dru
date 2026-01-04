@@ -311,8 +311,8 @@ class WeeklyBilanMarking(db.Model):
     expires_at = db.Column(db.DateTime, nullable=False)  # marked_at + 7 days
     
     # Relationships
-    coach = db.relationship('User', foreign_keys=[coach_id], backref='markings_made', cascade='all, delete-orphan')
-    athlete = db.relationship('User', foreign_keys=[athlete_id], backref='markings_received', cascade='all, delete-orphan')
+    coach = db.relationship('User', foreign_keys=[coach_id], backref='markings_made')
+    athlete = db.relationship('User', foreign_keys=[athlete_id], backref='markings_received')
     
     __table_args__ = (
         db.UniqueConstraint('coach_id', 'athlete_id', 'week_start', name='uq_coach_athlete_week'),
