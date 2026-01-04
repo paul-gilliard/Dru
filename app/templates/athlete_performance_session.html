@@ -40,6 +40,11 @@
         padding: 25px;
         margin-bottom: 30px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+    }
+
+    .session-exercises.collapsed {
+        padding: 15px 25px;
     }
 
     .session-exercises h3 {
@@ -47,12 +52,48 @@
         color: #333;
         margin-bottom: 20px;
         font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .session-exercises.collapsed h3 {
+        margin-bottom: 0;
+    }
+
+    .collapse-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        background: #667eea;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 1.1em;
+        transition: all 0.3s ease;
+        flex-shrink: 0;
+    }
+
+    .collapse-toggle:hover {
+        background: #764ba2;
+        transform: scale(1.1);
     }
 
     .exercise-list {
         display: flex;
         flex-direction: column;
         gap: 15px;
+    }
+
+    .session-exercises.collapsed .exercise-list {
+        display: none;
     }
 
     .exercise-item {
@@ -363,9 +404,12 @@
     </div>
 
     <!-- Exercices de la séance -->
-    <div class="session-exercises">
-        <h3>📋 Exercices prévus</h3>
-        <div class="exercise-list">
+    <div class="session-exercises collapsed" id="session-exercises-panel">
+        <h3 onclick="toggleSessionExercises()">
+            <span>📋 Exercices prévus</span>
+            <button class="collapse-toggle" id="collapse-btn" onclick="event.stopPropagation(); toggleSessionExercises()">+</button>
+        </h3>
+        <div class="exercise-list" id="exercise-list-content">
             {% for ex in session_exercises %}
             <div class="exercise-item">
                 <div class="exercise-name">{{ ex.name }}</div>
@@ -599,6 +643,22 @@
           console.log('Erreur lors du chargement de la dernière performance:', error);
           lastPerfInfo.style.display = 'none';
         });
+    }
+
+    // ============ COLLAPSE/EXPAND EXERCICES ============
+    function toggleSessionExercises() {
+      const panel = document.getElementById('session-exercises-panel');
+      const btn = document.getElementById('collapse-btn');
+      
+      if (panel.classList.contains('collapsed')) {
+        // Expand
+        panel.classList.remove('collapsed');
+        btn.textContent = '−';
+      } else {
+        // Collapse
+        panel.classList.add('collapsed');
+        btn.textContent = '+';
+      }
     }
 </script>
 
