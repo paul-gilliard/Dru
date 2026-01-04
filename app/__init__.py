@@ -39,6 +39,14 @@ def create_app():
             db.session.add(admin)
             db.session.commit()
             print("✓ Admin user created")
+        
+        # Seed exercises and foods if tables are empty
+        from app.models import Exercise, Food
+        if Exercise.query.count() == 0 or Food.query.count() == 0:
+            print("\n📋 Seeding database...")
+            from seeds import seed_all_data
+            seed_all_data()
+            print("✓ Database seeded\n")
     
     # Import routes after app is created to avoid circular imports
     from app import routes
