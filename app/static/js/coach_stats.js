@@ -591,6 +591,9 @@ document.addEventListener('DOMContentLoaded', function(){
     
     selectedProgramId = programId;
     
+    // Load performance data first
+    await loadPerformance(athleteId);
+    
     // Load exercises for this program
     try {
       const res = await fetch(`/api/program/${programId}/exercises`);
