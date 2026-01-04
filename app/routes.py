@@ -171,7 +171,7 @@ def register_routes(app):
         # accès : si l'utilisateur est l'athlete lié ou un coach/admin
         if user.role == 'athlete' and prog.athlete_id != user.id:
             flash("Vous n'avez pas accès à ce programme")
-            return redirect(url_for('athlete'))
+            return redirect(url_for('athlete_program'))
         # autoriser coachs à voir aussi (ou restreindre si nécessaire)
 
         sessions_by_day = {}

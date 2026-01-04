@@ -4,7 +4,7 @@
 <h2>Programme — {{ athlete.username }}</h2>
 
 <nav style="margin-bottom:12px; display:flex; gap:12px;">
-  <a href="{{ url_for('athlete') }}" class="kv" {% if request.path == url_for('athlete') %}style="font-weight:700;text-decoration:underline"{% endif %}>Programme</a>
+  <a href="{{ url_for('athlete_program') }}" class="kv" {% if request.path == url_for('athlete_program') %}style="font-weight:700;text-decoration:underline"{% endif %}>Programme</a>
   <a href="{{ url_for('athlete_journal') }}" class="kv" {% if request.path.startswith(url_for('athlete_journal')) %}style="font-weight:700;text-decoration:underline"{% endif %}>Journal</a>
   <a href="{{ url_for('athlete_performance') }}" class="kv" {% if request.path.startswith(url_for('athlete_performance')) %}style="font-weight:700;text-decoration:underline"{% endif %}>Entraînement</a>
 </nav>

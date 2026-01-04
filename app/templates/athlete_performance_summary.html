@@ -4,7 +4,7 @@
 <h2>Résumé — {{ program_session.session_name or 'Séance' }} — {{ entry_date.strftime('%Y-%m-%d') }}</h2>
 
 <nav style="margin-bottom:12px; display:flex; gap:12px;">
-  <a href="{{ url_for('athlete') }}" class="kv">Programme</a>
+  <a href="{{ url_for('athlete_program') }}" class="kv">Programme</a>
   <a href="{{ url_for('athlete_journal') }}" class="kv">Journal</a>
   <a href="{{ url_for('athlete_performance') }}" class="kv">Entraînement</a>
 </nav>

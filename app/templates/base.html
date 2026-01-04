@@ -174,7 +174,7 @@
 
                 {# lien athlete (si rôle != coach) #}
                 {% if session.get('role') != 'coach' %}
-                <li><a href="{{ url_for('athlete') }}">⛹️ Mon Espace</a></li>
+                <li><a href="{{ url_for('athlete_home') }}">⛹️ Mon Espace</a></li>
                 {% endif %}
 
                 <div class="user-info">
