@@ -457,7 +457,12 @@ def register_routes(app):
                     sets=ex.sets,
                     reps=ex.reps,
                     rest=ex.rest,
-                    rir=ex.rir
+                    rir=ex.rir,
+                    intensification=ex.intensification,
+                    muscle=ex.muscle,
+                    remark=ex.remark,
+                    series_description=ex.series_description,
+                    main_series=ex.main_series
                 )
                 db.session.add(new_ex)
         
