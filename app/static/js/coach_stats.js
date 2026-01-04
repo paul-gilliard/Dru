@@ -262,7 +262,141 @@ document.addEventListener('DOMContentLoaded', function(){
     } catch (err) {
       console.error('Error loading summary:', err);
     }
-  }  function renderTonnage(muscleGroup){
+  }
+
+  async function loadSummary14days(athleteId){
+    try {
+      const res = await fetch(`/coach/stats/athlete/${athleteId}/summary-14days.json`);
+      if (!res.ok) {
+        console.log('Summary 14days load failed:', res.status);
+        return;
+      }
+      const data = await res.json();
+      
+      // Get arrow function based on change
+      const getArrow = (diff) => {
+        if (diff === null || diff === undefined) return '—';
+        if (Math.abs(diff) < 0.1) return '→';
+        return diff > 0 ? '📈' : '📉';
+      };
+      
+      const formatDiff = (val, decimals = 1) => {
+        if (val === null || val === undefined) return '—';
+        const num = Number(val).toFixed(decimals);
+        const sign = parseFloat(num) > 0 ? '+' : '';
+        return sign + num;
+      };
+      
+      // Update summary values with differences
+      const weightArrow = getArrow(data.weight_diff);
+      const weightValue = data.weight_diff !== null ? 
+        `${formatDiff(data.weight_diff, 2)} kg ${weightArrow}` : '—';
+      document.getElementById('summary-14days-weight').textContent = weightValue;
+      
+      const kcalsArrow = getArrow(data.kcals_diff);
+      const kcalsValue = data.kcals_diff !== null ? 
+        `${formatDiff(data.kcals_diff, 0)} cal ${kcalsArrow}` : '—';
+      document.getElementById('summary-14days-kcals').textContent = kcalsValue;
+      
+      const waterArrow = getArrow(data.water_diff);
+      const waterValue = data.water_diff !== null ? 
+        `${formatDiff(data.water_diff, 0)} ml ${waterArrow}` : '—';
+      document.getElementById('summary-14days-water').textContent = waterValue;
+      
+      const sleepArrow = getArrow(data.sleep_diff);
+      const sleepValue = data.sleep_diff !== null ? 
+        `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
+      document.getElementById('summary-14days-sleep').textContent = sleepValue;
+      
+      // Fill tonnage rows
+      const tonnageBody = document.getElementById('summary-14days-tonnage-body');
+      tonnageBody.innerHTML = '';
+      Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #e5e7eb';
+        const diff = data.tonnage_diff_by_muscle[muscle];
+        const arrow = getArrow(diff);
+        const diffStr = formatDiff(diff, 0);
+        tr.innerHTML = `
+          <td style="padding:12px; font-weight:600;">${muscle}</td>
+          <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
+        `;
+        tonnageBody.appendChild(tr);
+      });
+      
+      document.getElementById('summary-14days-container').style.display = 'block';
+    } catch (err) {
+      console.error('Error loading summary-14days:', err);
+    }
+  }
+
+  async function loadSummary28days(athleteId){
+    try {
+      const res = await fetch(`/coach/stats/athlete/${athleteId}/summary-28days.json`);
+      if (!res.ok) {
+        console.log('Summary 28days load failed:', res.status);
+        return;
+      }
+      const data = await res.json();
+      
+      // Get arrow function based on change
+      const getArrow = (diff) => {
+        if (diff === null || diff === undefined) return '—';
+        if (Math.abs(diff) < 0.1) return '→';
+        return diff > 0 ? '📈' : '📉';
+      };
+      
+      const formatDiff = (val, decimals = 1) => {
+        if (val === null || val === undefined) return '—';
+        const num = Number(val).toFixed(decimals);
+        const sign = parseFloat(num) > 0 ? '+' : '';
+        return sign + num;
+      };
+      
+      // Update summary values with differences
+      const weightArrow = getArrow(data.weight_diff);
+      const weightValue = data.weight_diff !== null ? 
+        `${formatDiff(data.weight_diff, 2)} kg ${weightArrow}` : '—';
+      document.getElementById('summary-28days-weight').textContent = weightValue;
+      
+      const kcalsArrow = getArrow(data.kcals_diff);
+      const kcalsValue = data.kcals_diff !== null ? 
+        `${formatDiff(data.kcals_diff, 0)} cal ${kcalsArrow}` : '—';
+      document.getElementById('summary-28days-kcals').textContent = kcalsValue;
+      
+      const waterArrow = getArrow(data.water_diff);
+      const waterValue = data.water_diff !== null ? 
+        `${formatDiff(data.water_diff, 0)} ml ${waterArrow}` : '—';
+      document.getElementById('summary-28days-water').textContent = waterValue;
+      
+      const sleepArrow = getArrow(data.sleep_diff);
+      const sleepValue = data.sleep_diff !== null ? 
+        `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
+      document.getElementById('summary-28days-sleep').textContent = sleepValue;
+      
+      // Fill tonnage rows
+      const tonnageBody = document.getElementById('summary-28days-tonnage-body');
+      tonnageBody.innerHTML = '';
+      Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #e5e7eb';
+        const diff = data.tonnage_diff_by_muscle[muscle];
+        const arrow = getArrow(diff);
+        const diffStr = formatDiff(diff, 0);
+        tr.innerHTML = `
+          <td style="padding:12px; font-weight:600;">${muscle}</td>
+          <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
+        `;
+        tonnageBody.appendChild(tr);
+      });
+      
+      document.getElementById('summary-28days-container').style.display = 'block';
+    } catch (err) {
+      console.error('Error loading summary-28days:', err);
+    }
+  }
+
+  function renderTonnage(muscleGroup){
     if (!tonnageCache || !tonnageCache[muscleGroup]) return;
     
     const tonnageData = tonnageCache[muscleGroup];
@@ -570,6 +704,8 @@ document.addEventListener('DOMContentLoaded', function(){
     await loadJournal(athleteId);
     await loadTonnage(athleteId);
     await loadSummary(athleteId);
+    await loadSummary14days(athleteId);
+    await loadSummary28days(athleteId);
   });
 
   programSelect.addEventListener('change', async function(){
