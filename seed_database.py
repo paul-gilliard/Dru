@@ -159,7 +159,7 @@ FOODS_DATA = [
     ("Haricot rouge (Marque repère)", 96, 7.2, 0.7, 0.1, 12, 0.5, 6.5, 0.4),
     ("Haricot vert", 800, 0, 100, None, 0, None, None, None),
     ("Huile d'olive", 884, 0, 100, 15, 0, 0, 0, 0),
-    ("Huile colza", 884, None, 100, 8, 0, 0, 0, 0),
+    ("Huile colza", 884, 0, 100, 8, 0, 0, 0, 0),
     ("Huîtres", 212, 30, 10, None, 0.5, None, None, None),
     ("Iso Whey Zero (BiotechUSA)", 372, 84, 1.6, 1, 5.2, 0.8, None, 0.71),
     ("Jambon cru italien Cora", 128, 16, 6, None, 2.5, None, None, None),
