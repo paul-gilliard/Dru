@@ -176,6 +176,30 @@
         background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
     }
 
+    .validation-badge {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: rgba(16, 185, 129, 0.9);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 0.85em;
+        font-weight: 600;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .validation-badge .days {
+        display: block;
+        font-size: 1.1em;
+        margin-top: 2px;
+    }
+
+    .athlete-card.marked {
+        position: relative;
+    }
+
     /* Checkbox wrapper in header */
     .card-header-top {
         display: flex;
@@ -456,16 +480,32 @@
         });
     });
 
-    function updateCardAppearance(athleteId, isMarked) {
+    function updateCardAppearance(athleteId, isMarked, expiresAt = null) {
         const card = document.getElementById(`athlete-card-${athleteId}`);
         const activeGrid = document.getElementById('active-athletes');
         const markedSection = document.getElementById('marked-section');
         const markedGrid = document.getElementById('marked-athletes');
         
+        // Remove existing badge if any
+        const existingBadge = card.querySelector('.validation-badge');
+        if (existingBadge) {
+            existingBadge.remove();
+        }
+        
         if (isMarked) {
             // Move card to marked section
             card.classList.add('marked');
             markedGrid.appendChild(card);
+            
+            // Add validation badge with days remaining
+            const daysRemaining = expiresAt ? calculateDaysRemaining(expiresAt) : 7;
+            const badge = document.createElement('div');
+            badge.className = 'validation-badge';
+            badge.innerHTML = `
+                ✅ Validé<span class="days">${daysRemaining} j</span>
+            `;
+            card.style.position = 'relative';
+            card.appendChild(badge);
             
             // Show marked section if not visible
             if (markedSection.style.display === 'none') {
@@ -483,6 +523,14 @@
         }
     }
 
+    function calculateDaysRemaining(expiresAt) {
+        const now = new Date();
+        const expireDate = new Date(expiresAt);
+        const diffTime = expireDate - now;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return Math.max(0, diffDays);
+    }
+
     // Load data when page loads
     async function initPage() {
         // Load markings first
@@ -491,11 +539,12 @@
             const data = await response.json();
             
             // Check marked athletes
-            for (const [athleteId, marked] of Object.entries(data.markings)) {
+            for (const [athleteId, markingData] of Object.entries(data.markings)) {
                 const checkbox = document.getElementById(`check-${athleteId}`);
                 if (checkbox) {
                     checkbox.checked = true;
-                    updateCardAppearance(parseInt(athleteId), true);
+                    const expiresAt = markingData.expires_at || null;
+                    updateCardAppearance(parseInt(athleteId), true, expiresAt);
                 }
             }
         } catch (error) {

@@ -793,10 +793,16 @@ def register_routes(app):
             week_start=current_week_start
         ).all()
         
-        # Filter out expired markings
-        active_markings = {m.athlete_id: m for m in markings if not m.is_expired()}
+        # Filter out expired markings and build response with expiration dates
+        markings_data = {}
+        for m in markings:
+            if not m.is_expired():
+                markings_data[str(m.athlete_id)] = {
+                    'marked': True,
+                    'expires_at': m.expires_at.isoformat()
+                }
         
-        return jsonify({'markings': {str(aid): True for aid in active_markings.keys()}}), 200
+        return jsonify({'markings': markings_data}), 200
 
     @app.route('/athlete/availability')
     def athlete_availability():
