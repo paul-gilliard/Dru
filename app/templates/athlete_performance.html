@@ -1,36 +1,221 @@
 {% extends 'base.html' %}
 {% block title %}Entraînement — {{ athlete.username }}{% endblock %}
 {% block content %}
-<h2>Entraînement — {{ athlete.username }}</h2>
 
-<div class="card">
-  <h3>Sélections de séances</h3>
+<style>
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
 
-  {% if programs %}
-    {% for p in programs %}
-    <div class="program-block" style="margin-bottom:14px;">
-      <h4 style="margin-bottom:8px;">{{ p.name }}</h4>
+    .performance-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
 
-      <div class="session-grid">
-        {% for s in p.sessions %}
-        <a class="session-card" href="{{ url_for('athlete_performance_session', session_id=s.id) }}">
-          <div class="session-card-top">
-            <span class="session-day">{{ ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][s.day_of_week] }}</span>
-            {% if s.session_name %}
-            <span class="session-badge">{{ s.session_name }}</span>
-            {% endif %}
-          </div>
-          <div class="session-card-body">
-            <div class="session-name">{{ s.session_name or 'Séance' }}</div>
-            <div class="session-meta">{{ s.exercises|length }} exercice{{ 's' if s.exercises|length > 1 else '' }}</div>
-          </div>
-        </a>
-        {% endfor %}
-      </div>
+    .header-performance {
+        text-align: center;
+        color: white;
+        margin-bottom: 40px;
+    }
+
+    .header-performance h1 {
+        font-size: 2em;
+        font-weight: 700;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .header-performance p {
+        font-size: 1em;
+        opacity: 0.95;
+    }
+
+    /* Programmes et sessions */
+    .program-section {
+        margin-bottom: 40px;
+    }
+
+    .program-title {
+        color: white;
+        font-size: 1.3em;
+        font-weight: 700;
+        margin-bottom: 20px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid rgba(255,255,255,0.3);
+    }
+
+    .sessions-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 20px;
+    }
+
+    .session-link {
+        text-decoration: none;
+        color: inherit;
+    }
+
+    .session-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        border-left: 5px solid #667eea;
+        transition: all 0.3s ease;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .session-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+    }
+
+    .session-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        gap: 10px;
+    }
+
+    .day-badge {
+        display: inline-block;
+        background: #e8eaf6;
+        color: #667eea;
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 0.9em;
+        font-weight: 700;
+        text-transform: uppercase;
+    }
+
+    .session-name-badge {
+        display: inline-block;
+        background: #f3e5f5;
+        color: #764ba2;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.85em;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .session-name {
+        font-size: 1.1em;
+        font-weight: 700;
+        color: #333;
+        margin-bottom: 10px;
+    }
+
+    .session-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.95em;
+        color: #666;
+    }
+
+    .exercise-icon {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        background: #667eea;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.8em;
+        font-weight: 700;
+    }
+
+    .no-sessions {
+        background: rgba(255,255,255,0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 40px 20px;
+        text-align: center;
+        color: white;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .no-sessions strong {
+        display: block;
+        font-size: 1.2em;
+        margin-bottom: 10px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .header-performance h1 {
+            font-size: 1.5em;
+        }
+
+        .sessions-grid {
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .program-title {
+            font-size: 1.1em;
+        }
+
+        .session-card {
+            padding: 15px;
+        }
+
+        .session-name {
+            font-size: 1em;
+        }
+    }
+</style>
+
+<div class="performance-container">
+    <!-- En-tête -->
+    <div class="header-performance">
+        <h1>🏋️ Session d'Entraînement</h1>
+        <p>{{ athlete.username }}</p>
     </div>
-    {% endfor %}
-  {% else %}
-    <p class="text-muted">Aucune séance programmée.</p>
-  {% endif %}
+
+    {% if programs %}
+        {% for p in programs %}
+        <div class="program-section">
+            <div class="program-title">📋 {{ p.name }}</div>
+            
+            <div class="sessions-grid">
+                {% for s in p.sessions %}
+                <a href="{{ url_for('athlete_performance_session', session_id=s.id) }}" class="session-link">
+                    <div class="session-card">
+                        <div class="session-header">
+                            <span class="day-badge">{{ ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][s.day_of_week] }}</span>
+                            {% if s.session_name %}
+                            <span class="session-name-badge">{{ s.session_name }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="session-name">{{ s.session_name or 'Séance' }}</div>
+                        <div class="session-meta">
+                            <div class="exercise-icon">{{ s.exercises|length }}</div>
+                            <span>exercice{{ 's' if s.exercises|length > 1 else '' }}</span>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endfor %}
+    {% else %}
+        <div class="no-sessions">
+            <strong>📋 Aucune séance</strong>
+            <p>Vous n'avez pas encore de séances programmées. Contactez votre coach.</p>
+        </div>
+    {% endif %}
 </div>
+
 {% endblock %}
