@@ -937,12 +937,12 @@ def register_routes(app):
                 return jsonify({'error': 'program not found'}), 404
             
             # Get all sessions for this program
-            sessions = ProgramSession.query.filter_by(program_id=program_id).all()
+            program_sessions = ProgramSession.query.filter_by(program_id=program_id).all()
             
             # Collect all unique exercise names with their muscle groups
             exercises_dict = {}
-            for session in sessions:
-                for exercise in session.exercises:
+            for prog_session in program_sessions:
+                for exercise in prog_session.exercises:
                     if exercise.name not in exercises_dict:
                         exercises_dict[exercise.name] = exercise.muscle or 'Unknown'
             
