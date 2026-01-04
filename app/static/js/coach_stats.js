@@ -151,11 +151,10 @@ document.addEventListener('DOMContentLoaded', function(){
     }
     
     perfCache = data;
-    // populate exercise select
-    exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
-    Object.keys(data).sort().forEach(ex=>{
-      const opt = document.createElement('option'); opt.value = ex; opt.textContent = ex; exSelect.appendChild(opt);
-    });
+    // populate exercise select with filter based on selected muscle group
+    const selectedMuscle = muscleSelect.value;
+    updateExercisesForMuscle(selectedMuscle);
+    
     // clear tables
     document.getElementById('main-series-table').querySelector('tbody').innerHTML = '';
     document.getElementById('other-series-table').querySelector('tbody').innerHTML = '';
@@ -535,18 +534,50 @@ document.addEventListener('DOMContentLoaded', function(){
     await loadSummary(id);
   });
 
+  // Function to update exercise select based on selected muscle group
+  function updateExercisesForMuscle(muscleGroup) {
+    exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
+    if (!muscleGroup) {
+      // Show all exercises
+      if (perfCache) {
+        Object.keys(perfCache).sort().forEach(ex => {
+          const opt = document.createElement('option');
+          opt.value = ex;
+          opt.textContent = ex;
+          exSelect.appendChild(opt);
+        });
+      }
+      return;
+    }
+    // Show only exercises for selected muscle group
+    if (perfCache) {
+      Object.keys(perfCache).sort().forEach(ex => {
+        const exData = perfCache[ex];
+        if (exData.muscle_group === muscleGroup) {
+          const opt = document.createElement('option');
+          opt.value = ex;
+          opt.textContent = ex;
+          exSelect.appendChild(opt);
+        }
+      });
+    }
+  }
+
   muscleSelect.addEventListener('change', function(){
     const muscle = this.value;
     if (!muscle) { 
       document.getElementById('tonnage-chart-container').style.display = 'none';
+      updateExercisesForMuscle(null); // Show all exercises
       return; 
     }
     renderTonnage(muscle);
+    updateExercisesForMuscle(muscle); // Filter exercises for this muscle group
   });
 
   clearMuscle.addEventListener('click', function(){
     muscleSelect.value = '';
     document.getElementById('tonnage-chart-container').style.display = 'none';
+    updateExercisesForMuscle(null); // Show all exercises
   });
 
   exSelect.addEventListener('change', function(){

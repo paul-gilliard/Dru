@@ -736,7 +736,15 @@ def register_routes(app):
         # convert to friendly structure
         out = {}
         for ex, data in payload.items():
+            # Get muscle group for this exercise
+            muscle_group = 'Autre'
+            if ex != 'Autre':
+                ex_record = Exercise.query.filter_by(name=ex).first()
+                if ex_record:
+                    muscle_group = ex_record.muscle_group
+            
             out[ex] = {
+                'muscle_group': muscle_group,
                 'main_series': [],
                 'other_series': []
             }
