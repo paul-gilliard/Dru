@@ -127,6 +127,16 @@ def register_routes(app):
             return redirect(url_for('coach'))
         
         username = user.username
+        
+        # Supprimer tous les enregistrements WeeklyBilanMarking liés à cet utilisateur
+        # (comme coach_id ou athlete_id)
+        WeeklyBilanMarking.query.filter(
+            (WeeklyBilanMarking.coach_id == user_id) | 
+            (WeeklyBilanMarking.athlete_id == user_id)
+        ).delete()
+        db.session.commit()
+        
+        # Maintenant supprimer l'utilisateur
         db.session.delete(user)
         db.session.commit()
         flash(f'Utilisateur "{username}" a été supprimé')
