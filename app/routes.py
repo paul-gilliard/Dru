@@ -667,6 +667,16 @@ def register_routes(app):
         athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
         return render_template('coach_stats.html', coach=user, athletes=athletes)
 
+    @app.route('/coach/meal-plan')
+    def coach_meal_plan():
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            flash('Accès réservé aux coachs')
+            return redirect(url_for('home'))
+        return render_template('coach_meal_plan.html', coach=user)
+
     @app.route('/coach/stats/athlete/<int:athlete_id>/journal.json')
     def coach_stats_athlete_journal(athlete_id):
         if 'user_id' not in session:
@@ -1169,6 +1179,7 @@ def register_routes(app):
             'programming' : {'url': '/coach/programming',  'endpoint': 'coach_programming',  'label': 'Création programmation'},
             'exercises'   : {'url': '/coach/exercises',    'endpoint': 'coach_exercises',    'label': 'Banque d\'exercices'},
             'stats'       : {'url': '/coach/stats',         'endpoint': 'coach_stats',        'label': 'Suivi journal'},
+            'meal_plan'   : {'url': '/coach/meal-plan',    'endpoint': 'coach_meal_plan',    'label': 'Plan alimentaire'},
         }
         return {'coach_nav_items_static': items}
 
