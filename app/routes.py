@@ -442,8 +442,8 @@ def register_routes(app):
         for session_obj in prog.sessions:
             new_session = ProgramSession(
                 program_id=new_prog.id,
-                day=session_obj.day,
-                session_number=session_obj.session_number
+                day_of_week=session_obj.day_of_week,
+                session_name=session_obj.session_name
             )
             db.session.add(new_session)
             db.session.flush()  # Pour obtenir l'ID de la nouvelle session
@@ -452,12 +452,12 @@ def register_routes(app):
             for ex in session_obj.exercises:
                 new_ex = ExerciseEntry(
                     session_id=new_session.id,
-                    exercise_id=ex.exercise_id,
+                    position=ex.position,
+                    name=ex.name,
                     sets=ex.sets,
                     reps=ex.reps,
-                    weight=ex.weight,
-                    rpe=ex.rpe,
-                    order=ex.order
+                    rest=ex.rest,
+                    rir=ex.rir
                 )
                 db.session.add(new_ex)
         
