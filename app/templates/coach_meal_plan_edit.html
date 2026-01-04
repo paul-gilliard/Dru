@@ -76,13 +76,18 @@
                         <!-- Ajouter un aliment -->
                         <div class="mb-4">
                             <div class="input-group">
-                                <select id="food_select_{{ meal_num }}" class="form-select" placeholder="Sélectionner un aliment">
-                                    <option value="">-- Ajouter un aliment --</option>
+                                <input type="text" id="food_search_{{ meal_num }}" class="form-control" 
+                                       placeholder="🔍 Chercher un aliment..." 
+                                       onkeyup="filterFoods({{ meal_num }})">
+                                <select id="food_select_{{ meal_num }}" class="form-select" placeholder="Sélectionner un aliment"
+                                        onchange="onFoodSelected({{ meal_num }})">
+                                    <option value="">-- Sélectionner un aliment --</option>
                                     {% for food in foods %}
                                         <option value="{{ food.id }}" data-kcal="{{ food.kcal }}" 
                                                 data-proteins="{{ food.proteins or 0 }}" 
                                                 data-lipids="{{ food.lipids or 0 }}" 
-                                                data-carbs="{{ food.carbs or 0 }}">
+                                                data-carbs="{{ food.carbs or 0 }}"
+                                                data-name="{{ food.name }}">
                                             {{ food.name }} ({{ food.kcal }} kcal)
                                         </option>
                                     {% endfor %}
@@ -157,6 +162,39 @@
 <script>
 // Récupérer l'ID du plan depuis l'URL
 const mealPlanId = window.location.pathname.split('/').pop();
+
+// ============ FILTRER LES ALIMENTS PAR RECHERCHE ============
+function filterFoods(mealNum) {
+    const searchInput = document.getElementById(`food_search_${mealNum}`);
+    const select = document.getElementById(`food_select_${mealNum}`);
+    const searchTerm = searchInput.value.toLowerCase();
+    
+    // Parcourir les options et les masquer/afficher selon la recherche
+    const options = select.querySelectorAll('option');
+    options.forEach(option => {
+        if (option.value === '') return; // Ne pas masquer l'option vide
+        
+        const foodName = option.getAttribute('data-name') || option.textContent;
+        if (foodName.toLowerCase().includes(searchTerm)) {
+            option.style.display = '';
+        } else {
+            option.style.display = 'none';
+        }
+    });
+}
+
+// Réinitialiser la recherche quand on sélectionne un aliment
+function onFoodSelected(mealNum) {
+    const searchInput = document.getElementById(`food_search_${mealNum}`);
+    searchInput.value = '';
+    
+    // Afficher à nouveau tous les aliments
+    const select = document.getElementById(`food_select_${mealNum}`);
+    const options = select.querySelectorAll('option');
+    options.forEach(option => {
+        option.style.display = '';
+    });
+}
 
 // ============ AJOUTER UN ALIMENT ============
 async function addFoodToMeal(mealPlanId, mealNumber) {
