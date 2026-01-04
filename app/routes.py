@@ -113,6 +113,25 @@ def register_routes(app):
         users = User.query.order_by(User.id).all()
         return render_template('coach.html', users=users)
 
+    # Route pour supprimer un utilisateur
+    @app.route('/coach/delete-user/<int:user_id>', methods=['POST'])
+    def delete_user(user_id):
+        # contrôle d'accès
+        forbidden = _require_coach()
+        if forbidden:
+            return forbidden
+
+        user = User.query.get(user_id)
+        if not user:
+            flash('Utilisateur introuvable')
+            return redirect(url_for('coach'))
+        
+        username = user.username
+        db.session.delete(user)
+        db.session.commit()
+        flash(f'Utilisateur "{username}" a été supprimé')
+        return redirect(url_for('coach'))
+
     @app.route('/athlete')
     def athlete_home():
         # Page d'accueil de l'athlète avec mosaïque de boutons

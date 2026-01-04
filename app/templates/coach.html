@@ -32,10 +32,17 @@
     <h3>Utilisateurs existants</h3>
     {% if users %}
     <table>
-      <thead><tr><th>ID</th><th>Nom</th><th>Rôle</th></tr></thead>
+      <thead><tr><th>ID</th><th>Nom</th><th>Rôle</th><th>Action</th></tr></thead>
       <tbody>
         {% for u in users %}
-        <tr><td>{{ u.id }}</td><td>{{ u.username }}</td><td>{{ u.role }}</td></tr>
+        <tr>
+          <td>{{ u.id }}</td>
+          <td>{{ u.username }}</td>
+          <td>{{ u.role }}</td>
+          <td>
+            <button class="delete-btn" onclick="confirmDelete({{ u.id }}, '{{ u.username }}')" style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:600; font-size:0.9rem; transition:all 0.2s ease;" onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">Supprimer</button>
+          </td>
+        </tr>
         {% endfor %}
       </tbody>
     </table>
@@ -43,6 +50,71 @@
     <p>Aucun utilisateur</p>
     {% endif %}
   </div>
+
+  <!-- Modal de confirmation -->
+  <div id="deleteModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; display:flex; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:12px; padding:30px; max-width:400px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3); animation:slideUp 0.3s ease-out;">
+      <h3 style="margin:0 0 16px 0; color:#1e293b; font-size:1.2rem;">Confirmer la suppression</h3>
+      <p id="deleteMessage" style="margin:0 0 24px 0; color:#64748b; line-height:1.6;"></p>
+      <div style="display:flex; gap:12px; justify-content:flex-end;">
+        <button onclick="closeDeleteModal()" style="background:#e2e8f0; color:#1e293b; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:600; transition:all 0.2s ease;" onmouseover="this.style.background='#cbd5e1'" onmouseout="this.style.background='#e2e8f0'">Annuler</button>
+        <button onclick="performDelete()" style="background:#ef4444; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:600; transition:all 0.2s ease;" onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">Supprimer</button>
+      </div>
+    </div>
+  </div>
+
+  <style>
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    #deleteModal[style*="display: flex"] {
+      display: flex !important;
+    }
+  </style>
+
+  <script>
+    let deleteUserId = null;
+
+    function confirmDelete(userId, username) {
+      deleteUserId = userId;
+      const modal = document.getElementById('deleteModal');
+      const message = document.getElementById('deleteMessage');
+      message.textContent = `Êtes-vous sûr de vouloir supprimer l'utilisateur "${username}" ? Cette action est irréversible.`;
+      modal.style.display = 'flex';
+    }
+
+    function closeDeleteModal() {
+      const modal = document.getElementById('deleteModal');
+      modal.style.display = 'none';
+      deleteUserId = null;
+    }
+
+    function performDelete() {
+      if (deleteUserId) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `{{ url_for('delete_user', user_id='USERID') }}`.replace('USERID', deleteUserId);
+        document.body.appendChild(form);
+        form.submit();
+      }
+    }
+
+    // Fermer la modal en cliquant en dehors
+    document.addEventListener('click', function(event) {
+      const modal = document.getElementById('deleteModal');
+      if (event.target === modal) {
+        closeDeleteModal();
+      }
+    });
+  </script>
 </div>
 
 {% endblock %}
