@@ -3,34 +3,338 @@
 {% block title %}Mon Plan Alimentaire - Dru{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-    <div class="row">
-        <div class="col-md-8 offset-md-2">
-            <div class="card">
-                <div class="card-header bg-warning text-dark">
-                    <h4 class="mb-0">
-                        <a href="{{ url_for('athlete_home') }}" class="btn btn-sm btn-outline-dark me-2">← Retour</a>
-                        🍽️ Mon Plan Alimentaire
-                    </h4>
-                </div>
-                <div class="card-body">
-                    <div class="alert alert-info">
-                        <h5>Votre plan alimentaire personnalisé</h5>
-                        <p class="mb-0">Cette page affichera bientôt votre plan alimentaire personnalisé créé par votre coach.</p>
-                    </div>
 
-                    {% if not meal_plan %}
-                    <div class="alert alert-warning">
-                        <strong>⚠️ Pas de plan alimentaire pour le moment</strong>
-                        <p class="mb-0">Contactez votre coach pour qu'il vous crée un plan alimentaire adapté à vos objectifs.</p>
-                    </div>
-                    {% else %}
-                    <h5>{{ meal_plan.name }}</h5>
-                    <p><em>Créé le {{ meal_plan.created_at.strftime('%d/%m/%Y') }}</em></p>
-                    {% endif %}
-                </div>
+<style>
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .meal-plan-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .header-meal-plan {
+        text-align: center;
+        color: white;
+        margin-bottom: 40px;
+    }
+
+    .header-meal-plan h1 {
+        font-size: 2em;
+        font-weight: 700;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .header-meal-plan p {
+        font-size: 1.05em;
+        opacity: 0.95;
+        margin-bottom: 8px;
+    }
+
+    .plan-name {
+        font-size: 0.95em;
+        opacity: 0.9;
+        font-style: italic;
+    }
+
+    /* Daily totals */
+    .daily-totals {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 15px;
+        margin-bottom: 40px;
+    }
+
+    .total-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        border-top: 4px solid #667eea;
+    }
+
+    .total-value {
+        font-size: 2em;
+        font-weight: 700;
+        color: #667eea;
+        margin-bottom: 5px;
+    }
+
+    .total-label {
+        font-size: 0.9em;
+        color: #666;
+        font-weight: 600;
+    }
+
+    /* Meals grid */
+    .meals-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .meal-card {
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        transition: all 0.3s ease;
+        border-left: 5px solid #667eea;
+    }
+
+    .meal-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+
+    .meal-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .meal-icon {
+        font-size: 1.8em;
+        margin-right: 10px;
+    }
+
+    .meal-title {
+        font-size: 1.1em;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+    }
+
+    .meal-body {
+        padding: 15px;
+    }
+
+    .food-item {
+        padding: 10px 0;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 0.95em;
+    }
+
+    .food-item:last-child {
+        border-bottom: none;
+    }
+
+    .food-name {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 3px;
+    }
+
+    .food-quantity {
+        font-size: 0.85em;
+        color: #667eea;
+        font-weight: 500;
+    }
+
+    .food-macros {
+        font-size: 0.8em;
+        color: #999;
+        margin-top: 3px;
+        line-height: 1.4;
+    }
+
+    .meal-totals {
+        background: #f8f9fa;
+        padding: 12px;
+        border-radius: 8px;
+        margin-top: 12px;
+        font-size: 0.9em;
+        border-left: 3px solid #667eea;
+    }
+
+    .meal-total-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+        color: #666;
+    }
+
+    .meal-total-row:last-child {
+        margin-bottom: 0;
+        font-weight: 700;
+        color: #333;
+        border-top: 1px solid #e0e0e0;
+        padding-top: 6px;
+        margin-top: 6px;
+    }
+
+    .empty-meal {
+        text-align: center;
+        color: #999;
+        font-style: italic;
+        padding: 30px 15px;
+    }
+
+    .no-plan {
+        background: rgba(255,255,255,0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 40px 20px;
+        text-align: center;
+        color: white;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .no-plan strong {
+        display: block;
+        font-size: 1.2em;
+        margin-bottom: 10px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .header-meal-plan h1 {
+            font-size: 1.5em;
+        }
+
+        .meals-grid {
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .daily-totals {
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .meal-card {
+            margin: 0;
+        }
+    }
+</style>
+
+<div class="meal-plan-container">
+    <!-- En-tête -->
+    <div class="header-meal-plan">
+        <h1>🍽️ Mon Plan Alimentaire</h1>
+        {% if meal_plan %}
+            <p>{{ meal_plan.name }}</p>
+            <span class="plan-name">Mis à jour le {{ meal_plan.updated_at.strftime('%d %B %Y') }}</span>
+        {% endif %}
+    </div>
+
+    {% if meal_plan %}
+        <!-- Totaux quotidiens -->
+        {% set daily_totals = meal_plan.get_daily_totals() %}
+        <div class="daily-totals">
+            <div class="total-card">
+                <div class="total-value">{{ '%.0f'|format(daily_totals.kcals) }}</div>
+                <div class="total-label">Kcals</div>
+            </div>
+            <div class="total-card">
+                <div class="total-value">{{ '%.1f'|format(daily_totals.proteins) }}g</div>
+                <div class="total-label">Protéines</div>
+            </div>
+            <div class="total-card">
+                <div class="total-value">{{ '%.1f'|format(daily_totals.carbs) }}g</div>
+                <div class="total-label">Glucides</div>
+            </div>
+            <div class="total-card">
+                <div class="total-value">{{ '%.1f'|format(daily_totals.lipids) }}g</div>
+                <div class="total-label">Lipides</div>
             </div>
         </div>
-    </div>
+
+        <!-- Repas -->
+        <div class="meals-grid">
+            {% for meal_num in range(1, 7) %}
+                {% set meals = meal_plan.meals|selectattr('meal_number', 'equalto', meal_num)|list %}
+                <div class="meal-card">
+                    <div class="meal-header">
+                        <div class="meal-title">
+                            {% if meal_num == 1 %}
+                                <span class="meal-icon">🌅</span>Petit-déjeuner
+                            {% elif meal_num == 2 %}
+                                <span class="meal-icon">🥤</span>Collation 1
+                            {% elif meal_num == 3 %}
+                                <span class="meal-icon">🍽️</span>Déjeuner
+                            {% elif meal_num == 4 %}
+                                <span class="meal-icon">🥗</span>Collation 2
+                            {% elif meal_num == 5 %}
+                                <span class="meal-icon">🍝</span>Dîner
+                            {% elif meal_num == 6 %}
+                                <span class="meal-icon">🥛</span>Collation 3
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="meal-body">
+                        {% if meals %}
+                            {% set meal_kcals = 0 %}
+                            {% set meal_proteins = 0 %}
+                            {% set meal_carbs = 0 %}
+                            {% set meal_lipids = 0 %}
+
+                            {% for meal_entry in meals %}
+                                {% if meal_entry.food %}
+                                    {% set quantity_factor = (meal_entry.quantity or 100) / 100.0 %}
+                                    {% set kcals = (meal_entry.food.kcal or 0) * quantity_factor %}
+                                    {% set proteins = (meal_entry.food.proteins or 0) * quantity_factor %}
+                                    {% set carbs = (meal_entry.food.carbs or 0) * quantity_factor %}
+                                    {% set lipids = (meal_entry.food.lipids or 0) * quantity_factor %}
+                                    {% set meal_kcals = meal_kcals + kcals %}
+                                    {% set meal_proteins = meal_proteins + proteins %}
+                                    {% set meal_carbs = meal_carbs + carbs %}
+                                    {% set meal_lipids = meal_lipids + lipids %}
+
+                                    <div class="food-item">
+                                        <div class="food-name">{{ meal_entry.food.name }}</div>
+                                        <div class="food-quantity">{{ meal_entry.quantity|int }}g</div>
+                                        <div class="food-macros">
+                                            {{ '%.0f'|format(kcals) }}kcal • 
+                                            {{ '%.1f'|format(proteins) }}P • 
+                                            {{ '%.1f'|format(carbs) }}C • 
+                                            {{ '%.1f'|format(lipids) }}L
+                                        </div>
+                                    </div>
+                                {% endif %}
+                            {% endfor %}
+
+                            <div class="meal-totals">
+                                <div class="meal-total-row">
+                                    <span>Kcals</span>
+                                    <strong>{{ '%.0f'|format(meal_kcals) }}</strong>
+                                </div>
+                                <div class="meal-total-row">
+                                    <span>Protéines</span>
+                                    <strong>{{ '%.1f'|format(meal_proteins) }}g</strong>
+                                </div>
+                                <div class="meal-total-row">
+                                    <span>Glucides</span>
+                                    <strong>{{ '%.1f'|format(meal_carbs) }}g</strong>
+                                </div>
+                                <div class="meal-total-row">
+                                    <span>Lipides</span>
+                                    <strong>{{ '%.1f'|format(meal_lipids) }}g</strong>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="empty-meal">Pas d'aliments</div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+    {% else %}
+        <div class="no-plan">
+            <strong>📋 Aucun plan alimentaire</strong>
+            <p>Vous n'avez pas encore de plan alimentaire. Contactez votre coach pour qu'il vous en crée un adapté à vos objectifs.</p>
+        </div>
+    {% endif %}
 </div>
+
 {% endblock %}
