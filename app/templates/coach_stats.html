@@ -1,6 +1,33 @@
 {% extends 'base.html' %}
 {% block title %}Suivi statistiques{% endblock %}
 {% block content %}
+<style>
+  /* Loading spinner */
+  .spinner {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #e5e7eb;
+    border-top: 3px solid #0b63d6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  
+  .loading-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 30px;
+    gap: 12px;
+    color: #64748b;
+  }
+</style>
+
 <h2>Suivi statistiques</h2>
 
 <!-- {% include 'coach_nav.html' %} -->
@@ -58,6 +85,10 @@
 
   <div class="card">
     <h3>Récapitulatif semaine actuelle vs précédente</h3>
+    <div id="summary-7days-loader" class="loading-container">
+      <div class="spinner"></div>
+      <span>Chargement...</span>
+    </div>
     <div id="summary-7days-container" style="display:none;">
       <table style="width:100%; border-collapse:collapse;">
         <tbody>
@@ -89,6 +120,10 @@
   
   <div class="card">
     <h3>Récapitulatif semaine actuelle vs il y a 2 semaines</h3>
+    <div id="summary-14days-loader" class="loading-container">
+      <div class="spinner"></div>
+      <span>Chargement...</span>
+    </div>
     <div id="summary-14days-container" style="display:none;">
       <table style="width:100%; border-collapse:collapse;">
         <tbody>
@@ -116,6 +151,10 @@
 
   <div class="card">
     <h3>Récapitulatif semaine actuelle vs il y a 4 semaines</h3>
+    <div id="summary-28days-loader" class="loading-container">
+      <div class="spinner"></div>
+      <span>Chargement...</span>
+    </div>
     <div id="summary-28days-container" style="display:none;">
       <table style="width:100%; border-collapse:collapse;">
         <tbody>
