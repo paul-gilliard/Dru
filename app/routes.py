@@ -697,7 +697,14 @@ def register_routes(app):
             flash('Accès réservé aux coachs')
             return redirect(url_for('home'))
         athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
-        return render_template('coach_weekly_summary.html', coach=user, athletes=athletes)
+        
+        # Calculate week dates
+        today = datetime.utcnow().date()
+        current_week_start = today - timedelta(days=today.weekday())
+        current_week_end = current_week_start + timedelta(days=6)
+        
+        return render_template('coach_weekly_summary.html', coach=user, athletes=athletes, 
+                             current_week_start=current_week_start, current_week_end=current_week_end)
 
     @app.route('/athlete/availability')
     def athlete_availability():

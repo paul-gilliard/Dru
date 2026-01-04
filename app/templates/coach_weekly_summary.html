@@ -207,10 +207,7 @@
             <div class="athlete-header">
                 <h2 class="athlete-name">{{ athlete.username }}</h2>
                 <div class="athlete-weeks">
-                    {% set today = now().date() %}
-                    {% set current_week_start = today - timedelta(days=today.weekday()) %}
-                    {% set previous_week_start = current_week_start - timedelta(days=7) %}
-                    Semaine: {{ current_week_start.strftime('%d %b') }} - {{ (current_week_start + timedelta(days=6)).strftime('%d %b') }}
+                    Semaine: {{ current_week_start.strftime('%d %b') }} - {{ current_week_end.strftime('%d %b') }}
                 </div>
             </div>
 
