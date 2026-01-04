@@ -116,16 +116,20 @@
                                             <tr id="entry_{{ entry.id }}">
                                                 <td>{{ entry.food.name }}</td>
                                                 <td>
-                                                    <input type="number" class="form-control form-control-sm" 
-                                                           value="{{ entry.quantity }}" min="1" step="10"
-                                                           onchange="updateMealEntry({{ entry.id }}, this.value)">
+                                                    <input type="number" class="form-control form-control-sm quantity-input" 
+                                                           id="qty_{{ entry.id }}"
+                                                           value="{{ entry.quantity }}" min="1" step="10">
                                                 </td>
                                                 {% set data = entry.to_dict() %}
-                                                <td>{{ "%.0f"|format(data.kcals) }} kcal</td>
-                                                <td>{{ "%.1f"|format(data.proteins) }}g</td>
-                                                <td>{{ "%.1f"|format(data.lipids) }}g</td>
-                                                <td>{{ "%.1f"|format(data.carbs) }}g</td>
+                                                <td class="data_kcals_{{ entry.id }}">{{ "%.0f"|format(data.kcals) }} kcal</td>
+                                                <td class="data_proteins_{{ entry.id }}">{{ "%.1f"|format(data.proteins) }}g</td>
+                                                <td class="data_lipids_{{ entry.id }}">{{ "%.1f"|format(data.lipids) }}g</td>
+                                                <td class="data_carbs_{{ entry.id }}">{{ "%.1f"|format(data.carbs) }}g</td>
                                                 <td>
+                                                    <button class="btn btn-sm btn-primary" 
+                                                            onclick="saveAndUpdateMeal({{ entry.id }})">
+                                                        💾
+                                                    </button>
                                                     <button class="btn btn-sm btn-danger" 
                                                             onclick="deleteMealEntry({{ entry.id }})">
                                                         🗑️
@@ -193,7 +197,15 @@ async function addFoodToMeal(mealPlanId, mealNumber) {
     }
 }
 
-async function updateMealEntry(entryId, quantity) {
+async function saveAndUpdateMeal(entryId) {
+    const quantityInput = document.getElementById(`qty_${entryId}`);
+    const quantity = parseFloat(quantityInput.value);
+    
+    if (quantity <= 0) {
+        alert('Quantité invalide');
+        return;
+    }
+    
     try {
         const response = await fetch(`/api/meal-entries/${entryId}/update`, {
             method: 'POST',
@@ -201,7 +213,7 @@ async function updateMealEntry(entryId, quantity) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                quantity: parseFloat(quantity)
+                quantity: quantity
             })
         });
         
@@ -211,10 +223,41 @@ async function updateMealEntry(entryId, quantity) {
             return;
         }
         
-        // Recharger pour mettre à jour les totaux
-        location.reload();
+        const data = await response.json();
+        
+        // Mettre à jour les valeurs sans recharger
+        document.querySelector(`.data_kcals_${entryId}`).textContent = data.kcals.toFixed(0) + ' kcal';
+        document.querySelector(`.data_proteins_${entryId}`).textContent = data.proteins.toFixed(1) + 'g';
+        document.querySelector(`.data_lipids_${entryId}`).textContent = data.lipids.toFixed(1) + 'g';
+        document.querySelector(`.data_carbs_${entryId}`).textContent = data.carbs.toFixed(1) + 'g';
+        
+        // Recharger les totaux quotidiens
+        updateDailyTotals();
+        
+        // Flash feedback
+        alert('✓ Quantité sauvegardée');
     } catch (error) {
         alert('Erreur: ' + error.message);
+    }
+}
+
+async function updateDailyTotals() {
+    // Récupérer l'ID du plan depuis l'URL ou la page
+    const mealPlanId = window.location.pathname.split('/').pop();
+    
+    try {
+        const response = await fetch(`/api/meal-plans/${mealPlanId}/totals`);
+        if (response.ok) {
+            const totals = await response.json();
+            
+            // Mettre à jour les éléments d'affichage des totaux
+            document.querySelector('h3:contains("Totaux")')?.parentElement?.remove();
+            
+            // Recharger simplement pour avoir les totaux à jour
+            setTimeout(() => location.reload(), 500);
+        }
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour des totaux:', error);
     }
 }
 
