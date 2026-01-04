@@ -1050,6 +1050,127 @@ def register_routes(app):
         exercises = Exercise.query.order_by(Exercise.name).all()
         return jsonify([ex.to_dict() for ex in exercises])
 
+    # ===== ALIMENTS (Food) ROUTES =====
+    
+    @app.route('/coach/foods', methods=['GET', 'POST'])
+    def coach_foods():
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            flash('Accès réservé aux coachs')
+            return redirect(url_for('home'))
+        
+        if request.method == 'POST':
+            try:
+                from app.models import Food
+                name = request.form.get('name', '').strip()
+                kcal = float(request.form.get('kcal', 0))
+                proteins = float(request.form.get('proteins', 0))
+                lipids = float(request.form.get('lipids', 0))
+                carbs = float(request.form.get('carbs', 0))
+                saturated_fats = request.form.get('saturated_fats')
+                simple_sugars = request.form.get('simple_sugars')
+                fiber = request.form.get('fiber')
+                salt = request.form.get('salt')
+                
+                saturated_fats = float(saturated_fats) if saturated_fats else None
+                simple_sugars = float(simple_sugars) if simple_sugars else None
+                fiber = float(fiber) if fiber else None
+                salt = float(salt) if salt else None
+                
+                if not name or kcal <= 0 or proteins < 0 or lipids < 0 or carbs < 0:
+                    flash('Erreur: vérifiez les champs obligatoires')
+                    return redirect(url_for('coach_foods'))
+                
+                existing = Food.query.filter_by(name=name).first()
+                if existing:
+                    flash(f'Aliment "{name}" existe déjà')
+                    return redirect(url_for('coach_foods'))
+                
+                food = Food(
+                    name=name,
+                    kcal=kcal,
+                    proteins=proteins,
+                    lipids=lipids,
+                    carbs=carbs,
+                    saturated_fats=saturated_fats,
+                    simple_sugars=simple_sugars,
+                    fiber=fiber,
+                    salt=salt
+                )
+                db.session.add(food)
+                db.session.commit()
+                flash(f'Aliment "{name}" créé')
+                return redirect(url_for('coach_foods'))
+            except Exception as e:
+                flash(f'Erreur: {str(e)}')
+                return redirect(url_for('coach_foods'))
+        
+        from app.models import Food
+        foods = Food.query.order_by(Food.name).all()
+        return render_template('coach_foods.html', foods=foods)
+
+    @app.route('/coach/foods/<int:food_id>/edit', methods=['GET', 'POST'])
+    def coach_foods_edit(food_id):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            flash('Accès réservé aux coachs')
+            return redirect(url_for('home'))
+        
+        from app.models import Food
+        food = Food.query.get_or_404(food_id)
+        
+        if request.method == 'POST':
+            try:
+                food.name = request.form.get('name', '').strip()
+                food.kcal = float(request.form.get('kcal', 0))
+                food.proteins = float(request.form.get('proteins', 0))
+                food.lipids = float(request.form.get('lipids', 0))
+                food.carbs = float(request.form.get('carbs', 0))
+                
+                saturated_fats = request.form.get('saturated_fats')
+                simple_sugars = request.form.get('simple_sugars')
+                fiber = request.form.get('fiber')
+                salt = request.form.get('salt')
+                
+                food.saturated_fats = float(saturated_fats) if saturated_fats else None
+                food.simple_sugars = float(simple_sugars) if simple_sugars else None
+                food.fiber = float(fiber) if fiber else None
+                food.salt = float(salt) if salt else None
+                
+                if not food.name or food.kcal <= 0 or food.proteins < 0 or food.lipids < 0 or food.carbs < 0:
+                    flash('Erreur: vérifiez les champs obligatoires')
+                    return redirect(url_for('coach_foods_edit', food_id=food_id))
+                
+                db.session.commit()
+                flash(f'Aliment "{food.name}" mis à jour')
+                return redirect(url_for('coach_foods_edit', food_id=food_id))
+            except Exception as e:
+                flash(f'Erreur: {str(e)}')
+                return redirect(url_for('coach_foods_edit', food_id=food_id))
+        
+        return render_template('coach_foods_edit.html', food=food)
+
+    @app.route('/coach/foods/<int:food_id>/delete', methods=['POST'])
+    def coach_foods_delete(food_id):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            forbidden = False
+            return forbidden
+
+        from app.models import Food
+        food = Food.query.get_or_404(food_id)
+        name = food.name
+        db.session.delete(food)
+        db.session.commit()
+        flash(f'Aliment "{name}" supprimé')
+        return redirect(url_for('coach_foods'))
+
     @app.route('/seed-exercises')
     def seed_exercises_page():
         """Page to seed exercises"""

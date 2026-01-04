@@ -1,0 +1,86 @@
+{% extends 'base.html' %}
+{% block title %}Banque d'aliments{% endblock %}
+{% block content %}
+<h2>Banque d'aliments</h2>
+
+<div class="card">
+  <h3>Créer un aliment</h3>
+  <form method="post" action="{{ url_for('coach_foods') }}">
+    <div>
+      <label for="name">Nom *</label>
+      <input id="name" name="name" type="text" required>
+    </div>
+    <div>
+      <label for="kcal">Kcal *</label>
+      <input id="kcal" name="kcal" type="number" step="0.1" required>
+    </div>
+    <div>
+      <label for="proteins">Protéines (g) *</label>
+      <input id="proteins" name="proteins" type="number" step="0.1" required>
+    </div>
+    <div>
+      <label for="lipids">Lipides (g) *</label>
+      <input id="lipids" name="lipids" type="number" step="0.1" required>
+    </div>
+    <div>
+      <label for="carbs">Glucides (g) *</label>
+      <input id="carbs" name="carbs" type="number" step="0.1" required>
+    </div>
+    <div>
+      <label for="saturated_fats">Acides gras saturés (g)</label>
+      <input id="saturated_fats" name="saturated_fats" type="number" step="0.1">
+    </div>
+    <div>
+      <label for="simple_sugars">Sucres simples (g)</label>
+      <input id="simple_sugars" name="simple_sugars" type="number" step="0.1">
+    </div>
+    <div>
+      <label for="fiber">Fibres alimentaires (g)</label>
+      <input id="fiber" name="fiber" type="number" step="0.1">
+    </div>
+    <div>
+      <label for="salt">Sel (g)</label>
+      <input id="salt" name="salt" type="number" step="0.1">
+    </div>
+    <button type="submit">Créer</button>
+  </form>
+</div>
+
+<div class="card" style="margin-top:12px;">
+  <h3>Liste des aliments</h3>
+  {% if foods %}
+  <table style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr style="background: #f3f4f6; border-bottom: 2px solid #d1d5db;">
+        <th style="padding:12px; text-align:left; font-weight:600;">Nom</th>
+        <th style="padding:12px; text-align:center; font-weight:600;">Kcal</th>
+        <th style="padding:12px; text-align:center; font-weight:600;">Protéines</th>
+        <th style="padding:12px; text-align:center; font-weight:600;">Lipides</th>
+        <th style="padding:12px; text-align:center; font-weight:600;">Glucides</th>
+        <th style="padding:12px; text-align:center; font-weight:600;">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for food in foods %}
+      <tr style="border-bottom: 1px solid #e5e7eb;">
+        <td style="padding:12px;">{{ food.name }}</td>
+        <td style="padding:12px; text-align:center;">{{ food.kcal }}</td>
+        <td style="padding:12px; text-align:center;">{{ food.proteins }}</td>
+        <td style="padding:12px; text-align:center;">{{ food.lipids }}</td>
+        <td style="padding:12px; text-align:center;">{{ food.carbs }}</td>
+        <td style="padding:12px; text-align:center;">
+          <a href="{{ url_for('coach_foods_edit', food_id=food.id) }}" style="color:#0b63d6; text-decoration:none; margin-right:8px;">Éditer</a>
+          <form method="post" action="{{ url_for('coach_foods_delete', food_id=food.id) }}" style="display:inline;">
+            <button type="submit" class="secondary" onclick="return confirm('Supprimer {{ food.name }} ?')" style="background:none; border:none; color:#ef4444; cursor:pointer; text-decoration:underline;">Supprimer</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p style="text-align:center; color:#888; padding:20px;">Aucun aliment pour l'instant</p>
+  {% endif %}
+</div>
+
+{% endblock %}

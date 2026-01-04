@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block title %}Éditer aliment{% endblock %}
+{% block content %}
+<h2>Éditer aliment: {{ food.name }}</h2>
+
+<div class="card">
+  <form method="post" action="{{ url_for('coach_foods_edit', food_id=food.id) }}">
+    <div>
+      <label for="name">Nom *</label>
+      <input id="name" name="name" type="text" value="{{ food.name }}" required>
+    </div>
+    <div>
+      <label for="kcal">Kcal *</label>
+      <input id="kcal" name="kcal" type="number" step="0.1" value="{{ food.kcal }}" required>
+    </div>
+    <div>
+      <label for="proteins">Protéines (g) *</label>
+      <input id="proteins" name="proteins" type="number" step="0.1" value="{{ food.proteins }}" required>
+    </div>
+    <div>
+      <label for="lipids">Lipides (g) *</label>
+      <input id="lipids" name="lipids" type="number" step="0.1" value="{{ food.lipids }}" required>
+    </div>
+    <div>
+      <label for="carbs">Glucides (g) *</label>
+      <input id="carbs" name="carbs" type="number" step="0.1" value="{{ food.carbs }}" required>
+    </div>
+    <div>
+      <label for="saturated_fats">Acides gras saturés (g)</label>
+      <input id="saturated_fats" name="saturated_fats" type="number" step="0.1" value="{{ food.saturated_fats or '' }}">
+    </div>
+    <div>
+      <label for="simple_sugars">Sucres simples (g)</label>
+      <input id="simple_sugars" name="simple_sugars" type="number" step="0.1" value="{{ food.simple_sugars or '' }}">
+    </div>
+    <div>
+      <label for="fiber">Fibres alimentaires (g)</label>
+      <input id="fiber" name="fiber" type="number" step="0.1" value="{{ food.fiber or '' }}">
+    </div>
+    <div>
+      <label for="salt">Sel (g)</label>
+      <input id="salt" name="salt" type="number" step="0.1" value="{{ food.salt or '' }}">
+    </div>
+    <button type="submit">Mettre à jour</button>
+    <a href="{{ url_for('coach_foods') }}" class="secondary" style="display:inline-block; padding:10px 16px; text-decoration:none; color:#0b63d6;">Retour</a>
+  </form>
+</div>
+
+{% endblock %}

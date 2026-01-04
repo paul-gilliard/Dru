@@ -198,3 +198,35 @@ class Exercise(db.Model):
             'name': self.name,
             'muscle_group': self.muscle_group
         }
+
+class Food(db.Model):
+    """Banque d'aliments"""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(192), nullable=False, unique=True)
+    kcal = db.Column(db.Float, nullable=False)
+    proteins = db.Column(db.Float, nullable=False)
+    lipids = db.Column(db.Float, nullable=False)
+    saturated_fats = db.Column(db.Float)
+    carbs = db.Column(db.Float, nullable=False)
+    simple_sugars = db.Column(db.Float)
+    fiber = db.Column(db.Float)
+    salt = db.Column(db.Float)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+
+    def __repr__(self):
+        return f'<Food {self.name} ({self.kcal} kcal)>'
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'kcal': self.kcal,
+            'proteins': self.proteins,
+            'lipids': self.lipids,
+            'saturated_fats': self.saturated_fats,
+            'carbs': self.carbs,
+            'simple_sugars': self.simple_sugars,
+            'fiber': self.fiber,
+            'salt': self.salt
+        }
