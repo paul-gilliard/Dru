@@ -150,6 +150,8 @@ document.addEventListener('DOMContentLoaded', function(){
       }
     });
   }
+
+  function renderExercise(ex){
     if (!perfCache || !perfCache[ex]) return;
     
     const mainSeriesContainer = document.getElementById('main-series-container');
