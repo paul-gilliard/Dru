@@ -27,7 +27,6 @@ document.addEventListener('DOMContentLoaded', function(){
   let otherSeriesChart = null;
   let tonnageChart = null;
   let tonnageCache = null;
-  let perfCache = null;
   let programExercises = {}; // Track exercises from selected program
   let selectedProgramId = null; // Track selected program
   let dateRange = { start: null, end: null }; // Date filter state
