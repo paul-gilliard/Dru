@@ -50,6 +50,33 @@ document.addEventListener('DOMContentLoaded', function(){
       journalChart.data.datasets.push({ label:'Sommeil (h)', data: sleep, borderColor:'#10b981', tension:0.2, yAxisID:'y' });
     }
     journalChart.update();
+    
+    // Fill journal table with selected metrics
+    const journalTableBody = document.getElementById('journal-table-body');
+    const journalTableHead = document.getElementById('journal-table-head');
+    
+    // Build headers dynamically based on toggles
+    let headers = '<tr style="background: #f3f4f6; border-bottom: 2px solid #d1d5db;"><th style="padding:12px; text-align:left; font-weight:600;">Date</th><th style="padding:12px; text-align:center; font-weight:600;">Poids (kg)</th>';
+    if (toggleKcals.checked) headers += '<th style="padding:12px; text-align:center; font-weight:600;">Kcals</th>';
+    if (toggleWater.checked) headers += '<th style="padding:12px; text-align:center; font-weight:600;">Eau (ml)</th>';
+    if (toggleSleep.checked) headers += '<th style="padding:12px; text-align:center; font-weight:600;">Sommeil (h)</th>';
+    headers += '</tr>';
+    journalTableHead.innerHTML = headers;
+    
+    // Build rows
+    journalTableBody.innerHTML = '';
+    data.forEach((entry, idx) => {
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid #e5e7eb';
+      let row = `<td style="padding:12px;">${entry.date}</td><td style="padding:12px; text-align:center;">${weight[idx] !== null ? weight[idx].toFixed(1) : '—'}</td>`;
+      if (toggleKcals.checked) row += `<td style="padding:12px; text-align:center;">${kcals[idx] !== null ? Math.round(kcals[idx]) : '—'}</td>`;
+      if (toggleWater.checked) row += `<td style="padding:12px; text-align:center;">${water[idx] !== null ? Math.round(water[idx]) : '—'}</td>`;
+      if (toggleSleep.checked) row += `<td style="padding:12px; text-align:center;">${sleep[idx] !== null ? sleep[idx].toFixed(1) : '—'}</td>`;
+      tr.innerHTML = row;
+      journalTableBody.appendChild(tr);
+    });
+    
+    document.getElementById('journal-table-container').style.display = 'block';
   }
 
   let perfCache = null;
@@ -162,6 +189,20 @@ document.addEventListener('DOMContentLoaded', function(){
     
     const tonnageData = tonnageCache[muscleGroup];
     createTonnageChart(tonnageData);
+    
+    // Fill tonnage table
+    const tonnageTableBody = document.getElementById('tonnage-table-body');
+    tonnageTableBody.innerHTML = '';
+    tonnageData.forEach(entry => {
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid #e5e7eb';
+      tr.innerHTML = `
+        <td style="padding:12px;">${entry.date}</td>
+        <td style="padding:12px; text-align:center;">${entry.tonnage !== null ? entry.tonnage.toFixed(2) : '—'}</td>
+      `;
+      tonnageTableBody.appendChild(tr);
+    });
+    
     document.getElementById('tonnage-chart-container').style.display = 'block';
   }
 

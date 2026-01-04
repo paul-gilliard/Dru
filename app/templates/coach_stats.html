@@ -57,6 +57,15 @@
 <div class="card" style="margin-top:12px;">
   <h3>Poids & journaux</h3>
   <canvas id="chart-journal" height="160"></canvas>
+  
+  <!-- Journal Table -->
+  <div style="margin-top:20px; display:none;" id="journal-table-container">
+    <table style="width:100%; border-collapse:collapse;">
+      <thead id="journal-table-head">
+      </thead>
+      <tbody id="journal-table-body"></tbody>
+    </table>
+  </div>
 </div>
 
 <div class="card" style="margin-top:12px;">
@@ -71,6 +80,19 @@
   <!-- Tonnage Chart -->
   <div id="tonnage-chart-container" style="display:none;">
     <canvas id="chart-tonnage" height="100"></canvas>
+    
+    <!-- Tonnage Table -->
+    <div style="margin-top:20px;">
+      <table id="tonnage-table" style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="background: #f3f4f6; border-bottom: 2px solid #d1d5db;">
+            <th style="padding:12px; text-align:left; font-weight:600;">Date</th>
+            <th style="padding:12px; text-align:center; font-weight:600;">Tonnage</th>
+          </tr>
+        </thead>
+        <tbody id="tonnage-table-body"></tbody>
+      </table>
+    </div>
   </div>
 </div>
 
