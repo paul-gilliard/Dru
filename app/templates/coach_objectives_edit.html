@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% block title %}Modifier objectif{% endblock %}
+{% block content %}
+
+<style>
+    .edit-container {
+        max-width: 700px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .edit-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+    }
+
+    .edit-header h1 {
+        margin: 0;
+        color: #1e293b;
+    }
+
+    .back-btn {
+        background: #e2e8f0;
+        color: #1e293b;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-block;
+        transition: all 0.2s ease;
+    }
+
+    .back-btn:hover {
+        background: #cbd5e1;
+    }
+
+    .edit-form {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 8px;
+        font-size: 0.95rem;
+    }
+
+    .form-group input,
+    .form-group textarea {
+        width: 100%;
+        padding: 12px 14px;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        font-family: inherit;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+        box-sizing: border-box;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #0b63d6;
+        box-shadow: 0 0 0 3px rgba(11, 99, 214, 0.1);
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        min-height: 120px;
+    }
+
+    .form-buttons {
+        display: flex;
+        gap: 12px;
+        margin-top: 30px;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border-radius: 6px;
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.95rem;
+    }
+
+    .btn-primary {
+        background: #0b63d6;
+        color: white;
+        flex: 1;
+    }
+
+    .btn-primary:hover {
+        background: #0a50c4;
+    }
+
+    .btn-secondary {
+        background: #e2e8f0;
+        color: #1e293b;
+    }
+
+    .btn-secondary:hover {
+        background: #cbd5e1;
+    }
+
+    .btn-danger {
+        background: #ef4444;
+        color: white;
+    }
+
+    .btn-danger:hover {
+        background: #dc2626;
+    }
+</style>
+
+<div class="edit-container">
+    <div class="edit-header">
+        <h1>✏️ Modifier l'objectif</h1>
+        <a href="{{ url_for('coach_objectives', athlete_id=objective.athlete_id) }}" class="back-btn">← Retour</a>
+    </div>
+
+    <div class="edit-form">
+        <form method="post" action="{{ url_for('coach_objectives_edit', objective_id=objective.id) }}">
+            <div class="form-group">
+                <label for="title">Titre de l'objectif</label>
+                <input type="text" id="title" name="title" value="{{ objective.title }}" required>
+            </div>
+            <div class="form-group">
+                <label for="description">Description</label>
+                <textarea id="description" name="description">{{ objective.description or '' }}</textarea>
+            </div>
+
+            <div class="form-buttons">
+                <button type="submit" class="btn btn-primary">💾 Enregistrer les modifications</button>
+                <a href="{{ url_for('coach_objectives', athlete_id=objective.athlete_id) }}" class="btn btn-secondary" style="text-decoration: none; display: flex; align-items: center; justify-content: center;">Annuler</a>
+            </div>
+        </form>
+
+        <!-- Zone de suppression séparée -->
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+            <h3 style="color: #ef4444; margin: 0 0 12px 0;">Zone de danger</h3>
+            <p style="color: #64748b; margin: 0 0 12px 0; font-size: 0.95rem;">Supprimer cet objectif supprimera définitivement toutes les données associées.</p>
+            <form method="post" action="{{ url_for('coach_objectives_delete', objective_id=objective.id) }}" style="display: inline;">
+                <button type="submit" class="btn btn-danger" onclick="return confirm('Êtes-vous sûr de vouloir supprimer cet objectif ? Cette action est irréversible.')">🗑️ Supprimer définitivement</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

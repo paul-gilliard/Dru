@@ -323,3 +323,18 @@ class WeeklyBilanMarking(db.Model):
     
     def __repr__(self):
         return f'<WeeklyBilanMarking coach={self.coach_id} athlete={self.athlete_id} week={self.week_start}>'
+
+class Objective(db.Model):
+    """Objectives for athletes"""
+    id = db.Column(db.Integer, primary_key=True)
+    athlete_id = db.Column(db.Integer, db.ForeignKey('user.id', ondelete='CASCADE'), nullable=False, index=True)
+    title = db.Column(db.String(256), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow, nullable=False, default=datetime.utcnow)
+    
+    # Relationship
+    athlete = db.relationship('User', foreign_keys=[athlete_id], backref='objectives')
+    
+    def __repr__(self):
+        return f'<Objective {self.title} for athlete={self.athlete_id}>'

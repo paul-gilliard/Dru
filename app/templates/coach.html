@@ -40,6 +40,9 @@
           <td>{{ u.username }}</td>
           <td>{{ u.role }}</td>
           <td>
+            {% if u.role == 'athlete' %}
+            <a href="{{ url_for('coach_objectives', athlete_id=u.id) }}" style="background:#0b63d6; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:600; font-size:0.9rem; text-decoration:none; display:inline-block; transition:all 0.2s ease; margin-right:6px;" onmouseover="this.style.background='#0a50c4'" onmouseout="this.style.background='#0b63d6'">Objectifs</a>
+            {% endif %}
             <button class="delete-btn" onclick="confirmDelete({{ u.id }}, '{{ u.username }}')" style="background:#ef4444; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-weight:600; font-size:0.9rem; transition:all 0.2s ease;" onmouseover="this.style.background='#dc2626'" onmouseout="this.style.background='#ef4444'">Supprimer</button>
           </td>
         </tr>

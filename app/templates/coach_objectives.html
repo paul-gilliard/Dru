@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+{% block title %}Objectifs de {{ athlete.username }}{% endblock %}
+{% block content %}
+
+<style>
+    .objectives-container {
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .objectives-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+    }
+
+    .objectives-header h1 {
+        margin: 0;
+        color: #1e293b;
+    }
+
+    .back-btn {
+        background: #e2e8f0;
+        color: #1e293b;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-block;
+        transition: all 0.2s ease;
+    }
+
+    .back-btn:hover {
+        background: #cbd5e1;
+    }
+
+    .add-objective-form {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 30px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .form-group {
+        margin-bottom: 16px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        color: #1e293b;
+        margin-bottom: 6px;
+        font-size: 0.95rem;
+    }
+
+    .form-group input,
+    .form-group textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        font-family: inherit;
+        font-size: 0.95rem;
+        transition: all 0.2s ease;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: #0b63d6;
+        box-shadow: 0 0 0 3px rgba(11, 99, 214, 0.1);
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    .form-buttons {
+        display: flex;
+        gap: 12px;
+    }
+
+    .btn {
+        padding: 10px 20px;
+        border-radius: 6px;
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.95rem;
+    }
+
+    .btn-primary {
+        background: #0b63d6;
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: #0a50c4;
+    }
+
+    .objectives-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 20px;
+    }
+
+    .objective-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        border-left: 4px solid #0b63d6;
+        transition: all 0.2s ease;
+    }
+
+    .objective-card:hover {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        transform: translateY(-2px);
+    }
+
+    .objective-title {
+        font-size: 1.1em;
+        font-weight: 700;
+        color: #1e293b;
+        margin: 0 0 10px 0;
+    }
+
+    .objective-description {
+        color: #64748b;
+        font-size: 0.95rem;
+        margin: 0 0 12px 0;
+        line-height: 1.5;
+    }
+
+    .objective-meta {
+        font-size: 0.85em;
+        color: #94a3b8;
+        margin-bottom: 12px;
+    }
+
+    .objective-actions {
+        display: flex;
+        gap: 8px;
+    }
+
+    .btn-small {
+        padding: 6px 12px;
+        border: none;
+        border-radius: 4px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-decoration: none;
+        display: inline-block;
+    }
+
+    .btn-edit {
+        background: #10b981;
+        color: white;
+    }
+
+    .btn-edit:hover {
+        background: #059669;
+    }
+
+    .btn-delete {
+        background: #ef4444;
+        color: white;
+    }
+
+    .btn-delete:hover {
+        background: #dc2626;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        color: #94a3b8;
+    }
+
+    .empty-state p {
+        font-size: 1.05em;
+        margin: 0;
+    }
+</style>
+
+<div class="objectives-container">
+    <div class="objectives-header">
+        <h1>🎯 Objectifs de {{ athlete.username }}</h1>
+        <a href="{{ url_for('coach') }}" class="back-btn">← Retour</a>
+    </div>
+
+    <!-- Formulaire pour ajouter un objectif -->
+    <div class="add-objective-form">
+        <h3 style="margin: 0 0 16px 0; color: #1e293b;">Ajouter un nouvel objectif</h3>
+        <form method="post" action="{{ url_for('coach_objectives', athlete_id=athlete.id) }}">
+            <div class="form-group">
+                <label for="title">Titre de l'objectif</label>
+                <input type="text" id="title" name="title" required placeholder="Ex: Perdre 5 kg, Augmenter la force...">
+            </div>
+            <div class="form-group">
+                <label for="description">Description (optionnel)</label>
+                <textarea id="description" name="description" placeholder="Détails sur l'objectif, étapes, délais..."></textarea>
+            </div>
+            <div class="form-buttons">
+                <button type="submit" class="btn btn-primary">✓ Ajouter l'objectif</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Liste des objectifs -->
+    {% if objectives %}
+        <div class="objectives-list">
+            {% for obj in objectives %}
+                <div class="objective-card">
+                    <h3 class="objective-title">{{ obj.title }}</h3>
+                    {% if obj.description %}
+                        <p class="objective-description">{{ obj.description }}</p>
+                    {% endif %}
+                    <div class="objective-meta">
+                        Créé le {{ obj.created_at.strftime('%d %b %Y à %H:%M') }}
+                        {% if obj.updated_at != obj.created_at %}
+                            • Modifié le {{ obj.updated_at.strftime('%d %b %Y à %H:%M') }}
+                        {% endif %}
+                    </div>
+                    <div class="objective-actions">
+                        <a href="{{ url_for('coach_objectives_edit', objective_id=obj.id) }}" class="btn-small btn-edit">Modifier</a>
+                        <form method="post" action="{{ url_for('coach_objectives_delete', objective_id=obj.id) }}" style="display: inline; margin: 0;">
+                            <button type="submit" class="btn-small btn-delete" onclick="return confirm('Êtes-vous sûr ?')">Supprimer</button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <p>Aucun objectif pour le moment. Ajoutez-en un pour {{ athlete.username }} ! 📝</p>
+        </div>
+    {% endif %}
+</div>
+
+{% endblock %}

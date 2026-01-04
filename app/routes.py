@@ -1,7 +1,7 @@
 from flask import render_template, request, redirect, url_for, flash, session, abort, jsonify
 from werkzeug.routing import BuildError
 from app import db
-from app.models import User, JournalEntry, PerformanceEntry, ProgramSession, Availability, Program, ExerciseEntry, Exercise, Food, MealPlan, MealEntry, WeeklyBilanMarking, MUSCLE_GROUPS
+from app.models import User, JournalEntry, PerformanceEntry, ProgramSession, Availability, Program, ExerciseEntry, Exercise, Food, MealPlan, MealEntry, WeeklyBilanMarking, Objective, MUSCLE_GROUPS
 from datetime import date, datetime, timedelta
 
 def register_routes(app):
@@ -152,11 +152,86 @@ def register_routes(app):
         # 6. PerformanceEntry
         PerformanceEntry.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
         
-        # 7. Maintenant supprimer l'utilisateur
+        # 7. Objective
+        Objective.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
+        
+        # 8. Maintenant supprimer l'utilisateur
         db.session.delete(user)
         db.session.commit()
         flash(f'Utilisateur "{username}" a été supprimé')
         return redirect(url_for('coach'))
+
+    # ============ ROUTES POUR LES OBJECTIFS ============
+    @app.route('/coach/objectives/<int:athlete_id>', methods=['GET', 'POST'])
+    def coach_objectives(athlete_id):
+        # contrôle d'accès
+        forbidden = _require_coach()
+        if forbidden:
+            return forbidden
+
+        athlete = User.query.get_or_404(athlete_id)
+        
+        if request.method == 'POST':
+            title = (request.form.get('title') or '').strip()
+            description = (request.form.get('description') or '').strip()
+            
+            if not title:
+                flash('Le titre de l\'objectif est requis')
+                return redirect(url_for('coach_objectives', athlete_id=athlete_id))
+            
+            objective = Objective(
+                athlete_id=athlete_id,
+                title=title,
+                description=description
+            )
+            db.session.add(objective)
+            db.session.commit()
+            flash(f'Objectif "{title}" ajouté pour {athlete.username}')
+            return redirect(url_for('coach_objectives', athlete_id=athlete_id))
+        
+        objectives = Objective.query.filter_by(athlete_id=athlete_id).order_by(Objective.created_at.desc()).all()
+        return render_template('coach_objectives.html', athlete=athlete, objectives=objectives)
+
+    @app.route('/coach/objectives/<int:objective_id>/edit', methods=['GET', 'POST'])
+    def coach_objectives_edit(objective_id):
+        # contrôle d'accès
+        forbidden = _require_coach()
+        if forbidden:
+            return forbidden
+
+        objective = Objective.query.get_or_404(objective_id)
+        
+        if request.method == 'POST':
+            title = (request.form.get('title') or '').strip()
+            description = (request.form.get('description') or '').strip()
+            
+            if not title:
+                flash('Le titre de l\'objectif est requis')
+                return redirect(url_for('coach_objectives_edit', objective_id=objective_id))
+            
+            objective.title = title
+            objective.description = description
+            db.session.commit()
+            flash(f'Objectif "{title}" modifié')
+            return redirect(url_for('coach_objectives', athlete_id=objective.athlete_id))
+        
+        return render_template('coach_objectives_edit.html', objective=objective)
+
+    @app.route('/coach/objectives/<int:objective_id>/delete', methods=['POST'])
+    def coach_objectives_delete(objective_id):
+        # contrôle d'accès
+        forbidden = _require_coach()
+        if forbidden:
+            return forbidden
+
+        objective = Objective.query.get_or_404(objective_id)
+        athlete_id = objective.athlete_id
+        title = objective.title
+        
+        db.session.delete(objective)
+        db.session.commit()
+        flash(f'Objectif "{title}" supprimé')
+        return redirect(url_for('coach_objectives', athlete_id=athlete_id))
 
     @app.route('/athlete')
     def athlete_home():
