@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 
   let performanceChart = null;
+  let otherSeriesChart = null;
 
   async function loadJournal(athleteId){
     const res = await fetch(`/coach/stats/athlete/${athleteId}/journal.json`);
@@ -64,6 +65,7 @@ document.addEventListener('DOMContentLoaded', function(){
     document.getElementById('main-series-container').style.display = 'none';
     document.getElementById('other-series-container').style.display = 'none';
     document.getElementById('perf-chart-container').style.display = 'none';
+    document.getElementById('other-series-chart-container').style.display = 'none';
   }
 
   function renderExercise(ex){
@@ -116,8 +118,13 @@ document.addEventListener('DOMContentLoaded', function(){
         `;
         otherTableBody.appendChild(tr);
       });
+      
+      // Create chart for other series
+      createOtherSeriesChart(data.other_series);
+      document.getElementById('other-series-chart-container').style.display = 'block';
     } else {
       otherSeriesContainer.style.display = 'none';
+      document.getElementById('other-series-chart-container').style.display = 'none';
     }
   }
 
@@ -188,6 +195,73 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
+  function createOtherSeriesChart(otherSeriesData){
+    const otherCtx = document.getElementById('chart-other-series').getContext('2d');
+    
+    // Destroy old chart if exists
+    if (otherSeriesChart) {
+      otherSeriesChart.destroy();
+    }
+    
+    const labels = otherSeriesData.map(d => d.date);
+    const avgReps = otherSeriesData.map(d => d.avg_reps !== null ? d.avg_reps : null);
+    const avgLoad = otherSeriesData.map(d => d.avg_load !== null ? d.avg_load : null);
+    
+    otherSeriesChart = new Chart(otherCtx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Reps (moy.)',
+            data: avgReps,
+            backgroundColor: 'rgba(59, 130, 246, 0.7)',
+            borderColor: '#3b82f6',
+            borderWidth: 1,
+            yAxisID: 'y',
+            type: 'bar'
+          },
+          {
+            label: 'Poids moy. (kg)',
+            data: avgLoad,
+            borderColor: '#f97316',
+            backgroundColor: 'transparent',
+            tension: 0.3,
+            yAxisID: 'y1',
+            pointBackgroundColor: '#f97316',
+            pointRadius: 5,
+            pointBorderWidth: 2,
+            type: 'line',
+            borderWidth: 2
+          }
+        ]
+      },
+      options: {
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          y: {
+            type: 'linear',
+            position: 'left',
+            title: { display: true, text: 'Reps (moy.)', font: { weight: 'bold' } },
+            beginAtZero: true
+          },
+          y1: {
+            type: 'linear',
+            position: 'right',
+            title: { display: true, text: 'Poids moy. (kg)', font: { weight: 'bold' } },
+            grid: { drawOnChartArea: false }
+          }
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top'
+          }
+        }
+      }
+    });
+  }
+
   athleteSelect.addEventListener('change', async function(){
     const id = this.value;
     if (!id) return;
@@ -201,6 +275,7 @@ document.addEventListener('DOMContentLoaded', function(){
       document.getElementById('main-series-container').style.display = 'none';
       document.getElementById('other-series-container').style.display = 'none';
       document.getElementById('perf-chart-container').style.display = 'none';
+      document.getElementById('other-series-chart-container').style.display = 'none';
       return; 
     }
     renderExercise(ex);
@@ -211,6 +286,7 @@ document.addEventListener('DOMContentLoaded', function(){
     document.getElementById('main-series-container').style.display = 'none';
     document.getElementById('other-series-container').style.display = 'none';
     document.getElementById('perf-chart-container').style.display = 'none';
+    document.getElementById('other-series-chart-container').style.display = 'none';
   });
 
   [toggleKcals, toggleWater, toggleSleep].forEach(el=>{
