@@ -118,7 +118,13 @@
                                                 <td>
                                                     <input type="number" class="form-control form-control-sm quantity-input" 
                                                            id="qty_{{ entry.id }}"
-                                                           value="{{ entry.quantity }}" min="1" step="10">
+                                                           data-entry-id="{{ entry.id }}"
+                                                           data-food-kcal="{{ entry.food.kcal }}"
+                                                           data-food-proteins="{{ entry.food.proteins or 0 }}"
+                                                           data-food-lipids="{{ entry.food.lipids or 0 }}"
+                                                           data-food-carbs="{{ entry.food.carbs or 0 }}"
+                                                           value="{{ entry.quantity }}" min="1" step="10"
+                                                           onchange="updateMealEntryAndTotals(this)">
                                                 </td>
                                                 {% set data = entry.to_dict() %}
                                                 <td class="data_kcals_{{ entry.id }}">{{ "%.0f"|format(data.kcals) }} kcal</td>
@@ -126,10 +132,6 @@
                                                 <td class="data_lipids_{{ entry.id }}">{{ "%.1f"|format(data.lipids) }}g</td>
                                                 <td class="data_carbs_{{ entry.id }}">{{ "%.1f"|format(data.carbs) }}g</td>
                                                 <td>
-                                                    <button class="btn btn-sm btn-primary" 
-                                                            onclick="saveAndUpdateMeal({{ entry.id }})">
-                                                        💾
-                                                    </button>
                                                     <button class="btn btn-sm btn-danger" 
                                                             onclick="deleteMealEntry({{ entry.id }})">
                                                         🗑️
@@ -153,6 +155,10 @@
 </div>
 
 <script>
+// Récupérer l'ID du plan depuis l'URL
+const mealPlanId = window.location.pathname.split('/').pop();
+
+// ============ AJOUTER UN ALIMENT ============
 async function addFoodToMeal(mealPlanId, mealNumber) {
     const selectElement = document.getElementById(`food_select_${mealNumber}`);
     const quantityElement = document.getElementById(`quantity_${mealNumber}`);
@@ -197,70 +203,92 @@ async function addFoodToMeal(mealPlanId, mealNumber) {
     }
 }
 
-async function saveAndUpdateMeal(entryId) {
-    const quantityInput = document.getElementById(`qty_${entryId}`);
-    const quantity = parseFloat(quantityInput.value);
+// ============ METTRE À JOUR UN ALIMENT + CALCUL EN DIRECT ============
+async function updateMealEntryAndTotals(inputElement) {
+    const entryId = inputElement.getAttribute('data-entry-id');
+    const quantity = parseFloat(inputElement.value);
     
     if (quantity <= 0) {
         alert('Quantité invalide');
+        inputElement.value = 100;
         return;
     }
     
+    // Récupérer les données nutritionnelles du produit depuis l'attribut data
+    const foodKcal = parseFloat(inputElement.getAttribute('data-food-kcal')) || 0;
+    const foodProteins = parseFloat(inputElement.getAttribute('data-food-proteins')) || 0;
+    const foodLipids = parseFloat(inputElement.getAttribute('data-food-lipids')) || 0;
+    const foodCarbs = parseFloat(inputElement.getAttribute('data-food-carbs')) || 0;
+    
+    // Calcul des macros pour cette quantité (100g = 1x, donc quantity/100 = facteur)
+    const quantityFactor = quantity / 100;
+    const kcals = (foodKcal * quantityFactor).toFixed(0);
+    const proteins = (foodProteins * quantityFactor).toFixed(1);
+    const lipids = (foodLipids * quantityFactor).toFixed(1);
+    const carbs = (foodCarbs * quantityFactor).toFixed(1);
+    
+    // Mettre à jour l'affichage des macros de cette ligne
+    document.querySelector(`.data_kcals_${entryId}`).textContent = kcals + ' kcal';
+    document.querySelector(`.data_proteins_${entryId}`).textContent = proteins + 'g';
+    document.querySelector(`.data_lipids_${entryId}`).textContent = lipids + 'g';
+    document.querySelector(`.data_carbs_${entryId}`).textContent = carbs + 'g';
+    
+    // Sauvegarder en base de données (en arrière-plan, sans recharger)
     try {
         const response = await fetch(`/api/meal-entries/${entryId}/update`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                quantity: quantity
-            })
+            body: JSON.stringify({ quantity: quantity })
         });
         
         if (!response.ok) {
-            const error = await response.json();
-            alert('Erreur: ' + error.error);
-            return;
+            console.error('Erreur lors de la sauvegarde');
         }
-        
-        const data = await response.json();
-        
-        // Mettre à jour les valeurs sans recharger
-        document.querySelector(`.data_kcals_${entryId}`).textContent = data.kcals.toFixed(0) + ' kcal';
-        document.querySelector(`.data_proteins_${entryId}`).textContent = data.proteins.toFixed(1) + 'g';
-        document.querySelector(`.data_lipids_${entryId}`).textContent = data.lipids.toFixed(1) + 'g';
-        document.querySelector(`.data_carbs_${entryId}`).textContent = data.carbs.toFixed(1) + 'g';
-        
-        // Recharger les totaux quotidiens
-        updateDailyTotals();
-        
-        // Flash feedback
-        alert('✓ Quantité sauvegardée');
     } catch (error) {
-        alert('Erreur: ' + error.message);
+        console.error('Erreur:', error);
     }
-}
-
-async function updateDailyTotals() {
-    // Récupérer l'ID du plan depuis l'URL ou la page
-    const mealPlanId = window.location.pathname.split('/').pop();
     
-    try {
-        const response = await fetch(`/api/meal-plans/${mealPlanId}/totals`);
-        if (response.ok) {
-            const totals = await response.json();
-            
-            // Mettre à jour les éléments d'affichage des totaux
-            document.querySelector('h3:contains("Totaux")')?.parentElement?.remove();
-            
-            // Recharger simplement pour avoir les totaux à jour
-            setTimeout(() => location.reload(), 500);
-        }
-    } catch (error) {
-        console.error('Erreur lors de la mise à jour des totaux:', error);
-    }
+    // Recalculer les totaux quotidiens
+    updateDailyTotals();
 }
 
+// ============ RECALCULER LES TOTAUX QUOTIDIENS ============
+function updateDailyTotals() {
+    let totalKcals = 0;
+    let totalProteins = 0;
+    let totalLipids = 0;
+    let totalCarbs = 0;
+    
+    // Parcourir toutes les lignes de quantité et calculer les totaux
+    document.querySelectorAll('.quantity-input').forEach(input => {
+        const quantity = parseFloat(input.value) || 0;
+        const foodKcal = parseFloat(input.getAttribute('data-food-kcal')) || 0;
+        const foodProteins = parseFloat(input.getAttribute('data-food-proteins')) || 0;
+        const foodLipids = parseFloat(input.getAttribute('data-food-lipids')) || 0;
+        const foodCarbs = parseFloat(input.getAttribute('data-food-carbs')) || 0;
+        
+        const quantityFactor = quantity / 100;
+        totalKcals += foodKcal * quantityFactor;
+        totalProteins += foodProteins * quantityFactor;
+        totalLipids += foodLipids * quantityFactor;
+        totalCarbs += foodCarbs * quantityFactor;
+    });
+    
+    // Mettre à jour l'affichage des totaux en haut
+    const kcalsElement = document.querySelector('h3.text-primary');
+    const proteinsElement = document.querySelector('h3.text-danger');
+    const lipidsElement = document.querySelector('h3.text-warning');
+    const carbsElement = document.querySelector('h3.text-info');
+    
+    if (kcalsElement) kcalsElement.innerHTML = `${totalKcals.toFixed(0)} <small>kcal</small>`;
+    if (proteinsElement) proteinsElement.innerHTML = `${totalProteins.toFixed(1)} <small>g</small>`;
+    if (lipidsElement) lipidsElement.innerHTML = `${totalLipids.toFixed(1)} <small>g</small>`;
+    if (carbsElement) carbsElement.innerHTML = `${totalCarbs.toFixed(1)} <small>g</small>`;
+}
+
+// ============ SUPPRIMER UN ALIMENT ============
 async function deleteMealEntry(entryId) {
     if (!confirm('Supprimer cet aliment ?')) {
         return;
