@@ -5,78 +5,83 @@
 
 <!-- {% include 'coach_nav.html' %} -->
 
-<div class="card">
-  <h3>Sélection athlete</h3>
-  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-    <select id="stats-athlete-select">
-      <option value="">— choisir un athlete —</option>
-      {% for a in athletes %}
-      <option value="{{ a.id }}">{{ a.username }}</option>
-      {% endfor %}
-    </select>
-
-    <label style="display:flex; align-items:center; gap:8px; margin-left:12px;">
-      <input id="toggle-kcals" type="checkbox" checked> Kcals
-    </label>
-    <label style="display:flex; align-items:center; gap:8px;">
-      <input id="toggle-water" type="checkbox" checked> Eau
-    </label>
-    <label style="display:flex; align-items:center; gap:8px;">
-      <input id="toggle-sleep" type="checkbox"> Sommeil
-    </label>
-  </div>
+<!-- Top row: Selection + Summary -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
   
-  <!-- Date filters -->
-  <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-    <select id="date-preset" style="padding:6px 8px;">
-      <option value="">— Tous les données —</option>
-      <option value="7">Derniers 7 jours</option>
-      <option value="30">Derniers 30 jours</option>
-      <option value="90">Derniers 90 jours</option>
-    </select>
-    
-    <div style="display:flex; gap:8px; align-items:center;">
-      <label>Du:</label>
-      <input id="date-start" type="date" style="padding:6px 8px;">
+  <div class="card">
+    <h3>Sélection athlete</h3>
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <select id="stats-athlete-select">
+        <option value="">— choisir un athlete —</option>
+        {% for a in athletes %}
+        <option value="{{ a.id }}">{{ a.username }}</option>
+        {% endfor %}
+      </select>
+
+      <label style="display:flex; align-items:center; gap:8px; margin-left:12px;">
+        <input id="toggle-kcals" type="checkbox" checked> Kcals
+      </label>
+      <label style="display:flex; align-items:center; gap:8px;">
+        <input id="toggle-water" type="checkbox" checked> Eau
+      </label>
+      <label style="display:flex; align-items:center; gap:8px;">
+        <input id="toggle-sleep" type="checkbox"> Sommeil
+      </label>
     </div>
     
-    <div style="display:flex; gap:8px; align-items:center;">
-      <label>Au:</label>
-      <input id="date-end" type="date" style="padding:6px 8px;">
+    <!-- Date filters -->
+    <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <select id="date-preset" style="padding:6px 8px;">
+        <option value="">— Tous les données —</option>
+        <option value="7">Derniers 7 jours</option>
+        <option value="30">Derniers 30 jours</option>
+        <option value="90">Derniers 90 jours</option>
+      </select>
+      
+      <div style="display:flex; gap:8px; align-items:center;">
+        <label>Du:</label>
+        <input id="date-start" type="date" style="padding:6px 8px;">
+      </div>
+      
+      <div style="display:flex; gap:8px; align-items:center;">
+        <label>Au:</label>
+        <input id="date-end" type="date" style="padding:6px 8px;">
+      </div>
+      
+      <button id="apply-date-filter" type="button" class="secondary">Appliquer</button>
     </div>
-    
-    <button id="apply-date-filter" type="button" class="secondary">Appliquer</button>
+  </div>
+
+  <div class="card">
+    <h3>Récapitulatif semaine actuelle vs précédente</h3>
+    <div id="summary-7days-container" style="display:none;">
+      <table style="width:100%; border-collapse:collapse;">
+        <tbody>
+          <tr style="border-bottom: 1px solid #e5e7eb;">
+            <td style="padding:12px; font-weight:600;">Poids</td>
+            <td style="padding:12px; text-align:center;"><span id="summary-weight">—</span></td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e5e7eb;">
+            <td style="padding:12px; font-weight:600;">Kcals</td>
+            <td style="padding:12px; text-align:center;"><span id="summary-kcals">—</span></td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e5e7eb;">
+            <td style="padding:12px; font-weight:600;">Eau</td>
+            <td style="padding:12px; text-align:center;"><span id="summary-water">—</span></td>
+          </tr>
+          <tr style="border-bottom: 1px solid #e5e7eb;">
+            <td style="padding:12px; font-weight:600;">Sommeil</td>
+            <td style="padding:12px; text-align:center;"><span id="summary-sleep">—</span></td>
+          </tr>
+          <tbody id="summary-tonnage-body"></tbody>
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
-<div class="card" style="margin-top:12px;">
-  <h3>Récapitulatif semaine actuelle vs précédente</h3>
-  <div id="summary-7days-container" style="display:none;">
-    <table style="width:100%; border-collapse:collapse;">
-      <tbody>
-        <tr style="border-bottom: 1px solid #e5e7eb;">
-          <td style="padding:12px; font-weight:600;">Poids</td>
-          <td style="padding:12px; text-align:center;"><span id="summary-weight">—</span></td>
-        </tr>
-        <tr style="border-bottom: 1px solid #e5e7eb;">
-          <td style="padding:12px; font-weight:600;">Kcals</td>
-          <td style="padding:12px; text-align:center;"><span id="summary-kcals">—</span></td>
-        </tr>
-        <tr style="border-bottom: 1px solid #e5e7eb;">
-          <td style="padding:12px; font-weight:600;">Eau</td>
-          <td style="padding:12px; text-align:center;"><span id="summary-water">—</span></td>
-        </tr>
-        <tr style="border-bottom: 1px solid #e5e7eb;">
-          <td style="padding:12px; font-weight:600;">Sommeil</td>
-          <td style="padding:12px; text-align:center;"><span id="summary-sleep">—</span></td>
-        </tr>
-        <tbody id="summary-tonnage-body"></tbody>
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<div class="card" style="margin-top:12px;">
+<!-- Full width: Poids & journaux -->
+<div class="card" style="margin-bottom:12px;">
   <h3>Poids & journaux</h3>
   <canvas id="chart-journal" height="160"></canvas>
   
@@ -90,84 +95,88 @@
   </div>
 </div>
 
-<div class="card" style="margin-top:12px;">
-  <h3>Tonnage par groupe musculaire</h3>
-  <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-    <select id="stats-muscle-select">
-      <option value="">— choisir un groupe musculaire —</option>
-    </select>
-    <button id="clear-muscle" type="button" class="secondary">Effacer</button>
-  </div>
+<!-- Bottom row: Tonnage + Performances -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
   
-  <!-- Tonnage Chart -->
-  <div id="tonnage-chart-container" style="display:none;">
-    <canvas id="chart-tonnage" height="100"></canvas>
+  <div class="card">
+    <h3>Tonnage par groupe musculaire</h3>
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+      <select id="stats-muscle-select">
+        <option value="">— choisir un groupe musculaire —</option>
+      </select>
+      <button id="clear-muscle" type="button" class="secondary">Effacer</button>
+    </div>
     
-    <!-- Tonnage Table -->
-    <div style="margin-top:20px;">
-      <table id="tonnage-table" style="width:100%; border-collapse:collapse;">
+    <!-- Tonnage Chart -->
+    <div id="tonnage-chart-container" style="display:none;">
+      <canvas id="chart-tonnage" height="100"></canvas>
+      
+      <!-- Tonnage Table -->
+      <div style="margin-top:20px;">
+        <table id="tonnage-table" style="width:100%; border-collapse:collapse;">
+          <thead>
+            <tr style="background: #f3f4f6; border-bottom: 2px solid #d1d5db;">
+              <th style="padding:12px; text-align:left; font-weight:600;">Date</th>
+              <th style="padding:12px; text-align:center; font-weight:600;">Tonnage</th>
+            </tr>
+          </thead>
+          <tbody id="tonnage-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Performances par exercice</h3>
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+      <select id="stats-exercise-select">
+        <option value="">— choisir un exercice —</option>
+      </select>
+      <button id="clear-exercise" type="button" class="secondary">Effacer</button>
+    </div>
+    
+    <!-- Performance Chart by Date -->
+    <div id="perf-chart-container" style="display:none; margin-bottom:20px;">
+      <h4 style="color: #0b63d6; margin-bottom: 12px;">Évolution de la performance</h4>
+      <canvas id="chart-performance" height="100"></canvas>
+    </div>
+
+    <!-- Main Series Table -->
+    <div id="main-series-container" style="display:none; margin-bottom:20px;">
+      <h4 style="color: #0b63d6; margin-bottom: 12px;">Séries principales</h4>
+      <table id="main-series-table" style="width:100%; border-collapse:collapse;">
         <thead>
           <tr style="background: #f3f4f6; border-bottom: 2px solid #d1d5db;">
             <th style="padding:12px; text-align:left; font-weight:600;">Date</th>
-            <th style="padding:12px; text-align:center; font-weight:600;">Tonnage</th>
+            <th style="padding:12px; text-align:center; font-weight:600;">Reps</th>
+            <th style="padding:12px; text-align:center; font-weight:600;">Poids (kg)</th>
           </tr>
         </thead>
-        <tbody id="tonnage-table-body"></tbody>
+        <tbody></tbody>
       </table>
     </div>
-  </div>
-</div>
-
-<div class="card" style="margin-top:12px;">
-  <h3>Performances par exercice</h3>
-  <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-    <select id="stats-exercise-select">
-      <option value="">— choisir un exercice —</option>
-    </select>
-    <button id="clear-exercise" type="button" class="secondary">Effacer</button>
-  </div>
-  
-  <!-- Performance Chart by Date -->
-  <div id="perf-chart-container" style="display:none; margin-bottom:20px;">
-    <h4 style="color: #0b63d6; margin-bottom: 12px;">Évolution de la performance</h4>
-    <canvas id="chart-performance" height="100"></canvas>
-  </div>
-
-  <!-- Main Series Table -->
-  <div id="main-series-container" style="display:none; margin-bottom:20px;">
-    <h4 style="color: #0b63d6; margin-bottom: 12px;">Séries principales</h4>
-    <table id="main-series-table" style="width:100%; border-collapse:collapse;">
-      <thead>
-        <tr style="background: #f3f4f6; border-bottom: 2px solid #d1d5db;">
-          <th style="padding:12px; text-align:left; font-weight:600;">Date</th>
-          <th style="padding:12px; text-align:center; font-weight:600;">Reps</th>
-          <th style="padding:12px; text-align:center; font-weight:600;">Poids (kg)</th>
-        </tr>
-      </thead>
+    
+    <!-- Other Series Chart -->
+    <div id="other-series-chart-container" style="display:none; margin-bottom:20px;">
+      <h4 style="color: #0b63d6; margin-bottom: 12px;">Autres séries - Évolution</h4>
+      <canvas id="chart-other-series" height="100"></canvas>
+    </div>
+    
+    <!-- Other Series Table -->
+    <div id="other-series-container" style="display:none;">
+      <h4 style="color: #0b63d6; margin-bottom: 12px;">Autres séries (moyennes)</h4>
+      <table id="other-series-table" style="width:100%; border-collapse:collapse;">
+        <thead>
+          <tr style="background: #f3f4f6; border-bottom: 2px solid #d1d5db;">
+            <th style="padding:12px; text-align:left; font-weight:600;">Date</th>
+            <th style="padding:12px; text-align:center; font-weight:600;">Reps (moy.)</th>
+            <th style="padding:12px; text-align:center; font-weight:600;">Poids moy. (kg)</th>
+            <th style="padding:12px; text-align:center; font-weight:600;">Nombre</th>
+          </tr>
+        </thead>
       <tbody></tbody>
     </table>
-  </div>
-  
-  <!-- Other Series Chart -->
-  <div id="other-series-chart-container" style="display:none; margin-bottom:20px;">
-    <h4 style="color: #0b63d6; margin-bottom: 12px;">Autres séries - Évolution</h4>
-    <canvas id="chart-other-series" height="100"></canvas>
-  </div>
-  
-  <!-- Other Series Table -->
-  <div id="other-series-container" style="display:none;">
-    <h4 style="color: #0b63d6; margin-bottom: 12px;">Autres séries (moyennes)</h4>
-    <table id="other-series-table" style="width:100%; border-collapse:collapse;">
-      <thead>
-        <tr style="background: #f3f4f6; border-bottom: 2px solid #d1d5db;">
-          <th style="padding:12px; text-align:left; font-weight:600;">Date</th>
-          <th style="padding:12px; text-align:center; font-weight:600;">Reps (moy.)</th>
-          <th style="padding:12px; text-align:center; font-weight:600;">Poids moy. (kg)</th>
-          <th style="padding:12px; text-align:center; font-weight:600;">Nombre</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    </div>
   </div>
 </div>
 
