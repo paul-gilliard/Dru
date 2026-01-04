@@ -856,6 +856,39 @@ def register_routes(app):
                                total_reps=total_reps,
                                total_volume=total_volume)
 
+    # ============ API POUR SURCHARGE PROGRESSIVE ============
+    @app.route('/api/athlete/performance/last-for-exercise', methods=['GET'])
+    def api_last_performance_for_exercise():
+        """Get the last performance entry for a given exercise for the current athlete"""
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'athlete':
+            return jsonify({'error': 'access denied'}), 403
+        
+        exercise_name = request.args.get('exercise', '').strip()
+        if not exercise_name:
+            return jsonify({'error': 'exercise name required'}), 400
+        
+        # Get the most recent performance entry for this exercise
+        last_entry = PerformanceEntry.query.filter_by(
+            athlete_id=user.id,
+            exercise=exercise_name
+        ).order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.created_at.desc()).first()
+        
+        if not last_entry:
+            return jsonify({'found': False}), 200
+        
+        return jsonify({
+            'found': True,
+            'entry_date': last_entry.entry_date.isoformat() if last_entry.entry_date else None,
+            'reps': last_entry.reps,
+            'load': last_entry.load,
+            'series_number': last_entry.series_number,
+            'notes': last_entry.notes
+        }), 200
+
     @app.route('/coach/stats')
     def coach_stats():
         if 'user_id' not in session:

@@ -146,6 +146,44 @@
         grid-column: 1 / -1;
     }
 
+    /* Surcharge progressive - Last performance info */
+    .last-perf-info {
+        grid-column: 1 / -1;
+        padding: 12px 16px;
+        background: #f0f4ff;
+        border-left: 3px solid #667eea;
+        border-radius: 6px;
+        font-size: 0.9em;
+    }
+
+    .last-perf-badge {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        color: #555;
+    }
+
+    .badge-title {
+        font-weight: 700;
+        color: #667eea;
+    }
+
+    .badge-date {
+        font-size: 0.85em;
+        color: #888;
+    }
+
+    .badge-separator {
+        color: #ccc;
+    }
+
+    .badge-load,
+    .badge-reps {
+        font-weight: 600;
+        color: #667eea;
+    }
+
     .btn-add {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -389,6 +427,18 @@
                     <label>Remarque</label>
                     <input name="notes" type="text" placeholder="Notes sur cette série...">
                 </div>
+
+                <!-- Surcharge progressive : dernière performance -->
+                <div id="last-perf-info" class="last-perf-info" style="display: none;">
+                    <div class="last-perf-badge">
+                        <span class="badge-title">📈 Dernière séance:</span>
+                        <span class="badge-date" id="last-perf-date"></span>
+                        <span class="badge-separator">•</span>
+                        <span class="badge-load" id="last-perf-load"></span>
+                        <span class="badge-separator">•</span>
+                        <span class="badge-reps" id="last-perf-reps"></span>
+                    </div>
+                </div>
             </div>
 
             <button type="submit" class="btn-add">Ajouter</button>
@@ -515,6 +565,40 @@
           seriesSelect.appendChild(option);
         });
       }
+
+      // Charger la dernière performance pour cet exercice
+      loadLastPerformance(selectedExercise);
+    }
+
+    function loadLastPerformance(exerciseName) {
+      const lastPerfInfo = document.getElementById('last-perf-info');
+      
+      if (!exerciseName || exerciseName === 'Autre') {
+        lastPerfInfo.style.display = 'none';
+        return;
+      }
+
+      fetch(`/api/athlete/performance/last-for-exercise?exercise=${encodeURIComponent(exerciseName)}`)
+        .then(response => response.json())
+        .then(data => {
+          if (data.found) {
+            // Formater la date
+            const date = new Date(data.entry_date + 'T00:00:00');
+            const dayName = date.toLocaleDateString('fr-FR', { weekday: 'short', month: 'short', day: 'numeric' });
+            
+            document.getElementById('last-perf-date').textContent = dayName;
+            document.getElementById('last-perf-load').textContent = data.load ? `${data.load}kg` : '—';
+            document.getElementById('last-perf-reps').textContent = data.reps ? `${data.reps} rép` : '—';
+            
+            lastPerfInfo.style.display = 'block';
+          } else {
+            lastPerfInfo.style.display = 'none';
+          }
+        })
+        .catch(error => {
+          console.log('Erreur lors du chargement de la dernière performance:', error);
+          lastPerfInfo.style.display = 'none';
+        });
     }
 </script>
 
