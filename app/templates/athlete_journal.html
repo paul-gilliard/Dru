@@ -224,6 +224,35 @@
         margin-bottom: 15px;
     }
 
+    /* Delete button on entry cards */
+    .delete-entry-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: #ef4444;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 1.2em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s ease;
+        z-index: 10;
+    }
+
+    .delete-entry-btn:hover {
+        background: #dc2626;
+        transform: scale(1.1);
+    }
+
+    .delete-entry-btn:active {
+        transform: scale(0.95);
+    }
+
     @media (max-width: 768px) {
         .journal-container {
             padding: 0 15px;
@@ -435,39 +464,42 @@
             {% if entries %}
             <div class="entries-list">
                 {% for e in entries %}
-                <div class="entry-card" onclick="openEditModal({{ e.id }})">
-                    <div class="entry-date">{{ e.entry_date.strftime('%d %B %Y') }}</div>
-                    <div class="entry-stats">
-                        {% if e.weight %}
-                        <div class="stat-item">
-                            <div class="stat-label">Poids</div>
-                            <div class="stat-value">{{ "%.1f"|format(e.weight) }} kg</div>
+                <div class="entry-card" data-entry-id="{{ e.id }}" style="position: relative;">
+                    <button class="delete-entry-btn" onclick="event.stopPropagation(); deleteEntry({{ e.id }});" title="Supprimer cette entrée">✕</button>
+                    <div style="cursor: pointer;" onclick="openEditModal({{ e.id }})">
+                        <div class="entry-date">{{ e.entry_date.strftime('%d %B %Y') }}</div>
+                        <div class="entry-stats">
+                            {% if e.weight %}
+                            <div class="stat-item">
+                                <div class="stat-label">Poids</div>
+                                <div class="stat-value">{{ "%.1f"|format(e.weight) }} kg</div>
+                            </div>
+                            {% endif %}
+                            {% if e.kcals %}
+                            <div class="stat-item">
+                                <div class="stat-label">Kcals</div>
+                                <div class="stat-value">{{ e.kcals }}</div>
+                            </div>
+                            {% endif %}
+                            {% if e.water_ml %}
+                            <div class="stat-item">
+                                <div class="stat-label">Eau</div>
+                                <div class="stat-value">{{ e.water_ml | int }} ml</div>
+                            </div>
+                            {% endif %}
+                            {% if e.sleep_hours %}
+                            <div class="stat-item">
+                                <div class="stat-label">Sommeil</div>
+                                <div class="stat-value">{{ "%.1f"|format(e.sleep_hours) }} h</div>
+                            </div>
+                            {% endif %}
+                            {% if e.energy %}
+                            <div class="stat-item">
+                                <div class="stat-label">Énergie</div>
+                                <div class="stat-value">{{ e.energy }}/10</div>
+                            </div>
+                            {% endif %}
                         </div>
-                        {% endif %}
-                        {% if e.kcals %}
-                        <div class="stat-item">
-                            <div class="stat-label">Kcals</div>
-                            <div class="stat-value">{{ e.kcals }}</div>
-                        </div>
-                        {% endif %}
-                        {% if e.water_ml %}
-                        <div class="stat-item">
-                            <div class="stat-label">Eau</div>
-                            <div class="stat-value">{{ e.water_ml | int }} ml</div>
-                        </div>
-                        {% endif %}
-                        {% if e.sleep_hours %}
-                        <div class="stat-item">
-                            <div class="stat-label">Sommeil</div>
-                            <div class="stat-value">{{ "%.1f"|format(e.sleep_hours) }} h</div>
-                        </div>
-                        {% endif %}
-                        {% if e.energy %}
-                        <div class="stat-item">
-                            <div class="stat-label">Énergie</div>
-                            <div class="stat-value">{{ e.energy }}/10</div>
-                        </div>
-                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
@@ -628,6 +660,48 @@
         document.getElementById('edit-cycle').value = entry.menstrual_cycle || '';
 
         document.getElementById('edit-modal').classList.add('active');
+    }
+
+    function deleteEntry(entryId) {
+        if (!confirm('Êtes-vous sûr de vouloir supprimer cette entrée ?')) {
+            return;
+        }
+
+        fetch(`/api/journal/entry/${entryId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Failed to delete entry');
+            }
+            return response.json();
+        })
+        .then(data => {
+            if (data.success) {
+                // Remove entry from the page
+                const entryCard = document.querySelector(`[data-entry-id="${entryId}"]`);
+                if (entryCard) {
+                    entryCard.remove();
+                }
+                // Also remove from the entries list
+                window.JOURNAL_ENTRIES = window.JOURNAL_ENTRIES.filter(e => e.id !== entryId);
+                
+                // If no more entries, show empty state
+                const entriesList = document.querySelector('.entries-list');
+                if (entriesList && entriesList.children.length === 0) {
+                    location.reload();
+                } else {
+                    alert('Entrée supprimée avec succès');
+                }
+            }
+        })
+        .catch(error => {
+            console.error('Error deleting entry:', error);
+            alert('Erreur lors de la suppression de l\'entrée');
+        });
     }
 
     function closeEditModal() {

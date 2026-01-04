@@ -663,6 +663,23 @@ def register_routes(app):
             'menstrual_cycle': e.menstrual_cycle
         })
 
+    @app.route('/api/journal/entry/<int:entry_id>', methods=['DELETE'])
+    def delete_journal_entry(entry_id):
+        if 'user_id' not in session:
+            return jsonify({'error': 'unauth'}), 401
+        user = User.query.get(session['user_id'])
+        e = JournalEntry.query.get_or_404(entry_id)
+        if e.athlete_id != user.id:
+            return jsonify({'error': 'forbidden'}), 403
+        
+        try:
+            db.session.delete(e)
+            db.session.commit()
+            return jsonify({'success': True, 'message': 'Entry deleted successfully'})
+        except Exception as err:
+            db.session.rollback()
+            return jsonify({'error': str(err)}), 500
+
     @app.route('/athlete/performance', methods=['GET'])
     def athlete_performance():
         # liste des séances disponibles pour l'athlete (derniers programmes)
