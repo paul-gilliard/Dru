@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """
-Script to create Food table and insert foods into the database
-Run with: python migrate_food.py
+Script pour insérer les aliments dans la table food
+Utilisation: python insert_foods_simple.py
 """
-import os
-import sys
 from app import create_app, db
 from app.models import Food
 
@@ -254,37 +252,24 @@ foods_data = [
     ("Yaourt nature maigre", 207, 4.8, 10, None, 23, None, None, None),
 ]
 
-def migrate():
-    from os import environ
-    
-    # Try to connect
-    try:
-        app = create_app()
-    except Exception as e:
-        print(f"⚠️  Cannot create app: {e}")
-        return
+def main():
+    app = create_app()
     
     with app.app_context():
-        print("\n🔄 Creating Food table...")
-        try:
-            # Create the Food table
-            db.create_all()
-            print("✓ Food table created successfully!")
-        except Exception as e:
-            print(f"✗ Error creating table: {e}")
-            return
+        print("\n📦 Insertion des aliments...\n")
         
-        print("\n📦 Inserting foods...")
-        count = 0
+        inserted = 0
         skipped = 0
         
         for name, kcal, proteins, lipids, saturated_fats, carbs, simple_sugars, fiber, salt in foods_data:
-            # Check if food already exists
+            # Vérifier si l'aliment existe déjà
             existing = Food.query.filter_by(name=name).first()
+            
             if existing:
                 skipped += 1
                 continue
             
+            # Créer et ajouter le nouvel aliment
             food = Food(
                 name=name,
                 kcal=kcal,
@@ -297,17 +282,23 @@ def migrate():
                 salt=salt
             )
             db.session.add(food)
-            count += 1
+            inserted += 1
+            
+            # Afficher la progression tous les 50
+            if inserted % 50 == 0:
+                print(f"  ✓ {inserted} aliments insérés...")
         
+        # Commit tous les changements
         try:
             db.session.commit()
-            print(f"\n✓ {count} new foods inserted successfully!")
+            print(f"\n✅ SUCCÈS!")
+            print(f"   - {inserted} nouveaux aliments insérés")
             if skipped > 0:
-                print(f"⚠ {skipped} foods already existed (skipped)")
-            print("\n✅ Migration complete!\n")
+                print(f"   - {skipped} aliments déjà existants (ignorés)")
+            print(f"   - Total en base: {Food.query.count()} aliments\n")
         except Exception as e:
             db.session.rollback()
-            print(f"✗ Error during commit: {e}")
+            print(f"\n❌ Erreur lors du commit: {e}\n")
 
 if __name__ == '__main__':
-    migrate()
+    main()
