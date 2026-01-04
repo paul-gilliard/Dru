@@ -472,16 +472,13 @@
                     <input name="notes" type="text" placeholder="Notes sur cette série...">
                 </div>
 
-                <!-- Surcharge progressive : dernière performance -->
+                <!-- Surcharge progressive : toutes les séries de la dernière date -->
                 <div id="last-perf-info" class="last-perf-info" style="display: none;">
                     <div class="last-perf-badge">
-                        <span class="badge-title">📈 Dernière séance:</span>
+                        <span class="badge-title">📈 Surcharge progressive:</span>
                         <span class="badge-date" id="last-perf-date"></span>
-                        <span class="badge-separator">•</span>
-                        <span class="badge-load" id="last-perf-load"></span>
-                        <span class="badge-separator">•</span>
-                        <span class="badge-reps" id="last-perf-reps"></span>
                     </div>
+                    <div id="series-list" style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;"></div>
                 </div>
             </div>
 
@@ -652,6 +649,7 @@
 
     function loadLastPerformance(exerciseName) {
       const lastPerfInfo = document.getElementById('last-perf-info');
+      const seriesList = document.getElementById('series-list');
       
       if (!exerciseName || exerciseName === 'Autre') {
         lastPerfInfo.style.display = 'none';
@@ -667,8 +665,27 @@
             const dayName = date.toLocaleDateString('fr-FR', { weekday: 'short', month: 'short', day: 'numeric' });
             
             document.getElementById('last-perf-date').textContent = dayName;
-            document.getElementById('last-perf-load').textContent = data.load ? `${data.load}kg` : '—';
-            document.getElementById('last-perf-reps').textContent = data.reps ? `${data.reps} rép` : '—';
+            
+            // Afficher toutes les séries
+            seriesList.innerHTML = '';
+            data.series.forEach(serie => {
+              const serieElement = document.createElement('div');
+              serieElement.style.cssText = 'font-size: 0.9em; color: #555; display: flex; align-items: center; gap: 8px;';
+              
+              const serieNum = document.createElement('span');
+              serieNum.style.cssText = 'font-weight: 600; color: #667eea; min-width: 30px;';
+              serieNum.textContent = `S${serie.series_number}:`;
+              
+              const serieData = document.createElement('span');
+              const parts = [];
+              if (serie.load) parts.push(`${serie.load}kg`);
+              if (serie.reps) parts.push(`${serie.reps} rép`);
+              serieData.textContent = parts.join(' • ') || '—';
+              
+              serieElement.appendChild(serieNum);
+              serieElement.appendChild(serieData);
+              seriesList.appendChild(serieElement);
+            });
             
             lastPerfInfo.style.display = 'block';
           } else {

@@ -859,7 +859,7 @@ def register_routes(app):
     # ============ API POUR SURCHARGE PROGRESSIVE ============
     @app.route('/api/athlete/performance/last-for-exercise', methods=['GET'])
     def api_last_performance_for_exercise():
-        """Get the last performance entry for a given exercise for the current athlete"""
+        """Get all series from the last performance date for a given exercise for the current athlete"""
         if 'user_id' not in session:
             return jsonify({'error': 'not authenticated'}), 401
         
@@ -871,22 +871,34 @@ def register_routes(app):
         if not exercise_name:
             return jsonify({'error': 'exercise name required'}), 400
         
-        # Get the most recent performance entry for this exercise
-        last_entry = PerformanceEntry.query.filter_by(
+        # Get the most recent date for this exercise
+        last_entry_date = db.session.query(db.func.max(PerformanceEntry.entry_date)).filter_by(
             athlete_id=user.id,
             exercise=exercise_name
-        ).order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.created_at.desc()).first()
+        ).scalar()
         
-        if not last_entry:
+        if not last_entry_date:
             return jsonify({'found': False}), 200
+        
+        # Get all entries for that date and exercise
+        entries = PerformanceEntry.query.filter_by(
+            athlete_id=user.id,
+            exercise=exercise_name,
+            entry_date=last_entry_date
+        ).order_by(PerformanceEntry.series_number.asc()).all()
+        
+        # Format the response with all series
+        series_list = [{
+            'series_number': entry.series_number,
+            'reps': entry.reps,
+            'load': entry.load,
+            'notes': entry.notes
+        } for entry in entries]
         
         return jsonify({
             'found': True,
-            'entry_date': last_entry.entry_date.isoformat() if last_entry.entry_date else None,
-            'reps': last_entry.reps,
-            'load': last_entry.load,
-            'series_number': last_entry.series_number,
-            'notes': last_entry.notes
+            'entry_date': last_entry_date.isoformat() if last_entry_date else None,
+            'series': series_list
         }), 200
 
     @app.route('/coach/stats')
