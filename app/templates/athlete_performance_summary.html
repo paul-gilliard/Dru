@@ -1,43 +1,283 @@
 {% extends 'base.html' %}
 {% block title %}Résumé séance — {{ athlete.username }}{% endblock %}
 {% block content %}
-<h2>Résumé — {{ program_session.session_name or 'Séance' }} — {{ entry_date.strftime('%Y-%m-%d') }}</h2>
 
-<div style="margin-top:8px; margin-bottom:12px;">
-  <a href="{{ url_for('athlete_performance_session', session_id=program_session.id) }}" class="secondary">← Retour à la séance</a>
+<style>
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .summary-container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+
+    .header-summary {
+        text-align: center;
+        color: white;
+        margin-bottom: 30px;
+    }
+
+    .header-summary h1 {
+        font-size: 2em;
+        font-weight: 700;
+        margin-bottom: 5px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .header-summary p {
+        font-size: 1em;
+        opacity: 0.9;
+    }
+
+    .back-link {
+        display: inline-block;
+        background: rgba(255,255,255,0.2);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 8px;
+        text-decoration: none;
+        font-weight: 600;
+        margin-bottom: 20px;
+        transition: all 0.3s ease;
+    }
+
+    .back-link:hover {
+        background: rgba(255,255,255,0.3);
+        transform: translateX(-3px);
+    }
+
+    /* Informations */
+    .info-section {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .info-section h3 {
+        font-size: 1.2em;
+        color: #333;
+        margin-bottom: 20px;
+        font-weight: 700;
+    }
+
+    .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+    }
+
+    .info-item {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        border-left: 4px solid #667eea;
+    }
+
+    .info-label {
+        font-size: 0.9em;
+        color: #666;
+        font-weight: 600;
+        margin-bottom: 5px;
+    }
+
+    .info-value {
+        font-size: 1.1em;
+        color: #333;
+        font-weight: 700;
+    }
+
+    /* Tableau des entrées */
+    .entries-section {
+        background: white;
+        border-radius: 12px;
+        padding: 25px;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .entries-section h3 {
+        font-size: 1.2em;
+        color: #333;
+        margin-bottom: 20px;
+        font-weight: 700;
+    }
+
+    .table-wrapper {
+        overflow-x: auto;
+        margin-bottom: 20px;
+    }
+
+    .summary-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.95em;
+    }
+
+    .summary-table thead {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .summary-table th {
+        padding: 12px;
+        text-align: left;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .summary-table td {
+        padding: 12px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+
+    .summary-table tbody tr:hover {
+        background: #f8f9fa;
+    }
+
+    /* Stats résumé */
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 15px;
+    }
+
+    .stat-box {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 12px;
+        text-align: center;
+    }
+
+    .stat-box-value {
+        font-size: 2em;
+        font-weight: 700;
+        margin-bottom: 5px;
+    }
+
+    .stat-box-label {
+        font-size: 0.9em;
+        opacity: 0.9;
+    }
+
+    .no-entries {
+        color: #999;
+        font-style: italic;
+        text-align: center;
+        padding: 30px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .header-summary h1 {
+            font-size: 1.5em;
+        }
+
+        .info-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .summary-table {
+            font-size: 0.85em;
+        }
+
+        .summary-table th,
+        .summary-table td {
+            padding: 8px;
+        }
+    }
+</style>
+
+<div class="summary-container">
+    <!-- En-tête -->
+    <a href="{{ url_for('athlete_performance_session', session_id=program_session.id) }}" class="back-link">← Retour à la séance</a>
+
+    <div class="header-summary">
+        <h1>📊 Résumé de séance</h1>
+        <p>{{ program_session.session_name or 'Séance' }} • {{ entry_date.strftime('%d %B %Y') }}</p>
+    </div>
+
+    <!-- Informations -->
+    <div class="info-section">
+        <h3>📋 Informations</h3>
+        <div class="info-grid">
+            <div class="info-item">
+                <div class="info-label">Programme</div>
+                <div class="info-value">{{ program_session.program.name }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Jour</div>
+                <div class="info-value">{{ ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'][program_session.day_of_week] }}</div>
+            </div>
+            <div class="info-item">
+                <div class="info-label">Date</div>
+                <div class="info-value">{{ entry_date.strftime('%Y-%m-%d') }}</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Entrées -->
+    <div class="entries-section">
+        <h3>🏋️ Performances enregistrées ({{ entries|length }})</h3>
+        
+        {% if entries %}
+            <div class="table-wrapper">
+                <table class="summary-table">
+                    <thead>
+                        <tr>
+                            <th>Exercice</th>
+                            <th>Série</th>
+                            <th>Rép</th>
+                            <th>Poids (kg)</th>
+                            <th>Remarque</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for e in entries %}
+                        <tr>
+                            <td><strong>{{ e.exercise }}</strong></td>
+                            <td>{{ e.series_number or '—' }}</td>
+                            <td>{{ '%.1f'|format(e.reps) if e.reps is not none else '—' }}</td>
+                            <td>{{ e.load if e.load is not none else '—' }}</td>
+                            <td>{{ e.notes or '—' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Statistiques -->
+            <h3 style="margin-top: 30px; margin-bottom: 20px; color: #333; font-weight: 700;">📈 Statistiques</h3>
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="stat-box-value">{{ total_sets }}</div>
+                    <div class="stat-box-label">Séries totales</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-box-value">{{ '%.1f'|format(total_reps) }}</div>
+                    <div class="stat-box-label">Répétitions (est.)</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-box-value">{{ '%.0f'|format(total_volume) }}</div>
+                    <div class="stat-box-label">Volume (kg·rep)</div>
+                </div>
+            </div>
+        {% else %}
+            <div class="no-entries">
+                <strong>Aucune performance enregistrée pour cette date.</strong>
+            </div>
+        {% endif %}
+    </div>
 </div>
 
-<div class="card">
-  <h3>Informations</h3>
-  <p>Programme : {{ program_session.program.name }}</p>
-  <p>Jour : {{ ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][program_session.day_of_week] }}</p>
-</div>
-
-<div class="card" style="margin-top:12px;">
-  <h3>Entrées ({{ entries|length }})</h3>
-  {% if entries %}
-  <table>
-    <thead><tr><th>Exercice</th><th>Série</th><th>Rép</th><th>Poids</th><th>Remarque</th></tr></thead>
-    <tbody>
-      {% for e in entries %}
-      <tr>
-        <td>{{ e.exercise }}</td>
-        <td class="center">{{ e.series_number or '—' }}</td>
-        <td class="center">{{ '%.1f'|format(e.reps) if e.reps is not none else '' }}</td>
-        <td class="center">{{ e.load or '' }}</td>
-        <td>{{ e.notes or '' }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-
-  <div style="margin-top:12px;">
-    <strong>Total séries :</strong> {{ total_sets }} &nbsp; • &nbsp;
-    <strong>Total répétitions (estimées) :</strong> {{ '%.1f'|format(total_reps) }} &nbsp; • &nbsp;
-    <strong>Total volume (kg·rep) :</strong> {{ '%.1f'|format(total_volume) }}
-  </div>
-  {% else %}
-    <p class="text-muted">Aucune entrée pour cette date.</p>
-  {% endif %}
-</div>
 {% endblock %}
