@@ -827,7 +827,7 @@ def register_routes(app):
 
     @app.route('/coach/stats/athlete/<int:athlete_id>/summary-7days.json')
     def coach_stats_athlete_summary_7days(athlete_id):
-        """Get 7-day summary for weight, kcals, water, sleep, and tonnage by muscle group"""
+        """Get 7-day summary comparing current week vs previous week"""
         try:
             if 'user_id' not in session:
                 return jsonify({'error':'unauth'}), 401
@@ -836,56 +836,106 @@ def register_routes(app):
                 return jsonify({'error':'forbidden'}), 403
             
             today = datetime.utcnow().date()
-            seven_days_ago = today - timedelta(days=7)
+            # Get the start of current week (Monday)
+            current_week_start = today - timedelta(days=today.weekday())
+            # Previous week start
+            previous_week_start = current_week_start - timedelta(days=7)
             
-            # Get journal entries for last 7 days
-            journal_entries = JournalEntry.query.filter(
+            # Get journal entries for current week
+            current_journal = JournalEntry.query.filter(
                 JournalEntry.athlete_id==athlete_id,
-                JournalEntry.entry_date >= seven_days_ago
-            ).order_by(JournalEntry.entry_date.asc()).all()
-            
-            # Calculate averages and changes
-            if journal_entries:
-                first_day = journal_entries[0]
-                last_day = journal_entries[-1]
-                
-                weight_start = first_day.weight
-                weight_end = last_day.weight
-                kcals_values = [e.kcals for e in journal_entries if e.kcals]
-                water_values = [e.water_ml for e in journal_entries if e.water_ml]
-                sleep_values = [e.sleep_hours for e in journal_entries if e.sleep_hours]
-                
-                kcals_avg = sum(kcals_values) / len(kcals_values) if kcals_values else None
-                water_avg = sum(water_values) / len(water_values) if water_values else None
-                sleep_avg = sum(sleep_values) / len(sleep_values) if sleep_values else None
-            else:
-                weight_start = weight_end = kcals_avg = water_avg = sleep_avg = None
-            
-            # Calculate tonnage by muscle group for last 7 days
-            perf_entries = PerformanceEntry.query.filter(
-                PerformanceEntry.athlete_id==athlete_id,
-                PerformanceEntry.entry_date >= seven_days_ago
+                JournalEntry.entry_date >= current_week_start,
+                JournalEntry.entry_date < current_week_start + timedelta(days=7)
             ).all()
             
-            tonnage_by_muscle = {}
-            for e in perf_entries:
+            # Get journal entries for previous week
+            previous_journal = JournalEntry.query.filter(
+                JournalEntry.athlete_id==athlete_id,
+                JournalEntry.entry_date >= previous_week_start,
+                JournalEntry.entry_date < previous_week_start + timedelta(days=7)
+            ).all()
+            
+            # Calculate averages for current week
+            current_weight_values = [e.weight for e in current_journal if e.weight]
+            current_kcals_values = [e.kcals for e in current_journal if e.kcals]
+            current_water_values = [e.water_ml for e in current_journal if e.water_ml]
+            current_sleep_values = [e.sleep_hours for e in current_journal if e.sleep_hours]
+            
+            current_weight_avg = sum(current_weight_values) / len(current_weight_values) if current_weight_values else None
+            current_kcals_avg = sum(current_kcals_values) / len(current_kcals_values) if current_kcals_values else None
+            current_water_avg = sum(current_water_values) / len(current_water_values) if current_water_values else None
+            current_sleep_avg = sum(current_sleep_values) / len(current_sleep_values) if current_sleep_values else None
+            
+            # Calculate averages for previous week
+            previous_weight_values = [e.weight for e in previous_journal if e.weight]
+            previous_kcals_values = [e.kcals for e in previous_journal if e.kcals]
+            previous_water_values = [e.water_ml for e in previous_journal if e.water_ml]
+            previous_sleep_values = [e.sleep_hours for e in previous_journal if e.sleep_hours]
+            
+            previous_weight_avg = sum(previous_weight_values) / len(previous_weight_values) if previous_weight_values else None
+            previous_kcals_avg = sum(previous_kcals_values) / len(previous_kcals_values) if previous_kcals_values else None
+            previous_water_avg = sum(previous_water_values) / len(previous_water_values) if previous_water_values else None
+            previous_sleep_avg = sum(previous_sleep_values) / len(previous_sleep_values) if previous_sleep_values else None
+            
+            # Calculate differences
+            weight_diff = (current_weight_avg - previous_weight_avg) if (current_weight_avg and previous_weight_avg) else None
+            kcals_diff = (current_kcals_avg - previous_kcals_avg) if (current_kcals_avg and previous_kcals_avg) else None
+            water_diff = (current_water_avg - previous_water_avg) if (current_water_avg and previous_water_avg) else None
+            sleep_diff = (current_sleep_avg - previous_sleep_avg) if (current_sleep_avg and previous_sleep_avg) else None
+            
+            # Calculate tonnage for current week and previous week
+            current_perfs = PerformanceEntry.query.filter(
+                PerformanceEntry.athlete_id==athlete_id,
+                PerformanceEntry.entry_date >= current_week_start,
+                PerformanceEntry.entry_date < current_week_start + timedelta(days=7)
+            ).all()
+            
+            previous_perfs = PerformanceEntry.query.filter(
+                PerformanceEntry.athlete_id==athlete_id,
+                PerformanceEntry.entry_date >= previous_week_start,
+                PerformanceEntry.entry_date < previous_week_start + timedelta(days=7)
+            ).all()
+            
+            # Calculate tonnage by muscle for current week
+            current_tonnage_by_muscle = {}
+            for e in current_perfs:
                 if not e.exercise or not e.reps or not e.load:
                     continue
                 ex = Exercise.query.filter_by(name=e.exercise).first()
                 if not ex:
                     continue
                 muscle_group = ex.muscle_group
-                if muscle_group not in tonnage_by_muscle:
-                    tonnage_by_muscle[muscle_group] = 0
-                tonnage_by_muscle[muscle_group] += e.reps * e.load
+                if muscle_group not in current_tonnage_by_muscle:
+                    current_tonnage_by_muscle[muscle_group] = 0
+                current_tonnage_by_muscle[muscle_group] += e.reps * e.load
+            
+            # Calculate tonnage by muscle for previous week
+            previous_tonnage_by_muscle = {}
+            for e in previous_perfs:
+                if not e.exercise or not e.reps or not e.load:
+                    continue
+                ex = Exercise.query.filter_by(name=e.exercise).first()
+                if not ex:
+                    continue
+                muscle_group = ex.muscle_group
+                if muscle_group not in previous_tonnage_by_muscle:
+                    previous_tonnage_by_muscle[muscle_group] = 0
+                previous_tonnage_by_muscle[muscle_group] += e.reps * e.load
+            
+            # Calculate tonnage differences
+            tonnage_diff_by_muscle = {}
+            all_muscles = set(current_tonnage_by_muscle.keys()) | set(previous_tonnage_by_muscle.keys())
+            for muscle in all_muscles:
+                current = current_tonnage_by_muscle.get(muscle, 0)
+                previous = previous_tonnage_by_muscle.get(muscle, 0)
+                tonnage_diff_by_muscle[muscle] = current - previous
             
             return jsonify({
-                'weight_start': weight_start,
-                'weight_end': weight_end,
-                'kcals_avg': kcals_avg,
-                'water_avg': water_avg,
-                'sleep_avg': sleep_avg,
-                'tonnage_by_muscle': tonnage_by_muscle
+                'weight_diff': weight_diff,
+                'kcals_diff': kcals_diff,
+                'water_diff': water_diff,
+                'sleep_diff': sleep_diff,
+                'tonnage_diff_by_muscle': tonnage_diff_by_muscle
             })
         except Exception as e:
             print(f"Error in summary route: {str(e)}")

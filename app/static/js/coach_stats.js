@@ -103,43 +103,52 @@ document.addEventListener('DOMContentLoaded', function(){
       const data = await res.json();
       
       // Get arrow function based on change
-      const getArrow = (start, end) => {
-        if (!start || !end) return '—';
-        const change = end - start;
-        if (Math.abs(change) < 0.1) return '→';
-        return change > 0 ? '📈' : '📉';
+      const getArrow = (diff) => {
+        if (diff === null || diff === undefined) return '—';
+        if (Math.abs(diff) < 0.1) return '→';
+        return diff > 0 ? '📈' : '📉';
       };
       
-      const formatValue = (val, decimals = 1) => {
+      const formatDiff = (val, decimals = 1) => {
         if (val === null || val === undefined) return '—';
-        return Number(val).toFixed(decimals);
+        const num = Number(val).toFixed(decimals);
+        const sign = parseFloat(num) > 0 ? '+' : '';
+        return sign + num;
       };
       
-      // Update summary values
-      const weightArrow = getArrow(data.weight_start, data.weight_end);
-      const weightChange = data.weight_start && data.weight_end ? 
-        `${formatValue(data.weight_end)}kg ${weightArrow}` : '—';
-      document.getElementById('summary-weight').textContent = weightChange;
+      // Update summary values with differences
+      const weightArrow = getArrow(data.weight_diff);
+      const weightValue = data.weight_diff !== null ? 
+        `${formatDiff(data.weight_diff, 2)} kg ${weightArrow}` : '—';
+      document.getElementById('summary-weight').textContent = weightValue;
       
-      const kcalsValue = data.kcals_avg ? `${formatValue(data.kcals_avg, 0)} cal` : '—';
+      const kcalsArrow = getArrow(data.kcals_diff);
+      const kcalsValue = data.kcals_diff !== null ? 
+        `${formatDiff(data.kcals_diff, 0)} cal ${kcalsArrow}` : '—';
       document.getElementById('summary-kcals').textContent = kcalsValue;
       
-      const waterValue = data.water_avg ? `${formatValue(data.water_avg, 0)} ml` : '—';
+      const waterArrow = getArrow(data.water_diff);
+      const waterValue = data.water_diff !== null ? 
+        `${formatDiff(data.water_diff, 0)} ml ${waterArrow}` : '—';
       document.getElementById('summary-water').textContent = waterValue;
       
-      const sleepValue = data.sleep_avg ? `${formatValue(data.sleep_avg, 1)} h` : '—';
+      const sleepArrow = getArrow(data.sleep_diff);
+      const sleepValue = data.sleep_diff !== null ? 
+        `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
       document.getElementById('summary-sleep').textContent = sleepValue;
       
       // Fill tonnage rows
       const tonnageBody = document.getElementById('summary-tonnage-body');
       tonnageBody.innerHTML = '';
-      Object.keys(data.tonnage_by_muscle).sort().forEach(muscle => {
+      Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid #e5e7eb';
-        const tonnage = data.tonnage_by_muscle[muscle];
+        const diff = data.tonnage_diff_by_muscle[muscle];
+        const arrow = getArrow(diff);
+        const diffStr = formatDiff(diff, 0);
         tr.innerHTML = `
-          <td style="padding:12px; font-weight:600;">${muscle} (tonnage)</td>
-          <td style="padding:12px; text-align:center;">${formatValue(tonnage, 0)}</td>
+          <td style="padding:12px; font-weight:600;">${muscle}</td>
+          <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
         `;
         tonnageBody.appendChild(tr);
       });
