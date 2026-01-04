@@ -1,215 +1,224 @@
-{% extends 'base.html' %}
-{% block title %}Connexion{% endblock %}
-{% block content %}
-
-<style>
-    body {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        min-height: 100vh;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
-
-    .login-container {
-        width: 100%;
-        max-width: 420px;
-    }
-
-    .login-card {
-        background: white;
-        border-radius: 16px;
-        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-        padding: 40px 30px;
-        animation: slideUp 0.5s ease-out;
-    }
-
-    @keyframes slideUp {
-        from {
-            opacity: 0;
-            transform: translateY(30px);
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Connexion - Dru</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        to {
-            opacity: 1;
-            transform: translateY(0);
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-    }
 
-    .login-header {
-        text-align: center;
-        margin-bottom: 35px;
-    }
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+        }
 
-    .login-logo {
-        font-size: 3em;
-        margin-bottom: 10px;
-    }
-
-    .login-title {
-        font-size: 1.8em;
-        font-weight: 700;
-        color: #333;
-        margin-bottom: 8px;
-    }
-
-    .login-subtitle {
-        font-size: 0.95em;
-        color: #666;
-    }
-
-    .form-group {
-        margin-bottom: 20px;
-    }
-
-    .form-group label {
-        display: block;
-        font-weight: 600;
-        color: #333;
-        margin-bottom: 8px;
-        font-size: 0.95em;
-    }
-
-    .form-group input {
-        width: 100%;
-        padding: 12px 15px;
-        border: 2px solid #e0e0e0;
-        border-radius: 8px;
-        font-size: 1em;
-        font-family: inherit;
-        transition: all 0.3s ease;
-        box-sizing: border-box;
-    }
-
-    .form-group input:focus {
-        outline: none;
-        border-color: #667eea;
-        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-    }
-
-    .form-group input::placeholder {
-        color: #aaa;
-    }
-
-    .login-btn {
-        width: 100%;
-        padding: 14px;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        font-size: 1.05em;
-        font-weight: 700;
-        cursor: pointer;
-        transition: all 0.3s ease;
-        margin-top: 10px;
-    }
-
-    .login-btn:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-    }
-
-    .login-btn:active {
-        transform: translateY(0);
-    }
-
-    .error-message {
-        background: #fee;
-        border: 1px solid #fcc;
-        color: #c33;
-        padding: 12px 15px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        font-size: 0.95em;
-    }
-
-    .info-text {
-        text-align: center;
-        color: #999;
-        font-size: 0.9em;
-        margin-top: 25px;
-    }
-
-    /* Responsive */
-    @media (max-width: 480px) {
         .login-card {
-            padding: 30px 20px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px 30px;
+            animation: slideUp 0.5s ease-out;
         }
 
-        .login-title {
-            font-size: 1.5em;
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 35px;
         }
 
         .login-logo {
-            font-size: 2.5em;
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .login-title {
+            font-size: 1.8em;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 8px;
+        }
+
+        .login-subtitle {
+            font-size: 0.95em;
+            color: #666;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 8px;
+            font-size: 0.95em;
         }
 
         .form-group input {
-            padding: 11px 12px;
-            font-size: 16px;
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            font-family: inherit;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: #aaa;
         }
 
         .login-btn {
-            padding: 12px;
-            font-size: 1em;
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.05em;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 10px;
         }
-    }
-</style>
 
-<div class="login-container">
-    <div class="login-card">
-        <!-- Header -->
-        <div class="login-header">
-            <div class="login-logo">🏋️</div>
-            <h1 class="login-title">Dru</h1>
-            <p class="login-subtitle">Connexion à votre compte</p>
-        </div>
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
 
-        <!-- Messages d'erreur -->
-        {% with messages = get_flashed_messages() %}
-            {% if messages %}
-                {% for message in messages %}
-                    <div class="error-message">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+        .login-btn:active {
+            transform: translateY(0);
+        }
 
-        <!-- Formulaire -->
-        <form method="post" action="{{ url_for('login') }}">
-            <div class="form-group">
-                <label for="username">👤 Nom d'utilisateur</label>
-                <input 
-                    id="username" 
-                    name="username" 
-                    type="text" 
-                    placeholder="Entrez votre nom d'utilisateur"
-                    required 
-                    autofocus
-                >
+        .error-message {
+            background: #fee;
+            border: 1px solid #fcc;
+            color: #c33;
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+        }
+
+        .info-text {
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+            margin-top: 25px;
+        }
+
+        /* Responsive */
+        @media (max-width: 480px) {
+            .login-card {
+                padding: 30px 20px;
+            }
+
+            .login-title {
+                font-size: 1.5em;
+            }
+
+            .login-logo {
+                font-size: 2.5em;
+            }
+
+            .form-group input {
+                padding: 11px 12px;
+                font-size: 16px;
+            }
+
+            .login-btn {
+                padding: 12px;
+                font-size: 1em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-card">
+            <!-- Header -->
+            <div class="login-header">
+                <div class="login-logo">🏋️</div>
+                <h1 class="login-title">Dru</h1>
+                <p class="login-subtitle">Connexion à votre compte</p>
             </div>
 
-            <div class="form-group">
-                <label for="password">🔐 Mot de passe</label>
-                <input 
-                    id="password" 
-                    name="password" 
-                    type="password" 
-                    placeholder="Entrez votre mot de passe"
-                    required
-                >
+            <!-- Messages d'erreur -->
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="error-message">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Formulaire -->
+            <form method="post" action="{{ url_for('login') }}">
+                <div class="form-group">
+                    <label for="username">👤 Nom d'utilisateur</label>
+                    <input 
+                        id="username" 
+                        name="username" 
+                        type="text" 
+                        placeholder="Entrez votre nom d'utilisateur"
+                        required 
+                        autofocus
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="password">🔐 Mot de passe</label>
+                    <input 
+                        id="password" 
+                        name="password" 
+                        type="password" 
+                        placeholder="Entrez votre mot de passe"
+                        required
+                    >
+                </div>
+
+                <button type="submit" class="login-btn">Se connecter</button>
+            </form>
+
+            <!-- Info -->
+            <div class="info-text">
+                Plateforme d'entraînement et de nutrition<br>
+                <strong>Dru</strong>
             </div>
-
-            <button type="submit" class="login-btn">Se connecter</button>
-        </form>
-
-        <!-- Info -->
-        <div class="info-text">
-            Plateforme d'entraînement et de nutrition<br>
-            <strong>Dru</strong>
         </div>
     </div>
-</div>
-
-{% endblock %}
+</body>
+</html>
