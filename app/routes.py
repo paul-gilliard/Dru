@@ -753,10 +753,19 @@ def register_routes(app):
             flash('Accès réservé aux athlètes')
             return redirect(url_for('home'))
 
-        # Récupérer le plan alimentaire créé par un coach pour cet athlète
-        meal_plan = MealPlan.query.filter_by(athlete_id=user.id).first()
+        # Récupérer tous les plans alimentaires créés par les coaches pour cet athlète
+        meal_plans = MealPlan.query.filter_by(athlete_id=user.id).all()
+        
+        # Récupérer le plan sélectionné (par défaut le premier s'il existe)
+        selected_meal_plan_id = request.args.get('meal_plan_id', type=int)
+        if selected_meal_plan_id:
+            meal_plan = MealPlan.query.get(selected_meal_plan_id)
+            if not meal_plan or meal_plan.athlete_id != user.id:
+                meal_plan = meal_plans[0] if meal_plans else None
+        else:
+            meal_plan = meal_plans[0] if meal_plans else None
 
-        return render_template('athlete_meal_plan.html', athlete=user, meal_plan=meal_plan)
+        return render_template('athlete_meal_plan.html', athlete=user, meal_plan=meal_plan, meal_plans=meal_plans)
 
     @app.route('/coach/meal-plan')
     def coach_meal_plan():

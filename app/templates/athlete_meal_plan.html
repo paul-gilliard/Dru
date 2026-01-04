@@ -20,7 +20,7 @@
     .header-meal-plan {
         text-align: center;
         color: white;
-        margin-bottom: 40px;
+        margin-bottom: 30px;
     }
 
     .header-meal-plan h1 {
@@ -40,6 +40,59 @@
         font-size: 0.95em;
         opacity: 0.9;
         font-style: italic;
+    }
+
+    /* Plan selector */
+    .plan-selector-wrapper {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 30px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .plan-selector-wrapper label {
+        display: block;
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 10px;
+        font-size: 0.95em;
+    }
+
+    .plan-selector-wrapper select {
+        width: 100%;
+        padding: 12px 15px;
+        border: 2px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 1em;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background-color: white;
+        color: #333;
+    }
+
+    .plan-selector-wrapper select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .plan-selector-wrapper select:hover {
+        border-color: #667eea;
+    }
+
+    .no-plans {
+        background: white;
+        border-radius: 12px;
+        padding: 40px;
+        text-align: center;
+        color: #666;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .no-plans p {
+        font-size: 1.1em;
+        margin: 0;
     }
 
     /* Daily totals */
@@ -220,11 +273,21 @@
     <!-- En-tête -->
     <div class="header-meal-plan">
         <h1>🍽️ Mon Plan Alimentaire</h1>
-        {% if meal_plan %}
-            <p>{{ meal_plan.name }}</p>
-            <span class="plan-name">Mis à jour le {{ meal_plan.updated_at.strftime('%d %B %Y') }}</span>
-        {% endif %}
     </div>
+
+    <!-- Sélecteur de plans alimentaires -->
+    {% if meal_plans %}
+        <div class="plan-selector-wrapper">
+            <label for="meal-plan-select">Sélectionnez un plan alimentaire:</label>
+            <select id="meal-plan-select" onchange="changeplan(this.value)">
+                {% for plan in meal_plans %}
+                    <option value="{{ plan.id }}" {% if meal_plan and meal_plan.id == plan.id %}selected{% endif %}>
+                        {{ plan.name }} ({{ plan.updated_at.strftime('%d %B %Y') }})
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+    {% endif %}
 
     {% if meal_plan %}
         <!-- Totaux quotidiens -->
@@ -330,11 +393,16 @@
         </div>
 
     {% else %}
-        <div class="no-plan">
-            <strong>📋 Aucun plan alimentaire</strong>
-            <p>Vous n'avez pas encore de plan alimentaire. Contactez votre coach pour qu'il vous en crée un adapté à vos objectifs.</p>
+        <div class="no-plans">
+            <p>📋 Vous n'avez pas encore de plan alimentaire. Contactez votre coach pour qu'il vous en crée un adapté à vos objectifs.</p>
         </div>
     {% endif %}
 </div>
+
+<script>
+    function changeplan(planId) {
+        window.location.href = "{{ url_for('athlete_meal_plan') }}?meal_plan_id=" + planId;
+    }
+</script>
 
 {% endblock %}
