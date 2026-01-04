@@ -436,7 +436,7 @@
             <div class="form-grid">
                 <div class="form-group">
                     <label>Date</label>
-                    <input id="perf-entry-date" name="entry_date" type="date" value="{{ (now().date()|string) }}" required>
+                    <input id="perf-entry-date" name="entry_date" type="date" required>
                 </div>
                 
                 <div class="form-group">
@@ -592,6 +592,42 @@
     };
     
     window.PERF_ENTRIES = {{ perf_entries_json|tojson }};
+
+    // ============ GESTION DE LA DATE PERSISTANTE ============
+    const PERF_DATE_STORAGE_KEY = 'last_perf_date_session_{{ program_session.id }}';
+
+    function initializePerformanceDate() {
+      const dateInput = document.getElementById('perf-entry-date');
+      const savedDate = localStorage.getItem(PERF_DATE_STORAGE_KEY);
+      
+      if (savedDate) {
+        // Utiliser la date sauvegardée
+        dateInput.value = savedDate;
+      } else {
+        // Utiliser la date d'aujourd'hui
+        const today = new Date();
+        const isoDate = today.toISOString().split('T')[0];
+        dateInput.value = isoDate;
+      }
+    }
+
+    function savePerformanceDate() {
+      const dateInput = document.getElementById('perf-entry-date');
+      localStorage.setItem(PERF_DATE_STORAGE_KEY, dateInput.value);
+    }
+
+    // Initialiser la date au chargement
+    document.addEventListener('DOMContentLoaded', function() {
+      initializePerformanceDate();
+      
+      // Sauvegarder la date quand le formulaire est soumis
+      const form = document.getElementById('perf-add-form');
+      if (form) {
+        form.addEventListener('submit', function() {
+          savePerformanceDate();
+        });
+      }
+    });
     
     function updateSeriesDropdown() {
       const exerciseSelect = document.getElementById('perf-exercise');
