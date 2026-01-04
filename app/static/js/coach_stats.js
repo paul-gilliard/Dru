@@ -1,6 +1,8 @@
 document.addEventListener('DOMContentLoaded', function(){
   const athleteSelect = document.getElementById('stats-athlete-select');
   const chartJournalCtx = document.getElementById('chart-journal').getContext('2d');
+  const muscleSelect = document.getElementById('stats-muscle-select');
+  const clearMuscle = document.getElementById('clear-muscle');
   const exSelect = document.getElementById('stats-exercise-select');
   const clearEx = document.getElementById('clear-exercise');
   const toggleKcals = document.getElementById('toggle-kcals');
@@ -18,6 +20,8 @@ document.addEventListener('DOMContentLoaded', function(){
 
   let performanceChart = null;
   let otherSeriesChart = null;
+  let tonnageChart = null;
+  let tonnageCache = null;
 
   async function loadJournal(athleteId){
     const res = await fetch(`/coach/stats/athlete/${athleteId}/journal.json`);
@@ -68,7 +72,77 @@ document.addEventListener('DOMContentLoaded', function(){
     document.getElementById('other-series-chart-container').style.display = 'none';
   }
 
-  function renderExercise(ex){
+  async function loadTonnage(athleteId){
+    const res = await fetch(`/coach/stats/athlete/${athleteId}/tonnage-by-muscle.json`);
+    if (!res.ok) return;
+    const data = await res.json();
+    tonnageCache = data;
+    // populate muscle group select
+    muscleSelect.innerHTML = '<option value="">— choisir un groupe musculaire —</option>';
+    Object.keys(data).sort().forEach(muscle=>{
+      const opt = document.createElement('option'); opt.value = muscle; opt.textContent = muscle; muscleSelect.appendChild(opt);
+    });
+    // clear chart
+    document.getElementById('tonnage-chart-container').style.display = 'none';
+  }
+
+  function renderTonnage(muscleGroup){
+    if (!tonnageCache || !tonnageCache[muscleGroup]) return;
+    
+    const tonnageData = tonnageCache[muscleGroup];
+    createTonnageChart(tonnageData);
+    document.getElementById('tonnage-chart-container').style.display = 'block';
+  }
+
+  function createTonnageChart(tonnageData){
+    const tonnageCtx = document.getElementById('chart-tonnage').getContext('2d');
+    
+    // Destroy old chart if exists
+    if (tonnageChart) {
+      tonnageChart.destroy();
+    }
+    
+    const labels = tonnageData.map(d => d.date);
+    const tonnage = tonnageData.map(d => d.tonnage);
+    
+    tonnageChart = new Chart(tonnageCtx, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [
+          {
+            label: 'Tonnage total (reps × poids)',
+            data: tonnage,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            tension: 0.3,
+            fill: true,
+            pointBackgroundColor: '#10b981',
+            pointRadius: 5,
+            pointBorderWidth: 2,
+            borderWidth: 2
+          }
+        ]
+      },
+      options: {
+        interaction: { mode: 'index', intersect: false },
+        scales: {
+          y: {
+            type: 'linear',
+            position: 'left',
+            title: { display: true, text: 'Tonnage (reps × kg)', font: { weight: 'bold' } },
+            beginAtZero: true
+          }
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top'
+          }
+        }
+      }
+    });
+  }
     if (!perfCache || !perfCache[ex]) return;
     
     const mainSeriesContainer = document.getElementById('main-series-container');
@@ -267,6 +341,21 @@ document.addEventListener('DOMContentLoaded', function(){
     if (!id) return;
     await loadJournal(id);
     await loadPerformance(id);
+    await loadTonnage(id);
+  });
+
+  muscleSelect.addEventListener('change', function(){
+    const muscle = this.value;
+    if (!muscle) { 
+      document.getElementById('tonnage-chart-container').style.display = 'none';
+      return; 
+    }
+    renderTonnage(muscle);
+  });
+
+  clearMuscle.addEventListener('click', function(){
+    muscleSelect.value = '';
+    document.getElementById('tonnage-chart-container').style.display = 'none';
   });
 
   exSelect.addEventListener('change', function(){

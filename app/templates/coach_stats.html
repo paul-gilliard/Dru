@@ -33,6 +33,21 @@
 </div>
 
 <div class="card" style="margin-top:12px;">
+  <h3>Tonnage par groupe musculaire</h3>
+  <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+    <select id="stats-muscle-select">
+      <option value="">— choisir un groupe musculaire —</option>
+    </select>
+    <button id="clear-muscle" type="button" class="secondary">Effacer</button>
+  </div>
+  
+  <!-- Tonnage Chart -->
+  <div id="tonnage-chart-container" style="display:none;">
+    <canvas id="chart-tonnage" height="100"></canvas>
+  </div>
+</div>
+
+<div class="card" style="margin-top:12px;">
   <h3>Performances par exercice</h3>
   <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
     <select id="stats-exercise-select">
