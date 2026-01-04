@@ -41,6 +41,8 @@
           <div class="action-group">
             <a href="{{ url_for('coach_programming_edit', program_id=p.id) }}" class="save-program-btn" style="text-decoration:none; display:inline-block; padding:8px 16px; background:#0b63d6; color:white; border-radius:6px; font-weight:600; cursor:pointer; border:none; font-size:0.95rem;">Éditer</a>
 
+            <button type="button" class="duplicate-btn" onclick="openDuplicateModal({{ p.id }}, '{{ p.name }}')" style="padding:8px 16px; background:#10b981; color:white; border-radius:6px; font-weight:600; cursor:pointer; border:none; font-size:0.95rem; margin-left:6px;">Dupliquer</button>
+
             <form method="post" action="{{ url_for('coach_programming_delete', program_id=p.id) }}" class="delete-form" data-program-name="{{ p.name }}">
               <button type="submit" class="delete-btn secondary">Supprimer</button>
             </form>
@@ -69,7 +71,70 @@
   </div>
 </div>
 
+<!-- Modal for duplicating program -->
+<div id="duplicate-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:12px; padding:30px; max-width:400px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3); animation:slideUp 0.3s ease-out;">
+    <h3 style="margin:0 0 16px 0; color:#1e293b; font-size:1.2rem;">Dupliquer le programme</h3>
+    <form id="duplicate-form" method="post" style="margin:0;">
+      <div style="margin-bottom:20px;">
+        <label for="new_name" style="display:block; margin-bottom:8px; font-weight:600; color:#1e293b;">Nom du nouveau programme</label>
+        <input type="text" id="new_name" name="new_name" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95rem; box-sizing:border-box;" placeholder="Ex: Programme copie">
+      </div>
+      <div style="display:flex; gap:12px; justify-content:flex-end;">
+        <button type="button" onclick="closeDuplicateModal()" style="background:#e2e8f0; color:#1e293b; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:600; transition:all 0.2s ease;" onmouseover="this.style.background='#cbd5e1'" onmouseout="this.style.background='#e2e8f0'">Annuler</button>
+        <button type="submit" style="background:#10b981; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:600; transition:all 0.2s ease;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">Dupliquer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+  @keyframes slideUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+</style>
+
 <script>
+  let duplicateProgramId = null;
+
+  function openDuplicateModal(programId, programName) {
+    duplicateProgramId = programId;
+    const modal = document.getElementById('duplicate-modal');
+    const input = document.getElementById('new_name');
+    input.value = programName + ' (copie)';
+    modal.style.display = 'flex';
+    input.focus();
+  }
+
+  function closeDuplicateModal() {
+    const modal = document.getElementById('duplicate-modal');
+    modal.style.display = 'none';
+    duplicateProgramId = null;
+  }
+
+  document.getElementById('duplicate-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (duplicateProgramId) {
+      const form = this;
+      form.action = `/coach/programming/${duplicateProgramId}/duplicate`;
+      form.submit();
+    }
+  });
+
+  // Fermer la modal en cliquant en dehors
+  document.getElementById('duplicate-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeDuplicateModal();
+    }
+  });
+
   (function(){
     const modal = document.getElementById('delete-confirm-modal');
     const msgEl = document.getElementById('delete-confirm-msg');

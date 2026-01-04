@@ -411,6 +411,54 @@ def register_routes(app):
         flash('Programme supprimé')
         return redirect(url_for('coach_programming'))
 
+    @app.route('/coach/programming/<int:program_id>/duplicate', methods=['POST'])
+    def coach_programming_duplicate(program_id):
+        forbidden = _require_coach()
+        if forbidden:
+            return forbidden
+        
+        # Récupérer le programme à dupliquer
+        prog = Program.query.get_or_404(program_id)
+        
+        # Créer un nouveau programme avec le même contenu
+        new_name = request.form.get('new_name', f"{prog.name} (copie)").strip()
+        
+        if not new_name:
+            flash('Le nom du programme est requis')
+            return redirect(url_for('coach_programming'))
+        
+        # Créer le nouveau programme
+        new_prog = Program(athlete_id=prog.athlete_id, name=new_name)
+        db.session.add(new_prog)
+        db.session.flush()  # Pour obtenir l'ID du nouveau programme
+        
+        # Copier les sessions du programme original
+        for session in prog.sessions:
+            new_session = TrainingSession(
+                program_id=new_prog.id,
+                day=session.day,
+                session_number=session.session_number
+            )
+            db.session.add(new_session)
+            db.session.flush()  # Pour obtenir l'ID de la nouvelle session
+            
+            # Copier les exercices
+            for ex in session.exercises:
+                new_ex = TrainingExercise(
+                    session_id=new_session.id,
+                    exercise_id=ex.exercise_id,
+                    sets=ex.sets,
+                    reps=ex.reps,
+                    weight=ex.weight,
+                    rpe=ex.rpe,
+                    order=ex.order
+                )
+                db.session.add(new_ex)
+        
+        db.session.commit()
+        flash(f'Programme "{new_prog.name}" créé (copie de "{prog.name}")')
+        return redirect(url_for('coach_programming'))
+
     @app.route('/athlete/journal', methods=['GET', 'POST'])
     def athlete_journal():
         if 'user_id' not in session:
