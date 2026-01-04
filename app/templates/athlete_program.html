@@ -1,147 +1,390 @@
 {% extends 'base.html' %}
 {% block title %}Programme — {{ athlete.username }}{% endblock %}
 {% block content %}
-<h2>Programme — {{ athlete.username }}</h2>
 
-<div class="card" style="margin-bottom:12px;">
-  <h3>Programmes</h3>
-  {% if programs %}
-    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-      {% for p in programs %}
-        <a href="{{ url_for('athlete_program_view', program_id=p.id) }}" class="kv" style="{% if program and program.id==p.id %}font-weight:700;text-decoration:underline{% endif %}">{{ p.name }}</a>
-      {% endfor %}
+<style>
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .program-container {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+
+    .header-program {
+        text-align: center;
+        color: white;
+        margin-bottom: 30px;
+    }
+
+    .header-program h1 {
+        font-size: 2em;
+        font-weight: 700;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .header-program p {
+        font-size: 1em;
+        opacity: 0.95;
+    }
+
+    /* Sélecteur de programmes */
+    .program-selector {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin-bottom: 30px;
+    }
+
+    .program-btn {
+        padding: 10px 20px;
+        border-radius: 8px;
+        border: 2px solid white;
+        background: rgba(255,255,255,0.1);
+        color: white;
+        text-decoration: none;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .program-btn:hover {
+        background: rgba(255,255,255,0.2);
+        transform: translateY(-2px);
+    }
+
+    .program-btn.active {
+        background: white;
+        color: #667eea;
+    }
+
+    /* Statistiques du programme */
+    .program-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 30px;
+    }
+
+    .stat-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        border-top: 4px solid #667eea;
+    }
+
+    .stat-value {
+        font-size: 2.2em;
+        font-weight: 700;
+        color: #667eea;
+        margin-bottom: 5px;
+    }
+
+    .stat-label {
+        font-size: 0.9em;
+        color: #666;
+        font-weight: 600;
+    }
+
+    /* Calendrier de la semaine */
+    .week-calendar {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+        margin-bottom: 20px;
+    }
+
+    .day-session-card {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        overflow: hidden;
+        transition: all 0.3s ease;
+        border-left: 5px solid #667eea;
+    }
+
+    .day-session-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+
+    .day-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .day-name {
+        font-size: 1.1em;
+        font-weight: 700;
+        display: block;
+        margin-bottom: 5px;
+    }
+
+    .session-info {
+        font-size: 0.9em;
+        opacity: 0.95;
+    }
+
+    .exercise-count {
+        display: inline-block;
+        background: rgba(255,255,255,0.2);
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.85em;
+        font-weight: 600;
+        margin-top: 8px;
+    }
+
+    .day-body {
+        padding: 15px;
+    }
+
+    .rest-day {
+        text-align: center;
+        color: #999;
+        font-style: italic;
+        padding: 20px 15px;
+    }
+
+    .exercises-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .exercise-item {
+        background: #f8f9fa;
+        border-left: 4px solid #667eea;
+        padding: 12px;
+        border-radius: 6px;
+        font-size: 0.95em;
+    }
+
+    .exercise-name {
+        font-weight: 600;
+        color: #333;
+        margin-bottom: 5px;
+    }
+
+    .exercise-muscle {
+        color: #667eea;
+        font-size: 0.85em;
+        font-weight: 600;
+    }
+
+    .exercise-series {
+        color: #666;
+        font-size: 0.85em;
+        margin-top: 5px;
+        line-height: 1.4;
+    }
+
+    .series-badge {
+        display: inline-block;
+        background: #667eea;
+        color: white;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.8em;
+        font-weight: 600;
+        margin-left: 8px;
+    }
+
+    .no-program {
+        background: rgba(255,255,255,0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 40px 20px;
+        text-align: center;
+        color: white;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .no-program strong {
+        display: block;
+        font-size: 1.2em;
+        margin-bottom: 10px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .header-program h1 {
+            font-size: 1.5em;
+        }
+
+        .program-selector {
+            gap: 8px;
+        }
+
+        .program-btn {
+            padding: 8px 16px;
+            font-size: 0.9em;
+        }
+
+        .week-calendar {
+            grid-template-columns: 1fr;
+            gap: 15px;
+        }
+
+        .program-stats {
+            grid-template-columns: repeat(2, 1fr);
+        }
+
+        .day-header {
+            padding: 12px;
+        }
+
+        .day-body {
+            padding: 12px;
+        }
+    }
+</style>
+
+<div class="program-container">
+    <!-- En-tête -->
+    <div class="header-program">
+        <h1>📋 Ma Programmation</h1>
+        <p>{{ athlete.username }}</p>
     </div>
-  {% else %}
-    <p class="text-muted">Aucun programme associé pour le moment.</p>
-  {% endif %}
-</div>
 
-{% if program %}
-<div class="card">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
-    <h3 style="margin:0;">{{ program.name }}</h3>
-    <span class="session-badge" style="font-size:0.9rem; padding:6px 12px; background:#f3f4f6; color:#0b63d6; border-radius:6px; font-weight:600;">
-      {% set active_days = 0 %}
-      {% for day in range(7) %}
-        {% if sessions_by_day.get(day) and sessions_by_day.get(day).exercises|length > 0 %}
-          {% set active_days = active_days + 1 %}
-        {% endif %}
-      {% endfor %}
-      {{ active_days }} séances
-    </span>
-  </div>
-
-  <!-- Program summary -->
-  <div style="padding:14px; background:#f9fafb; border-left:4px solid #0b63d6; border-radius:6px; margin-bottom:20px;">
-    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:14px;">
-      {% set all_exercises = [] %}
-      {% set all_series = [] %}
-      {% set muscle_counts = {} %}
-      
-      {% for day in range(7) %}
-        {% set sd = sessions_by_day.get(day) %}
-        {% if sd and sd.exercises %}
-          {% for ex in sd.exercises %}
-            {% set _ = all_exercises.append(ex) %}
-            {% set series_list = ex.get_series_list() %}
-            {% for s in series_list %}
-              {% set _ = all_series.append(s) %}
+    {% if programs %}
+        <!-- Sélecteur de programmes -->
+        <div class="program-selector">
+            {% for p in programs %}
+                <a href="{{ url_for('athlete_program_view', program_id=p.id) }}" 
+                   class="program-btn {% if program and program.id == p.id %}active{% endif %}">
+                    {{ p.name }}
+                </a>
             {% endfor %}
-            {% if ex.muscle %}
-              {% if ex.muscle not in muscle_counts %}
-                {% set _ = muscle_counts.update({ex.muscle: []}) %}
-              {% endif %}
-              {% set _ = muscle_counts[ex.muscle].append(ex) %}
-            {% endif %}
-          {% endfor %}
-        {% endif %}
-      {% endfor %}
-      
-      <div>
-        <div style="font-size:2rem; font-weight:700; color:#0b63d6;">{{ all_exercises|length }}</div>
-        <div style="font-size:0.85rem; color:#666; font-weight:500;">Exercices</div>
-      </div>
-      <div>
-        <div style="font-size:2rem; font-weight:700; color:#0b63d6;">{{ all_series|length }}</div>
-        <div style="font-size:0.85rem; color:#666; font-weight:500;">Séries totales</div>
-      </div>
-      {% for muscle, exs in muscle_counts.items() %}
-      <div>
-        <div style="font-size:1.3rem; font-weight:700; color:#0b63d6;">
-          {% set muscle_series = 0 %}
-          {% for e in exs %}
-            {% set muscle_series = muscle_series + (e.get_series_list()|length) %}
-          {% endfor %}
-          {{ muscle_series }}
         </div>
-        <div style="font-size:0.85rem; color:#666; font-weight:500;">{{ muscle }}</div>
-      </div>
-      {% endfor %}
-    </div>
-  </div>
+    {% endif %}
 
-  <h3 style="margin-bottom:12px; color:#0b63d6; font-size:1rem;">Semaine d'entraînement</h3>
-
-  <div class="program-days-list" style="margin-top:12px; display:grid; gap:12px;">
-    {% for day in range(7) %}
-    {% set sd = sessions_by_day.get(day) %}
-    <div class="program-day-card" style="border:1px solid rgba(15,23,42,0.1); border-radius:8px; overflow:hidden;">
-      <div class="program-day-header" style="padding:12px; background:#f3f4f6; border-bottom:1px solid rgba(15,23,42,0.1);">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <strong class="day-name" style="font-size:1rem; color:#0b63d6;">{{ ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'][day] }}</strong>
-            {% if sd and sd.session and sd.session.session_name %}
-              <span style="color:#666; font-size:0.9rem;"> — {{ sd.session.session_name }}</span>
-            {% endif %}
-          </div>
-          <div style="text-align:right;">
-            {% if sd and sd.exercises and sd.exercises|length > 0 %}
-              <span style="font-weight:600; color:#0b63d6;">{{ sd.exercises|length }} exercice{{ 's' if sd.exercises|length > 1 else '' }}</span>
-            {% else %}
-              <span style="color:#999; font-style:italic; font-size:0.9rem;">Repos</span>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-
-      <div class="program-day-body" style="padding:12px;">
-        {% if sd and sd.exercises and sd.exercises|length > 0 %}
-        <div style="display:flex; flex-direction:column; gap:10px;">
-          {% for e in sd.exercises %}
-          <div style="padding:10px; background:#f9fafb; border-left:3px solid #0b63d6; border-radius:4px;">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
-              <div>
-                <strong style="font-size:0.95rem; color:#0b63d6;">{{ e.name }}</strong>
-                {% if e.muscle %}
-                  <span style="color:#666; font-size:0.85rem; margin-left:8px;">{{ e.muscle }}</span>
-                {% endif %}
-              </div>
-              {% set series_count = e.get_series_list()|length %}
-              <span style="background:#0b63d6; color:white; padding:4px 8px; border-radius:4px; font-size:0.8rem; font-weight:600;">{{ series_count }}S</span>
-            </div>
-            {% set series_list = e.get_series_list() %}
-            {% if series_list %}
-              <div style="font-size:0.85rem; color:#666; margin-top:6px;">
-                {% for s in series_list %}
-                  <div>{{ s.text }}</div>
+    {% if program %}
+        <!-- Statistiques du programme -->
+        {% set all_exercises = [] %}
+        {% set all_series = [] %}
+        {% set muscle_counts = {} %}
+        
+        {% for day in range(7) %}
+            {% set sd = sessions_by_day.get(day) %}
+            {% if sd and sd.exercises %}
+                {% for ex in sd.exercises %}
+                    {% set _ = all_exercises.append(ex) %}
+                    {% set series_list = ex.get_series_list() %}
+                    {% for s in series_list %}
+                        {% set _ = all_series.append(s) %}
+                    {% endfor %}
+                    {% if ex.muscle %}
+                        {% if ex.muscle not in muscle_counts %}
+                            {% set _ = muscle_counts.update({ex.muscle: []}) %}
+                        {% endif %}
+                        {% set _ = muscle_counts[ex.muscle].append(ex) %}
+                    {% endif %}
                 {% endfor %}
-              </div>
             {% endif %}
-          </div>
-          {% endfor %}
+        {% endfor %}
+
+        <div class="program-stats">
+            <div class="stat-card">
+                <div class="stat-value">{{ all_exercises|length }}</div>
+                <div class="stat-label">Exercices</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">{{ all_series|length }}</div>
+                <div class="stat-label">Séries totales</div>
+            </div>
+            {% set active_days = 0 %}
+            {% for day in range(7) %}
+                {% if sessions_by_day.get(day) and sessions_by_day.get(day).exercises|length > 0 %}
+                    {% set active_days = active_days + 1 %}
+                {% endif %}
+            {% endfor %}
+            <div class="stat-card">
+                <div class="stat-value">{{ active_days }}</div>
+                <div class="stat-label">Séances/semaine</div>
+            </div>
+            {% for muscle, exs in muscle_counts.items() %}
+                <div class="stat-card">
+                    <div class="stat-value">
+                        {% set muscle_series = 0 %}
+                        {% for e in exs %}
+                            {% set muscle_series = muscle_series + (e.get_series_list()|length) %}
+                        {% endfor %}
+                        {{ muscle_series }}
+                    </div>
+                    <div class="stat-label">{{ muscle }}</div>
+                </div>
+            {% endfor %}
         </div>
-        {% else %}
-          <p style="color:#999; font-style:italic; text-align:center; margin:0;">Pas de séance programmée</p>
-        {% endif %}
-      </div>
-    </div>
-    {% endfor %}
-  </div>
+
+        <!-- Calendrier de la semaine -->
+        <div class="week-calendar">
+            {% for day in range(7) %}
+            {% set sd = sessions_by_day.get(day) %}
+            <div class="day-session-card">
+                <div class="day-header">
+                    <span class="day-name">{{ ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'][day] }}</span>
+                    {% if sd and sd.session and sd.session.session_name %}
+                        <span class="session-info">{{ sd.session.session_name }}</span>
+                    {% endif %}
+                    {% if sd and sd.exercises and sd.exercises|length > 0 %}
+                        <span class="exercise-count">{{ sd.exercises|length }} exercice{{ 's' if sd.exercises|length > 1 else '' }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="day-body">
+                    {% if sd and sd.exercises and sd.exercises|length > 0 %}
+                        <div class="exercises-list">
+                            {% for e in sd.exercises %}
+                            <div class="exercise-item">
+                                <div class="exercise-name">
+                                    {{ e.name }}
+                                    {% set series_count = e.get_series_list()|length %}
+                                    <span class="series-badge">{{ series_count }}S</span>
+                                </div>
+                                {% if e.muscle %}
+                                    <div class="exercise-muscle">{{ e.muscle }}</div>
+                                {% endif %}
+                                {% set series_list = e.get_series_list() %}
+                                {% if series_list %}
+                                    <div class="exercise-series">
+                                        {% for s in series_list %}
+                                            <div>{{ s.text }}</div>
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="rest-day">Repos</div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+    {% elif programs %}
+        <div class="no-program">
+            <strong>📋 Aucun programme sélectionné</strong>
+            <p>Veuillez choisir un programme ci-dessus pour voir les détails.</p>
+        </div>
+    {% else %}
+        <div class="no-program">
+            <strong>📋 Aucun programme</strong>
+            <p>Vous n'avez pas encore de programme d'entraînement. Contactez votre coach pour en ajouter un.</p>
+        </div>
+    {% endif %}
 </div>
-{% else %}
-<div class="card">
-  <p class="text-muted">Aucun programme sélectionné.</p>
-</div>
-{% endif %}
 
 {% endblock %}
