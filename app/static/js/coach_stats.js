@@ -266,11 +266,11 @@ document.addEventListener('DOMContentLoaded', function(){
         tonnageBody.appendChild(tr);
       });
       
-      document.getElementById('summary-7days-loader').style.display = 'none';
+      document.getElementById('summary-7days-loader').classList.remove('show');
       document.getElementById('summary-7days-container').style.display = 'block';
     } catch (err) {
       console.error('Error loading summary:', err);
-      document.getElementById('summary-7days-loader').style.display = 'none';
+      document.getElementById('summary-7days-loader').classList.remove('show');
     }
   }
 
@@ -334,11 +334,11 @@ document.addEventListener('DOMContentLoaded', function(){
         tonnageBody.appendChild(tr);
       });
       
-      document.getElementById('summary-14days-loader').style.display = 'none';
+      document.getElementById('summary-14days-loader').classList.remove('show');
       document.getElementById('summary-14days-container').style.display = 'block';
     } catch (err) {
       console.error('Error loading summary-14days:', err);
-      document.getElementById('summary-14days-loader').style.display = 'none';
+      document.getElementById('summary-14days-loader').classList.remove('show');
     }
   }
 
@@ -402,11 +402,11 @@ document.addEventListener('DOMContentLoaded', function(){
         tonnageBody.appendChild(tr);
       });
       
-      document.getElementById('summary-28days-loader').style.display = 'none';
+      document.getElementById('summary-28days-loader').classList.remove('show');
       document.getElementById('summary-28days-container').style.display = 'block';
     } catch (err) {
       console.error('Error loading summary-28days:', err);
-      document.getElementById('summary-28days-loader').style.display = 'none';
+      document.getElementById('summary-28days-loader').classList.remove('show');
     }
   }
 
