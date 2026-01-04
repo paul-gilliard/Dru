@@ -1,7 +1,7 @@
 from flask import render_template, request, redirect, url_for, flash, session, abort, jsonify
 from werkzeug.routing import BuildError
 from app import db
-from app.models import User, JournalEntry, PerformanceEntry, ProgramSession, Availability, Program, ExerciseEntry, Exercise, Food, MUSCLE_GROUPS
+from app.models import User, JournalEntry, PerformanceEntry, ProgramSession, Availability, Program, ExerciseEntry, Exercise, Food, MealPlan, MealEntry, MUSCLE_GROUPS
 from datetime import date, datetime, timedelta
 
 def register_routes(app):
@@ -1170,6 +1170,238 @@ def register_routes(app):
         db.session.commit()
         flash(f'Aliment "{name}" supprimé')
         return redirect(url_for('coach_foods'))
+
+    # ===== PLANS ALIMENTAIRES (Meal Plan) ROUTES =====
+    
+    @app.route('/coach/meal-plans', methods=['GET', 'POST'])
+    def coach_meal_plans():
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            flash('Accès réservé aux coachs')
+            return redirect(url_for('home'))
+        
+        if request.method == 'POST':
+            try:
+                from app.models import MealPlan
+                athlete_id = request.form.get('athlete_id')
+                name = request.form.get('name', '').strip()
+                
+                if not athlete_id or not name:
+                    flash('Erreur: athlète et nom requis')
+                    return redirect(url_for('coach_meal_plans'))
+                
+                athlete = User.query.get(athlete_id)
+                if not athlete or athlete.role != 'athlete':
+                    flash('Athlète invalide')
+                    return redirect(url_for('coach_meal_plans'))
+                
+                # Check if name already exists for this athlete
+                existing = MealPlan.query.filter_by(athlete_id=athlete_id, name=name).first()
+                if existing:
+                    flash(f'Plan "{name}" existe déjà pour cet athlète')
+                    return redirect(url_for('coach_meal_plans'))
+                
+                meal_plan = MealPlan(
+                    name=name,
+                    athlete_id=athlete_id,
+                    coach_id=user.id
+                )
+                db.session.add(meal_plan)
+                db.session.commit()
+                flash(f'Plan alimentaire "{name}" créé')
+                return redirect(url_for('coach_meal_plan_edit', meal_plan_id=meal_plan.id))
+            except Exception as e:
+                flash(f'Erreur: {str(e)}')
+                return redirect(url_for('coach_meal_plans'))
+        
+        from app.models import MealPlan
+        # Get all athletes
+        athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
+        # Get all meal plans for this coach
+        meal_plans = MealPlan.query.filter_by(coach_id=user.id).order_by(MealPlan.updated_at.desc()).all()
+        
+        return render_template('coach_meal_plans.html', athletes=athletes, meal_plans=meal_plans)
+
+    @app.route('/coach/meal-plans/<int:meal_plan_id>/edit', methods=['GET', 'POST'])
+    def coach_meal_plan_edit(meal_plan_id):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            flash('Accès réservé aux coachs')
+            return redirect(url_for('home'))
+        
+        from app.models import MealPlan, MealEntry
+        meal_plan = MealPlan.query.get_or_404(meal_plan_id)
+        
+        if meal_plan.coach_id != user.id:
+            flash('Accès non autorisé')
+            return redirect(url_for('coach_meal_plans'))
+        
+        if request.method == 'POST':
+            try:
+                meal_plan.name = request.form.get('name', '').strip()
+                if not meal_plan.name:
+                    flash('Erreur: nom requis')
+                    return redirect(url_for('coach_meal_plan_edit', meal_plan_id=meal_plan_id))
+                
+                db.session.commit()
+                flash(f'Plan "{meal_plan.name}" mis à jour')
+                return redirect(url_for('coach_meal_plan_edit', meal_plan_id=meal_plan_id))
+            except Exception as e:
+                flash(f'Erreur: {str(e)}')
+                return redirect(url_for('coach_meal_plan_edit', meal_plan_id=meal_plan_id))
+        
+        from app.models import Food
+        foods = Food.query.order_by(Food.name).all()
+        
+        # Organize meals by meal_number
+        meals_by_number = {}
+        for i in range(1, 7):
+            meals_by_number[i] = sorted(
+                [m for m in meal_plan.meals if m.meal_number == i],
+                key=lambda x: x.position or 0
+            )
+        
+        daily_totals = meal_plan.get_daily_totals()
+        
+        return render_template('coach_meal_plan_edit.html', 
+                             meal_plan=meal_plan, 
+                             foods=foods,
+                             meals_by_number=meals_by_number,
+                             daily_totals=daily_totals)
+
+    @app.route('/coach/meal-plans/<int:meal_plan_id>/delete', methods=['POST'])
+    def coach_meal_plan_delete(meal_plan_id):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            flash('Accès réservé aux coachs')
+            return redirect(url_for('home'))
+        
+        from app.models import MealPlan
+        meal_plan = MealPlan.query.get_or_404(meal_plan_id)
+        
+        if meal_plan.coach_id != user.id:
+            flash('Accès non autorisé')
+            return redirect(url_for('coach_meal_plans'))
+        
+        name = meal_plan.name
+        db.session.delete(meal_plan)
+        db.session.commit()
+        flash(f'Plan "{name}" supprimé')
+        return redirect(url_for('coach_meal_plans'))
+
+    # API pour ajouter/modifier/supprimer des aliments dans un repas
+    @app.route('/api/meal-plans/<int:meal_plan_id>/meals/<int:meal_number>/add', methods=['POST'])
+    def api_meal_add_food(meal_plan_id, meal_number):
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            return jsonify({'error': 'forbidden'}), 403
+        
+        from app.models import MealPlan, MealEntry, Food
+        meal_plan = MealPlan.query.get_or_404(meal_plan_id)
+        
+        if meal_plan.coach_id != user.id:
+            return jsonify({'error': 'forbidden'}), 403
+        
+        try:
+            data = request.get_json()
+            food_id = data.get('food_id')
+            quantity = float(data.get('quantity', 100))
+            
+            if not food_id or quantity <= 0:
+                return jsonify({'error': 'invalid data'}), 400
+            
+            food = Food.query.get_or_404(food_id)
+            
+            # Get next position in this meal
+            max_position = db.session.query(db.func.max(MealEntry.position)).filter(
+                MealEntry.meal_plan_id == meal_plan_id,
+                MealEntry.meal_number == meal_number
+            ).scalar() or 0
+            
+            meal_entry = MealEntry(
+                meal_plan_id=meal_plan_id,
+                food_id=food_id,
+                meal_number=meal_number,
+                quantity=quantity,
+                position=max_position + 1
+            )
+            
+            db.session.add(meal_entry)
+            db.session.commit()
+            
+            return jsonify(meal_entry.to_dict()), 201
+        except Exception as e:
+            return jsonify({'error': str(e)}), 400
+
+    @app.route('/api/meal-entries/<int:entry_id>/update', methods=['POST'])
+    def api_meal_entry_update(entry_id):
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            return jsonify({'error': 'forbidden'}), 403
+        
+        from app.models import MealEntry
+        entry = MealEntry.query.get_or_404(entry_id)
+        
+        if entry.meal_plan.coach_id != user.id:
+            return jsonify({'error': 'forbidden'}), 403
+        
+        try:
+            data = request.get_json()
+            quantity = float(data.get('quantity', 100))
+            
+            if quantity <= 0:
+                return jsonify({'error': 'invalid quantity'}), 400
+            
+            entry.quantity = quantity
+            db.session.commit()
+            
+            return jsonify(entry.to_dict()), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 400
+
+    @app.route('/api/meal-entries/<int:entry_id>/delete', methods=['POST'])
+    def api_meal_entry_delete(entry_id):
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            return jsonify({'error': 'forbidden'}), 403
+        
+        from app.models import MealEntry
+        entry = MealEntry.query.get_or_404(entry_id)
+        
+        if entry.meal_plan.coach_id != user.id:
+            return jsonify({'error': 'forbidden'}), 403
+        
+        try:
+            db.session.delete(entry)
+            db.session.commit()
+            return jsonify({'success': True}), 200
+        except Exception as e:
+            return jsonify({'error': str(e)}), 400
+
+    @app.route('/api/meal-plans/<int:meal_plan_id>/totals', methods=['GET'])
+    def api_meal_plan_totals(meal_plan_id):
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        
+        from app.models import MealPlan
+        meal_plan = MealPlan.query.get_or_404(meal_plan_id)
+        
+        return jsonify(meal_plan.get_daily_totals()), 200
 
     @app.route('/seed-exercises')
     def seed_exercises_page():

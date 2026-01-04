@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block title %}Éditer Plan Alimentaire{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="mb-2">🍎 Éditer Plan Alimentaire</h1>
+            <p class="text-muted">Athlète: <strong>{{ meal_plan.athlete.username }}</strong></p>
+            
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-info alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Éditer le nom du plan -->
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">📝 Informations du plan</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" class="row g-3">
+                        <div class="col-md-6">
+                            <label for="name" class="form-label">Nom du plan</label>
+                            <input type="text" name="name" id="name" class="form-control" 
+                                   value="{{ meal_plan.name }}" required>
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-secondary">💾 Enregistrer</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Totaux quotidiens -->
+            <div class="card mb-4 bg-light">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0">📊 Totaux Quotidiens</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <h6>Calories</h6>
+                            <h3 class="text-primary">{{ "%.0f"|format(daily_totals.kcals) }} <small>kcal</small></h3>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>Protéines</h6>
+                            <h3 class="text-danger">{{ "%.1f"|format(daily_totals.proteins) }} <small>g</small></h3>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>Lipides</h6>
+                            <h3 class="text-warning">{{ "%.1f"|format(daily_totals.lipids) }} <small>g</small></h3>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>Glucides</h6>
+                            <h3 class="text-info">{{ "%.1f"|format(daily_totals.carbs) }} <small>g</small></h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Repas 1-6 -->
+            {% for meal_num in range(1, 7) %}
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">🍽️ Repas {{ meal_num }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <!-- Ajouter un aliment -->
+                        <div class="mb-4">
+                            <div class="input-group">
+                                <select id="food_select_{{ meal_num }}" class="form-select" placeholder="Sélectionner un aliment">
+                                    <option value="">-- Ajouter un aliment --</option>
+                                    {% for food in foods %}
+                                        <option value="{{ food.id }}" data-kcal="{{ food.kcal }}" 
+                                                data-proteins="{{ food.proteins or 0 }}" 
+                                                data-lipids="{{ food.lipids or 0 }}" 
+                                                data-carbs="{{ food.carbs or 0 }}">
+                                            {{ food.name }} ({{ food.kcal }} kcal)
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                                <input type="number" id="quantity_{{ meal_num }}" class="form-control" 
+                                       placeholder="Quantité (g)" value="100" min="1" step="10">
+                                <button class="btn btn-success" type="button"
+                                        onclick="addFoodToMeal({{ meal_plan.id }}, {{ meal_num }})">
+                                    ➕ Ajouter
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Liste des aliments dans ce repas -->
+                        <div id="meal_{{ meal_num }}_list">
+                            {% if meals_by_number[meal_num] %}
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Aliment</th>
+                                            <th>Quantité</th>
+                                            <th>Kcal</th>
+                                            <th>Protéines</th>
+                                            <th>Lipides</th>
+                                            <th>Glucides</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% for entry in meals_by_number[meal_num] %}
+                                            <tr id="entry_{{ entry.id }}">
+                                                <td>{{ entry.food.name }}</td>
+                                                <td>
+                                                    <input type="number" class="form-control form-control-sm" 
+                                                           value="{{ entry.quantity }}" min="1" step="10"
+                                                           onchange="updateMealEntry({{ entry.id }}, this.value)">
+                                                </td>
+                                                {% set data = entry.to_dict() %}
+                                                <td>{{ "%.0f"|format(data.kcals) }} kcal</td>
+                                                <td>{{ "%.1f"|format(data.proteins) }}g</td>
+                                                <td>{{ "%.1f"|format(data.lipids) }}g</td>
+                                                <td>{{ "%.1f"|format(data.carbs) }}g</td>
+                                                <td>
+                                                    <button class="btn btn-sm btn-danger" 
+                                                            onclick="deleteMealEntry({{ entry.id }})">
+                                                        🗑️
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            {% else %}
+                                <div class="alert alert-info mb-0">
+                                    Aucun aliment dans ce repas
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<script>
+async function addFoodToMeal(mealPlanId, mealNumber) {
+    const selectElement = document.getElementById(`food_select_${mealNumber}`);
+    const quantityElement = document.getElementById(`quantity_${mealNumber}`);
+    
+    const foodId = selectElement.value;
+    const quantity = parseFloat(quantityElement.value) || 100;
+    
+    if (!foodId) {
+        alert('Sélectionner un aliment');
+        return;
+    }
+    
+    if (quantity <= 0) {
+        alert('Quantité invalide');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/meal-plans/${mealPlanId}/meals/${mealNumber}/add`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                food_id: foodId,
+                quantity: quantity
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            alert('Erreur: ' + error.error);
+            return;
+        }
+        
+        // Réinitialiser et recharger
+        selectElement.value = '';
+        quantityElement.value = '100';
+        location.reload();
+    } catch (error) {
+        alert('Erreur: ' + error.message);
+    }
+}
+
+async function updateMealEntry(entryId, quantity) {
+    try {
+        const response = await fetch(`/api/meal-entries/${entryId}/update`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                quantity: parseFloat(quantity)
+            })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            alert('Erreur: ' + error.error);
+            return;
+        }
+        
+        // Recharger pour mettre à jour les totaux
+        location.reload();
+    } catch (error) {
+        alert('Erreur: ' + error.message);
+    }
+}
+
+async function deleteMealEntry(entryId) {
+    if (!confirm('Supprimer cet aliment ?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/meal-entries/${entryId}/delete`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            alert('Erreur: ' + error.error);
+            return;
+        }
+        
+        // Recharger pour mettre à jour les totaux
+        location.reload();
+    } catch (error) {
+        alert('Erreur: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

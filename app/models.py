@@ -230,3 +230,73 @@ class Food(db.Model):
             'fiber': self.fiber,
             'salt': self.salt
         }
+
+
+class MealPlan(db.Model):
+    """Plan alimentaire pour un athlète"""
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(128), nullable=False)
+    athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    coach_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+
+    athlete = db.relationship('User', foreign_keys=[athlete_id], backref='meal_plans_as_athlete')
+    coach = db.relationship('User', foreign_keys=[coach_id], backref='meal_plans_as_coach')
+    meals = db.relationship('MealEntry', backref='meal_plan', cascade='all, delete-orphan', order_by='MealEntry.meal_number')
+
+    def __repr__(self):
+        return f'<MealPlan {self.name} for {self.athlete_id}>'
+    
+    def get_daily_totals(self):
+        """Calcule les totaux journaliers"""
+        totals = {
+            'kcals': 0,
+            'proteins': 0,
+            'lipids': 0,
+            'carbs': 0
+        }
+        
+        for meal in self.meals:
+            if meal.food:
+                quantity_factor = (meal.quantity or 100) / 100.0
+                totals['kcals'] += (meal.food.kcal or 0) * quantity_factor
+                totals['proteins'] += (meal.food.proteins or 0) * quantity_factor
+                totals['lipids'] += (meal.food.lipids or 0) * quantity_factor
+                totals['carbs'] += (meal.food.carbs or 0) * quantity_factor
+        
+        return totals
+
+
+class MealEntry(db.Model):
+    """Entrée aliment dans un plan alimentaire"""
+    id = db.Column(db.Integer, primary_key=True)
+    meal_plan_id = db.Column(db.Integer, db.ForeignKey('meal_plan.id'), nullable=False)
+    food_id = db.Column(db.Integer, db.ForeignKey('food.id'), nullable=False)
+    meal_number = db.Column(db.Integer, nullable=False)  # 1-6 pour Repas 1-6
+    quantity = db.Column(db.Float, default=100)  # en grammes
+    position = db.Column(db.Integer, default=0)  # ordre dans le repas
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    food = db.relationship('Food', backref='meal_entries')
+
+    __table_args__ = (
+        db.UniqueConstraint('meal_plan_id', 'food_id', 'meal_number', 'position', name='uq_meal_entry'),
+    )
+
+    def __repr__(self):
+        return f'<MealEntry {self.food.name} ({self.quantity}g) Meal {self.meal_number}>'
+    
+    def to_dict(self):
+        quantity_factor = (self.quantity or 100) / 100.0
+        return {
+            'id': self.id,
+            'food_id': self.food_id,
+            'food_name': self.food.name if self.food else '',
+            'meal_number': self.meal_number,
+            'quantity': self.quantity,
+            'kcals': (self.food.kcal or 0) * quantity_factor if self.food else 0,
+            'proteins': (self.food.proteins or 0) * quantity_factor if self.food else 0,
+            'lipids': (self.food.lipids or 0) * quantity_factor if self.food else 0,
+            'carbs': (self.food.carbs or 0) * quantity_factor if self.food else 0
+        }

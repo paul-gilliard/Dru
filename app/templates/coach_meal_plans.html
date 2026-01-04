@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Plans Alimentaires{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h1 class="mb-4">🍎 Plans Alimentaires</h1>
+            
+            {% with messages = get_flashed_messages() %}
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-info alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+
+            <!-- Créer un nouveau plan -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">➕ Créer un nouveau plan</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" class="row g-3">
+                        <div class="col-md-6">
+                            <label for="athlete_id" class="form-label">Athlète</label>
+                            <select name="athlete_id" id="athlete_id" class="form-control" required>
+                                <option value="">-- Sélectionner un athlète --</option>
+                                {% for athlete in athletes %}
+                                    <option value="{{ athlete.id }}">{{ athlete.username }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="name" class="form-label">Nom du plan</label>
+                            <input type="text" name="name" id="name" class="form-control" placeholder="ex: Cutting Phase" required>
+                        </div>
+                        <div class="col-12">
+                            <button type="submit" class="btn btn-primary">Créer</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Liste des plans -->
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">📋 Plans existants</h5>
+                </div>
+                <div class="card-body">
+                    {% if meal_plans %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Athlète</th>
+                                        <th>Nom</th>
+                                        <th>Repas</th>
+                                        <th>Kcals</th>
+                                        <th>Protéines</th>
+                                        <th>Lipides</th>
+                                        <th>Glucides</th>
+                                        <th>Modifié</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for plan in meal_plans %}
+                                        {% set totals = plan.get_daily_totals() %}
+                                        <tr>
+                                            <td>
+                                                <strong>{{ plan.athlete.username }}</strong>
+                                            </td>
+                                            <td>{{ plan.name }}</td>
+                                            <td>{{ plan.meals|length }} aliment(s)</td>
+                                            <td>{{ "%.0f"|format(totals.kcals) }} kcal</td>
+                                            <td>{{ "%.1f"|format(totals.proteins) }}g</td>
+                                            <td>{{ "%.1f"|format(totals.lipids) }}g</td>
+                                            <td>{{ "%.1f"|format(totals.carbs) }}g</td>
+                                            <td>
+                                                <small class="text-muted">
+                                                    {{ plan.updated_at.strftime('%d/%m/%Y %H:%M') }}
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <a href="{{ url_for('coach_meal_plan_edit', meal_plan_id=plan.id) }}" 
+                                                   class="btn btn-sm btn-info">✏️ Éditer</a>
+                                                <form method="POST" 
+                                                      action="{{ url_for('coach_meal_plan_delete', meal_plan_id=plan.id) }}" 
+                                                      style="display:inline;">
+                                                    <button type="submit" class="btn btn-sm btn-danger" 
+                                                            onclick="return confirm('Supprimer ce plan ?')">🗑️ Supprimer</button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            Aucun plan alimentaire créé. Créez-en un ci-dessus !
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
