@@ -239,7 +239,7 @@ class MealPlan(db.Model):
     athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     coach_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     athlete = db.relationship('User', foreign_keys=[athlete_id], backref='meal_plans_as_athlete')
     coach = db.relationship('User', foreign_keys=[coach_id], backref='meal_plans_as_coach')

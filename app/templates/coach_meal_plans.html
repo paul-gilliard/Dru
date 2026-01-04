@@ -83,7 +83,11 @@
                                             <td>{{ "%.1f"|format(totals.carbs) }}g</td>
                                             <td>
                                                 <small class="text-muted">
-                                                    {{ plan.updated_at.strftime('%d/%m/%Y %H:%M') }}
+                                                    {% if plan.updated_at %}
+                                                        {{ plan.updated_at.strftime('%d/%m/%Y %H:%M') }}
+                                                    {% else %}
+                                                        -
+                                                    {% endif %}
                                                 </small>
                                             </td>
                                             <td>
