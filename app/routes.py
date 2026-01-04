@@ -1237,16 +1237,18 @@ def register_routes(app):
         if program.athlete_id != athlete_id:
             return jsonify({'error':'forbidden'}), 403
         
-        # Get all exercises in this program
+        # Get all session IDs and exercise names in this program
+        program_session_ids = set()
         program_exercises = set()
         for prog_session in program.sessions:
+            program_session_ids.add(prog_session.id)
             for ex_entry in prog_session.exercises:
                 program_exercises.add(ex_entry.name)
         
-        # Get performance entries only for exercises in this program
+        # Get performance entries only for exercises in this program AND linked to this program's sessions
         entries = PerformanceEntry.query.filter(
             PerformanceEntry.athlete_id==athlete_id,
-            PerformanceEntry.exercise.in_(list(program_exercises)) if program_exercises else False
+            PerformanceEntry.program_session_id.in_(list(program_session_ids))
         ).order_by(PerformanceEntry.entry_date.asc()).all()
         
         payload = {}
@@ -1421,16 +1423,18 @@ def register_routes(app):
             if program.athlete_id != athlete_id:
                 return jsonify({'error':'forbidden'}), 403
             
-            # Get all exercises in this program
+            # Get all session IDs and exercise names in this program
+            program_session_ids = set()
             program_exercises = set()
             for prog_session in program.sessions:
+                program_session_ids.add(prog_session.id)
                 for ex_entry in prog_session.exercises:
                     program_exercises.add(ex_entry.name)
             
-            # Get performance entries only for exercises in this program
+            # Get performance entries only for exercises in this program AND linked to this program's sessions
             entries = PerformanceEntry.query.filter(
                 PerformanceEntry.athlete_id==athlete_id,
-                PerformanceEntry.exercise.in_(list(program_exercises)) if program_exercises else False
+                PerformanceEntry.program_session_id.in_(list(program_session_ids))
             ).order_by(PerformanceEntry.entry_date.asc()).all()
             
             # Group by muscle_group and date

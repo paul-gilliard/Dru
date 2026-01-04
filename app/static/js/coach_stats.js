@@ -741,10 +741,7 @@ document.addEventListener('DOMContentLoaded', function(){
     
     selectedProgramId = programId;
     
-    // Load performance data first
-    await loadPerformance(athleteId);
-    
-    // Load exercises for this program
+    // Load exercises for this program FIRST
     try {
       const res = await fetch(`/api/program/${programId}/exercises`);
       if (!res.ok) {
@@ -759,18 +756,17 @@ document.addEventListener('DOMContentLoaded', function(){
         programExercises[ex.name] = ex.muscle;
       });
       
-      // Filter perfCache to only include exercises from this program
+      // THEN load performance data (which will now use the program-specific endpoint)
+      await loadPerformance(athleteId);
+      
+      // Load tonnage too
+      await loadTonnage(athleteId);
+      
+      // The backend already filters the data, so we just need to populate the select dropdowns
+      // Update exercise select with exercises from this program (already in perfCache)
       if (perfCache) {
-        const filteredPerfCache = {};
-        Object.keys(perfCache).forEach(exName => {
-          if (programExercises[exName] !== undefined) {
-            filteredPerfCache[exName] = perfCache[exName];
-          }
-        });
-        
-        // Update exercise select with filtered list
         exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
-        Object.keys(filteredPerfCache).sort().forEach(ex => {
+        Object.keys(perfCache).sort().forEach(ex => {
           const opt = document.createElement('option');
           opt.value = ex;
           opt.textContent = ex;
@@ -778,22 +774,18 @@ document.addEventListener('DOMContentLoaded', function(){
         });
       }
       
-      // Filter tonnage by program exercises' muscle groups
-      if (tonnageCache) {
-        const programMuscles = new Set();
-        Object.values(programExercises).forEach(muscle => {
-          if (muscle) programMuscles.add(muscle);
-        });
-        
-        // Update muscle select with only muscles from this program
-        muscleSelect.innerHTML = '<option value="">— choisir un groupe musculaire —</option>';
-        Array.from(programMuscles).sort().forEach(muscle => {
-          const opt = document.createElement('option');
-          opt.value = muscle;
-          opt.textContent = muscle;
-          muscleSelect.appendChild(opt);
-        });
-      }
+      // Update muscle select with only muscles from program exercises
+      muscleSelect.innerHTML = '<option value="">— choisir un groupe musculaire —</option>';
+      const programMuscles = new Set();
+      Object.values(programExercises).forEach(muscle => {
+        if (muscle) programMuscles.add(muscle);
+      });
+      Array.from(programMuscles).sort().forEach(muscle => {
+        const opt = document.createElement('option');
+        opt.value = muscle;
+        opt.textContent = muscle;
+        muscleSelect.appendChild(opt);
+      });
     } catch (err) {
       console.error('Error loading program exercises:', err);
     }
