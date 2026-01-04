@@ -173,6 +173,11 @@
         box-shadow: 0 8px 25px rgba(0,0,0,0.12);
     }
 
+    .entry-card:hover .entry-date,
+    .entry-card:hover .stat-item {
+        color: #333 !important;
+    }
+
     .entry-date {
         font-size: 1.2em;
         font-weight: 700;
@@ -638,118 +643,4 @@
     // Initialiser la date par défaut à aujourd'hui
     document.getElementById('add-entry-date').valueAsDate = new Date();
 </script>
-<h2>Journal — {{ athlete.username }}</h2>
-
-<div class="card">
-  <h3>Nouvelle entrée</h3>
-  <form id="journal-add-form" method="post" action="{{ url_for('athlete_journal') }}">
-    <div class="grid-compact">
-      <div><label>Date</label><input id="add-entry-date" type="date" name="entry_date" required></div>
-
-      <div><label>Poids (kg)</label><input name="weight" type="number" step="0.1" inputmode="decimal"></div>
-      <div><label>Eau (ml)</label><input name="water_ml" type="number" step="0.1" inputmode="decimal"></div>
-      <div><label>Sommeil (h)</label><input name="sleep_hours" type="number" step="0.1" inputmode="decimal"></div>
-
-      <div><label>Protéines (g)</label><input name="protein" type="number" step="1" inputmode="numeric"></div>
-      <div><label>Glucides (g)</label><input name="carbs" type="number" step="1" inputmode="numeric"></div>
-      <div><label>Lipides (g)</label><input name="fats" type="number" step="1" inputmode="numeric"></div>
-      <div><label>Kcals</label><input name="kcals" type="number" step="1" inputmode="numeric"></div>
-      <div><label>Pas</label><input name="steps" type="number" step="1" inputmode="numeric"></div>
-
-      <div><label>Digestion</label><input name="digestion" type="text"></div>
-
-      <div><label>Énergie (0-10)</label><input name="energy" type="number" min="0" max="10" step="1"></div>
-      <div><label>Stress (0-10)</label><input name="stress" type="number" min="0" max="10" step="1"></div>
-      <div><label>Sensation faim (0-10)</label><input name="hunger" type="number" min="0" max="10" step="1"></div>
-
-      <div><label>Qualité aliments</label><input name="food_quality" type="text"></div>
-
-      <div>
-        <label>Cycle menstruel</label>
-        <select name="menstrual_cycle">
-          <option value="">—</option>
-          <option>SPM</option>
-          <option>phase menstruelle</option>
-          <option>en paix</option>
-        </select>
-      </div>
-    </div>
-
-    <div style="margin-top:12px;">
-      <button type="submit" class="save-program-btn">Enregistrer entrée</button>
-    </div>
-  </form>
-</div>
-
-{# --- AJOUT : liste des entrées existantes (décroissant) --- #}
-<div class="card">
-  <h3>Entrées enregistrées</h3>
-  {% if entries %}
-  <table class="responsive-table">
-    <thead>
-      <tr><th>Date</th><th>Poids (kg)</th><th>Kcals</th><th class="center">Actions</th></tr>
-    </thead>
-    <tbody>
-      {% for e in entries %}
-      <tr>
-        <td>{{ e.entry_date.strftime('%Y-%m-%d') }}</td>
-        <td class="center">{{ e.weight if e.weight is not none else '' }}</td>
-        <td class="center">{{ e.kcals if e.kcals is not none else '' }}</td>
-        <td class="center">
-          <button type="button" class="edit-entry-btn" data-entry-id="{{ e.id }}">Éditer</button>
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}
-    <p class="text-muted">Aucune entrée pour le moment.</p>
-  {% endif %}
-</div>
-
-<!-- edit modal kept but inputs types adjusted (snippet shows relevant fields) -->
-<div id="journal-edit-modal" class="confirm-modal" aria-hidden="true">
-  <div class="confirm-modal-backdrop"></div>
-  <div class="confirm-modal-panel" role="document">
-    <div class="confirm-modal-body">
-      <h3>Modifier entrée</h3>
-      <form id="journal-edit-form" method="post" action="">
-        <input type="hidden" name="entry_id" id="edit-entry-id">
-        <div class="grid-compact">
-          <div><label>Date</label><input id="edit-entry-date" name="entry_date" type="date" required></div>
-
-          <div><label>Poids (kg)</label><input id="edit-weight" name="weight" type="number" step="0.1"></div>
-          <div><label>Eau (ml)</label><input id="edit-water" name="water_ml" type="number" step="0.1"></div>
-          <div><label>Sommeil (h)</label><input id="edit-sleep" name="sleep_hours" type="number" step="0.1"></div>
-
-          <div><label>Protéines (g)</label><input id="edit-protein" name="protein" type="number" step="1"></div>
-          <div><label>Glucides (g)</label><input id="edit-carbs" name="carbs" type="number" step="1"></div>
-          <div><label>Lipides (g)</label><input id="edit-fats" name="fats" type="number" step="1"></div>
-          <div><label>Kcals</label><input id="edit-kcals" name="kcals" type="number" step="1"></div>
-          <div><label>Pas</label><input id="edit-steps" name="steps" type="number" step="1"></div>
-
-          <div><label>Digestion</label><input id="edit-digestion" name="digestion" type="text"></div>
-
-          <div><label>Énergie (0-10)</label><input id="edit-energy" name="energy" type="number" min="0" max="10" step="1"></div>
-          <div><label>Stress (0-10)</label><input id="edit-stress" name="stress" type="number" min="0" max="10" step="1"></div>
-          <div><label>Sensation faim (0-10)</label><input id="edit-hunger" name="hunger" type="number" min="0" max="10" step="1"></div>
-
-          <div><label>Qualité aliments</label><input id="edit-food-quality" name="food_quality" type="text"></div>
-
-          <div>
-            <label>Cycle menstruel</label>
-            <select id="edit-cycle" name="menstrual_cycle">
-              <option value="">—</option>
-              <option>SPM</option>
-              <option>phase menstruelle</option>
-              <option>en paix</option>
-            </select>
-          </div>
-        </div>
-
-        <div style="margin-top:12px; display:flex; gap:8px; justify-content:flex-end;">
-          <button id="edit-save-btn" type="submit" class="save-program-btn">Enregistrer</button>
-          <button type="button" id="edit-cancel-btn" class="confirm-no">Annuler</button>
-        </div>
-      </form>
 {% endblock %}
