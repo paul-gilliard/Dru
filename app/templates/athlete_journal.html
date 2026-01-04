@@ -1,6 +1,643 @@
 {% extends 'base.html' %}
-{% block title %}Journal — {{ athlete.username }}{% endblock %}
+
+{% block title %}Mon Journal - Dru{% endblock %}
+
 {% block content %}
+<style>
+    .journal-container {
+        max-width: 900px;
+        margin: 20px auto;
+        padding: 0 20px;
+    }
+
+    .journal-header {
+        text-align: center;
+        margin-bottom: 30px;
+    }
+
+    .journal-header h1 {
+        font-size: 2em;
+        margin: 20px 0 10px 0;
+        color: #333;
+    }
+
+    .tab-buttons {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 25px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .tab-btn {
+        padding: 12px 24px;
+        border: 2px solid #ddd;
+        background: white;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        font-size: 1em;
+        transition: all 0.3s ease;
+    }
+
+    .tab-btn:hover {
+        border-color: #667eea;
+        color: #667eea;
+    }
+
+    .tab-btn.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-color: #667eea;
+    }
+
+    .tab-content {
+        display: none;
+    }
+
+    .tab-content.active {
+        display: block;
+    }
+
+    .form-card {
+        background: white;
+        border-radius: 15px;
+        padding: 25px;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+        margin-bottom: 25px;
+    }
+
+    .form-card h2 {
+        margin-top: 0;
+        margin-bottom: 20px;
+        color: #333;
+        font-size: 1.3em;
+    }
+
+    .form-sections {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 25px;
+    }
+
+    .form-section {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 4px solid #667eea;
+    }
+
+    .form-section h3 {
+        margin: 0 0 15px 0;
+        font-size: 0.95em;
+        color: #667eea;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group:last-child {
+        margin-bottom: 0;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+        font-size: 0.95em;
+        color: #333;
+    }
+
+    .form-group input,
+    .form-group select {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+        font-size: 1em;
+        font-family: inherit;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 25px;
+    }
+
+    .btn-submit {
+        flex: 1;
+        padding: 14px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        font-size: 1em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .btn-submit:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    .entries-list {
+        display: grid;
+        gap: 15px;
+    }
+
+    .entry-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        border-left: 5px solid #667eea;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .entry-card:hover {
+        transform: translateX(5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+    }
+
+    .entry-date {
+        font-size: 1.2em;
+        font-weight: 700;
+        color: #333;
+        margin-bottom: 12px;
+    }
+
+    .entry-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+        gap: 12px;
+    }
+
+    .stat-item {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 8px;
+        text-align: center;
+    }
+
+    .stat-label {
+        font-size: 0.8em;
+        color: #666;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .stat-value {
+        font-size: 1.3em;
+        color: #667eea;
+        font-weight: 700;
+        margin-top: 4px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px 20px;
+        color: #999;
+    }
+
+    .empty-state-icon {
+        font-size: 3em;
+        margin-bottom: 15px;
+    }
+
+    @media (max-width: 768px) {
+        .journal-container {
+            padding: 0 15px;
+        }
+
+        .form-sections {
+            grid-template-columns: 1fr;
+        }
+
+        .tab-buttons {
+            gap: 8px;
+        }
+
+        .tab-btn {
+            padding: 10px 16px;
+            font-size: 0.9em;
+        }
+
+        .journal-header h1 {
+            font-size: 1.5em;
+        }
+    }
+
+    /* Modal pour édition */
+    .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5);
+    }
+
+    .modal.active {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .modal-content {
+        background: white;
+        border-radius: 15px;
+        padding: 30px;
+        max-width: 600px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+
+    .modal-content h2 {
+        margin-top: 0;
+        margin-bottom: 20px;
+        color: #333;
+    }
+
+    .modal-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 25px;
+    }
+
+    .btn-cancel {
+        flex: 1;
+        padding: 12px;
+        background: #f0f0f0;
+        color: #333;
+        border: none;
+        border-radius: 8px;
+        font-size: 1em;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+
+    .btn-cancel:hover {
+        background: #e0e0e0;
+    }
+</style>
+
+<div class="journal-container">
+    <div class="journal-header">
+        <h1>📔 Mon Journal</h1>
+        <p>Suivi quotidien de votre alimentation et bien-être</p>
+    </div>
+
+    <!-- Onglets -->
+    <div class="tab-buttons">
+        <button class="tab-btn active" onclick="switchTab('new-entry')">➕ Nouvelle Entrée</button>
+        <button class="tab-btn" onclick="switchTab('my-entries')">📊 Mes Entrées</button>
+    </div>
+
+    <!-- Onglet: Nouvelle Entrée -->
+    <div id="new-entry" class="tab-content active">
+        <div class="form-card">
+            <h2>Enregistrer une nouvelle entrée</h2>
+            <form id="journal-add-form" method="post" action="{{ url_for('athlete_journal') }}">
+                
+                <!-- Section 1: Mesures Physiques -->
+                <div class="form-sections">
+                    <div class="form-section">
+                        <h3>📏 Mesures Physiques</h3>
+                        <div class="form-group">
+                            <label>Date *</label>
+                            <input id="add-entry-date" type="date" name="entry_date" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Poids (kg)</label>
+                            <input name="weight" type="number" step="0.1" inputmode="decimal" placeholder="ex: 75.5">
+                        </div>
+                        <div class="form-group">
+                            <label>Pas</label>
+                            <input name="steps" type="number" step="1" inputmode="numeric" placeholder="ex: 10000">
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Hydratation & Sommeil -->
+                    <div class="form-section">
+                        <h3>💧 Hydratation & Sommeil</h3>
+                        <div class="form-group">
+                            <label>Eau (ml)</label>
+                            <input name="water_ml" type="number" step="0.1" inputmode="decimal" placeholder="ex: 2000">
+                        </div>
+                        <div class="form-group">
+                            <label>Sommeil (h)</label>
+                            <input name="sleep_hours" type="number" step="0.1" inputmode="decimal" placeholder="ex: 8.5">
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Nutrition -->
+                    <div class="form-section">
+                        <h3>🍽️ Nutrition</h3>
+                        <div class="form-group">
+                            <label>Kcals</label>
+                            <input name="kcals" type="number" step="1" inputmode="numeric" placeholder="ex: 2500">
+                        </div>
+                        <div class="form-group">
+                            <label>Protéines (g)</label>
+                            <input name="protein" type="number" step="1" inputmode="numeric" placeholder="ex: 150">
+                        </div>
+                        <div class="form-group">
+                            <label>Glucides (g)</label>
+                            <input name="carbs" type="number" step="1" inputmode="numeric" placeholder="ex: 300">
+                        </div>
+                        <div class="form-group">
+                            <label>Lipides (g)</label>
+                            <input name="fats" type="number" step="1" inputmode="numeric" placeholder="ex: 80">
+                        </div>
+                    </div>
+
+                    <!-- Section 4: Qualité & Digestion -->
+                    <div class="form-section">
+                        <h3>⭐ Qualité & Digestion</h3>
+                        <div class="form-group">
+                            <label>Qualité aliments</label>
+                            <input name="food_quality" type="text" placeholder="ex: Très bonne">
+                        </div>
+                        <div class="form-group">
+                            <label>Digestion</label>
+                            <input name="digestion" type="text" placeholder="ex: Facile">
+                        </div>
+                    </div>
+
+                    <!-- Section 5: Ressenti -->
+                    <div class="form-section">
+                        <h3>💭 Ressenti</h3>
+                        <div class="form-group">
+                            <label>Énergie (0-10)</label>
+                            <input name="energy" type="number" min="0" max="10" step="1" placeholder="ex: 8">
+                        </div>
+                        <div class="form-group">
+                            <label>Stress (0-10)</label>
+                            <input name="stress" type="number" min="0" max="10" step="1" placeholder="ex: 3">
+                        </div>
+                        <div class="form-group">
+                            <label>Sensation faim (0-10)</label>
+                            <input name="hunger" type="number" min="0" max="10" step="1" placeholder="ex: 5">
+                        </div>
+                    </div>
+
+                    <!-- Section 6: Cycle Menstruel -->
+                    <div class="form-section">
+                        <h3>🔄 Cycle Menstruel</h3>
+                        <div class="form-group">
+                            <label>Phase</label>
+                            <select name="menstrual_cycle">
+                                <option value="">— Sélectionner une phase —</option>
+                                <option>SPM</option>
+                                <option>phase menstruelle</option>
+                                <option>en paix</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn-submit">✅ Enregistrer l'entrée</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Onglet: Mes Entrées -->
+    <div id="my-entries" class="tab-content">
+        <div class="form-card">
+            <h2>Mes entrées enregistrées</h2>
+            {% if entries %}
+            <div class="entries-list">
+                {% for e in entries %}
+                <div class="entry-card" onclick="openEditModal({{ e.id }})">
+                    <div class="entry-date">{{ e.entry_date.strftime('%d %B %Y') }}</div>
+                    <div class="entry-stats">
+                        {% if e.weight %}
+                        <div class="stat-item">
+                            <div class="stat-label">Poids</div>
+                            <div class="stat-value">{{ "%.1f"|format(e.weight) }} kg</div>
+                        </div>
+                        {% endif %}
+                        {% if e.kcals %}
+                        <div class="stat-item">
+                            <div class="stat-label">Kcals</div>
+                            <div class="stat-value">{{ e.kcals }}</div>
+                        </div>
+                        {% endif %}
+                        {% if e.water_ml %}
+                        <div class="stat-item">
+                            <div class="stat-label">Eau</div>
+                            <div class="stat-value">{{ e.water_ml | int }} ml</div>
+                        </div>
+                        {% endif %}
+                        {% if e.sleep_hours %}
+                        <div class="stat-item">
+                            <div class="stat-label">Sommeil</div>
+                            <div class="stat-value">{{ "%.1f"|format(e.sleep_hours) }} h</div>
+                        </div>
+                        {% endif %}
+                        {% if e.energy %}
+                        <div class="stat-item">
+                            <div class="stat-label">Énergie</div>
+                            <div class="stat-value">{{ e.energy }}/10</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">
+                <div class="empty-state-icon">📝</div>
+                <p><strong>Aucune entrée pour le moment</strong></p>
+                <p>Cliquez sur "Nouvelle Entrée" pour commencer à enregistrer vos données</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal d'édition -->
+<div id="edit-modal" class="modal">
+    <div class="modal-content">
+        <h2>Modifier l'entrée</h2>
+        <form id="journal-edit-form" method="post" action="">
+            <input type="hidden" name="entry_id" id="edit-entry-id">
+            <div class="form-sections">
+                <div class="form-section">
+                    <h3>📏 Mesures Physiques</h3>
+                    <div class="form-group">
+                        <label>Date *</label>
+                        <input id="edit-entry-date" name="entry_date" type="date" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Poids (kg)</label>
+                        <input id="edit-weight" name="weight" type="number" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Pas</label>
+                        <input id="edit-steps" name="steps" type="number" step="1">
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>💧 Hydratation & Sommeil</h3>
+                    <div class="form-group">
+                        <label>Eau (ml)</label>
+                        <input id="edit-water" name="water_ml" type="number" step="0.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Sommeil (h)</label>
+                        <input id="edit-sleep" name="sleep_hours" type="number" step="0.1">
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>🍽️ Nutrition</h3>
+                    <div class="form-group">
+                        <label>Kcals</label>
+                        <input id="edit-kcals" name="kcals" type="number" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Protéines (g)</label>
+                        <input id="edit-protein" name="protein" type="number" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Glucides (g)</label>
+                        <input id="edit-carbs" name="carbs" type="number" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Lipides (g)</label>
+                        <input id="edit-fats" name="fats" type="number" step="1">
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>⭐ Qualité & Digestion</h3>
+                    <div class="form-group">
+                        <label>Qualité aliments</label>
+                        <input id="edit-food-quality" name="food_quality" type="text">
+                    </div>
+                    <div class="form-group">
+                        <label>Digestion</label>
+                        <input id="edit-digestion" name="digestion" type="text">
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>💭 Ressenti</h3>
+                    <div class="form-group">
+                        <label>Énergie (0-10)</label>
+                        <input id="edit-energy" name="energy" type="number" min="0" max="10" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Stress (0-10)</label>
+                        <input id="edit-stress" name="stress" type="number" min="0" max="10" step="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Sensation faim (0-10)</label>
+                        <input id="edit-hunger" name="hunger" type="number" min="0" max="10" step="1">
+                    </div>
+                </div>
+
+                <div class="form-section">
+                    <h3>🔄 Cycle Menstruel</h3>
+                    <div class="form-group">
+                        <label>Phase</label>
+                        <select id="edit-cycle" name="menstrual_cycle">
+                            <option value="">— Sélectionner une phase —</option>
+                            <option>SPM</option>
+                            <option>phase menstruelle</option>
+                            <option>en paix</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button type="submit" class="btn-submit">💾 Enregistrer</button>
+                <button type="button" class="btn-cancel" onclick="closeEditModal()">Annuler</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    window.JOURNAL_ENTRIES = {{ entries_json|tojson }};
+
+    function switchTab(tabName) {
+        // Masquer tous les onglets
+        document.querySelectorAll('.tab-content').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        // Désactiver tous les boutons
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        // Afficher l'onglet sélectionné
+        document.getElementById(tabName).classList.add('active');
+        // Activer le bouton correspondant
+        event.target.classList.add('active');
+    }
+
+    function openEditModal(entryId) {
+        const entry = window.JOURNAL_ENTRIES.find(e => e.id === entryId);
+        if (!entry) return;
+
+        document.getElementById('edit-entry-id').value = entryId;
+        document.getElementById('edit-entry-date').value = entry.entry_date;
+        document.getElementById('edit-weight').value = entry.weight || '';
+        document.getElementById('edit-water').value = entry.water_ml || '';
+        document.getElementById('edit-sleep').value = entry.sleep_hours || '';
+        document.getElementById('edit-protein').value = entry.protein || '';
+        document.getElementById('edit-carbs').value = entry.carbs || '';
+        document.getElementById('edit-fats').value = entry.fats || '';
+        document.getElementById('edit-kcals').value = entry.kcals || '';
+        document.getElementById('edit-steps').value = entry.steps || '';
+        document.getElementById('edit-digestion').value = entry.digestion || '';
+        document.getElementById('edit-energy').value = entry.energy || '';
+        document.getElementById('edit-stress').value = entry.stress || '';
+        document.getElementById('edit-hunger').value = entry.hunger || '';
+        document.getElementById('edit-food-quality').value = entry.food_quality || '';
+        document.getElementById('edit-cycle').value = entry.menstrual_cycle || '';
+
+        document.getElementById('edit-modal').classList.add('active');
+    }
+
+    function closeEditModal() {
+        document.getElementById('edit-modal').classList.remove('active');
+    }
+
+    // Fermer le modal quand on clique en dehors
+    document.getElementById('edit-modal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeEditModal();
+        }
+    });
+
+    // Initialiser la date par défaut à aujourd'hui
+    document.getElementById('add-entry-date').valueAsDate = new Date();
+</script>
 <h2>Journal — {{ athlete.username }}</h2>
 
 <div class="card">
@@ -115,12 +752,4 @@
           <button type="button" id="edit-cancel-btn" class="confirm-no">Annuler</button>
         </div>
       </form>
-    </div>
-  </div>
-</div>
-
-<script>
-  window.JOURNAL_ENTRIES = {{ entries_json|tojson }};
-</script>
-<script src="{{ url_for('static', filename='js/athlete_journal.js') }}"></script>
 {% endblock %}
