@@ -363,6 +363,7 @@ def seed_all_data():
         try:
             db.session.add_all(foods_to_insert)
             db.session.flush()
+            db.session.commit()  # Commit foods to database
             print(f"   ✓ {len(foods_to_insert)} foods inserted")
         except Exception as e:
             print(f"   ⚠️ Food insert error: {e}")

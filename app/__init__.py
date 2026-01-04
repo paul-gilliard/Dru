@@ -77,6 +77,8 @@ def create_app():
             try:
                 from seeds import seed_all_data
                 seed_all_data()
+                # Force commit to persist all seeded data
+                db.session.commit()
                 # Verify after seeding
                 ex_final = db.session.query(Exercise).count()
                 food_final = db.session.query(Food).count()
