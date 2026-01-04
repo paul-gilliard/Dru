@@ -1359,35 +1359,59 @@ def register_routes(app):
             today = datetime.utcnow().date()
             # Get the start of current week (Monday)
             current_week_start = today - timedelta(days=today.weekday())
-            # Previous week start
+            current_week_end = current_week_start + timedelta(days=6)
+            # Previous week start/end
             previous_week_start = current_week_start - timedelta(days=7)
+            previous_week_end = previous_week_start + timedelta(days=6)
             
             print(f"\n=== SUMMARY 7DAYS DEBUG ===")
             print(f"Today: {today} (weekday: {today.weekday()})")
-            print(f"Current week: {current_week_start} to {current_week_start + timedelta(days=7)}")
-            print(f"Previous week: {previous_week_start} to {previous_week_start + timedelta(days=7)}")
+            print(f"Current week: {current_week_start} to {current_week_end}")
+            print(f"Previous week: {previous_week_start} to {previous_week_end}")
             
-            # Get journal entries for current week
+            # Get ALL journal entries for current week (use all for averaging)
             current_journal = JournalEntry.query.filter(
                 JournalEntry.athlete_id==athlete_id,
                 JournalEntry.entry_date >= current_week_start,
-                JournalEntry.entry_date <= current_week_start + timedelta(days=6)
+                JournalEntry.entry_date <= current_week_end
+            ).all()
+            
+            # Get ALL journal entries for previous week
+            previous_journal = JournalEntry.query.filter(
+                JournalEntry.athlete_id==athlete_id,
+                JournalEntry.entry_date >= previous_week_start,
+                JournalEntry.entry_date <= previous_week_end
             ).all()
             
             print(f"Current week entries: {len(current_journal)}")
             for e in current_journal:
                 print(f"  - {e.entry_date}: weight={e.weight}")
             
-            # Get journal entries for previous week
-            previous_journal = JournalEntry.query.filter(
-                JournalEntry.athlete_id==athlete_id,
-                JournalEntry.entry_date >= previous_week_start,
-                JournalEntry.entry_date <= previous_week_start + timedelta(days=6)
-            ).all()
-            
             print(f"Previous week entries: {len(previous_journal)}")
             for e in previous_journal:
                 print(f"  - {e.entry_date}: weight={e.weight}")
+            
+            # If no current week data, look back up to 7 days ago
+            if not current_journal:
+                print("No current week data, looking back 7 days...")
+                current_journal = JournalEntry.query.filter(
+                    JournalEntry.athlete_id==athlete_id,
+                    JournalEntry.entry_date <= current_week_end,
+                    JournalEntry.entry_date >= today - timedelta(days=7)
+                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
+                if current_journal:
+                    print(f"Found recent entry: {current_journal[0].entry_date}")
+            
+            # If no previous week data, look back from previous week
+            if not previous_journal:
+                print("No previous week data, looking back from previous week...")
+                previous_journal = JournalEntry.query.filter(
+                    JournalEntry.athlete_id==athlete_id,
+                    JournalEntry.entry_date <= previous_week_end,
+                    JournalEntry.entry_date >= previous_week_start - timedelta(days=14)
+                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
+                if previous_journal:
+                    print(f"Found previous entry: {previous_journal[0].entry_date}")
             
             # Calculate averages for current week
             current_weight_values = [e.weight for e in current_journal if e.weight]
@@ -1424,13 +1448,13 @@ def register_routes(app):
             current_perfs = PerformanceEntry.query.filter(
                 PerformanceEntry.athlete_id==athlete_id,
                 PerformanceEntry.entry_date >= current_week_start,
-                PerformanceEntry.entry_date <= current_week_start + timedelta(days=6)
+                PerformanceEntry.entry_date <= current_week_end
             ).all()
             
             previous_perfs = PerformanceEntry.query.filter(
                 PerformanceEntry.athlete_id==athlete_id,
                 PerformanceEntry.entry_date >= previous_week_start,
-                PerformanceEntry.entry_date <= previous_week_start + timedelta(days=6)
+                PerformanceEntry.entry_date <= previous_week_end
             ).all()
             
             # Calculate tonnage by muscle for current week
@@ -1504,6 +1528,7 @@ def register_routes(app):
             current_week_start = today - timedelta(days=today.weekday())
             # 2 weeks ago
             two_weeks_ago_start = current_week_start - timedelta(days=14)
+            two_weeks_ago_end = two_weeks_ago_start + timedelta(days=6)
             
             # Get journal entries for current week
             current_journal = JournalEntry.query.filter(
@@ -1516,8 +1541,24 @@ def register_routes(app):
             previous_journal = JournalEntry.query.filter(
                 JournalEntry.athlete_id==athlete_id,
                 JournalEntry.entry_date >= two_weeks_ago_start,
-                JournalEntry.entry_date <= two_weeks_ago_start + timedelta(days=6)
+                JournalEntry.entry_date <= two_weeks_ago_end
             ).all()
+            
+            # If no current week data, look back
+            if not current_journal:
+                current_journal = JournalEntry.query.filter(
+                    JournalEntry.athlete_id==athlete_id,
+                    JournalEntry.entry_date <= current_week_start + timedelta(days=6),
+                    JournalEntry.entry_date >= current_week_start - timedelta(days=7)
+                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
+            
+            # If no previous week data, look back further
+            if not previous_journal:
+                previous_journal = JournalEntry.query.filter(
+                    JournalEntry.athlete_id==athlete_id,
+                    JournalEntry.entry_date <= two_weeks_ago_end,
+                    JournalEntry.entry_date >= two_weeks_ago_start - timedelta(days=14)
+                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
             
             # Calculate averages for current week
             current_weight_values = [e.weight for e in current_journal if e.weight]
@@ -1629,6 +1670,7 @@ def register_routes(app):
             current_week_start = today - timedelta(days=today.weekday())
             # 4 weeks ago
             four_weeks_ago_start = current_week_start - timedelta(days=28)
+            four_weeks_ago_end = four_weeks_ago_start + timedelta(days=6)
             
             # Get journal entries for current week
             current_journal = JournalEntry.query.filter(
@@ -1641,8 +1683,24 @@ def register_routes(app):
             previous_journal = JournalEntry.query.filter(
                 JournalEntry.athlete_id==athlete_id,
                 JournalEntry.entry_date >= four_weeks_ago_start,
-                JournalEntry.entry_date <= four_weeks_ago_start + timedelta(days=6)
+                JournalEntry.entry_date <= four_weeks_ago_end
             ).all()
+            
+            # If no current week data, look back
+            if not current_journal:
+                current_journal = JournalEntry.query.filter(
+                    JournalEntry.athlete_id==athlete_id,
+                    JournalEntry.entry_date <= current_week_start + timedelta(days=6),
+                    JournalEntry.entry_date >= current_week_start - timedelta(days=7)
+                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
+            
+            # If no previous week data, look back further
+            if not previous_journal:
+                previous_journal = JournalEntry.query.filter(
+                    JournalEntry.athlete_id==athlete_id,
+                    JournalEntry.entry_date <= four_weeks_ago_end,
+                    JournalEntry.entry_date >= four_weeks_ago_start - timedelta(days=21)
+                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
             
             # Calculate averages for current week
             current_weight_values = [e.weight for e in current_journal if e.weight]
