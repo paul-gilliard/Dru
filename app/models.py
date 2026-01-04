@@ -300,3 +300,26 @@ class MealEntry(db.Model):
             'lipids': (self.food.lipids or 0) * quantity_factor if self.food else 0,
             'carbs': (self.food.carbs or 0) * quantity_factor if self.food else 0
         }
+
+class WeeklyBilanMarking(db.Model):
+    """Track which athletes have had their weekly bilan reviewed by a coach"""
+    id = db.Column(db.Integer, primary_key=True)
+    coach_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    week_start = db.Column(db.Date, nullable=False, index=True)  # Monday of the week
+    marked_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=False)  # marked_at + 7 days
+    
+    # Relationships
+    coach = db.relationship('User', foreign_keys=[coach_id], backref='markings_made')
+    athlete = db.relationship('User', foreign_keys=[athlete_id], backref='markings_received')
+    
+    __table_args__ = (
+        db.UniqueConstraint('coach_id', 'athlete_id', 'week_start', name='uq_coach_athlete_week'),
+    )
+    
+    def is_expired(self):
+        return datetime.utcnow() > self.expires_at
+    
+    def __repr__(self):
+        return f'<WeeklyBilanMarking coach={self.coach_id} athlete={self.athlete_id} week={self.week_start}>'

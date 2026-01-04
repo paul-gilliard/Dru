@@ -1,7 +1,7 @@
 from flask import render_template, request, redirect, url_for, flash, session, abort, jsonify
 from werkzeug.routing import BuildError
 from app import db
-from app.models import User, JournalEntry, PerformanceEntry, ProgramSession, Availability, Program, ExerciseEntry, Exercise, Food, MealPlan, MealEntry, MUSCLE_GROUPS
+from app.models import User, JournalEntry, PerformanceEntry, ProgramSession, Availability, Program, ExerciseEntry, Exercise, Food, MealPlan, MealEntry, WeeklyBilanMarking, MUSCLE_GROUPS
 from datetime import date, datetime, timedelta
 
 def register_routes(app):
@@ -705,6 +705,98 @@ def register_routes(app):
         
         return render_template('coach_weekly_summary.html', coach=user, athletes=athletes, 
                              current_week_start=current_week_start, current_week_end=current_week_end)
+
+    @app.route('/coach/bilan-hebdo/mark/<int:athlete_id>', methods=['POST'])
+    def mark_weekly_bilan(athlete_id):
+        """Mark a weekly bilan as reviewed by coach"""
+        if 'user_id' not in session:
+            return jsonify({'error': 'unauthorized'}), 401
+        coach = User.query.get(session['user_id'])
+        if not coach or coach.role != 'coach':
+            return jsonify({'error': 'forbidden'}), 403
+        
+        athlete = User.query.get(athlete_id)
+        if not athlete:
+            return jsonify({'error': 'athlete not found'}), 404
+        
+        # Calculate current week start
+        today = datetime.utcnow().date()
+        current_week_start = today - timedelta(days=today.weekday())
+        
+        # Check if already marked
+        marking = WeeklyBilanMarking.query.filter_by(
+            coach_id=coach.id,
+            athlete_id=athlete_id,
+            week_start=current_week_start
+        ).first()
+        
+        if marking:
+            return jsonify({'error': 'already marked'}), 400
+        
+        # Create new marking (expires in 7 days)
+        expires_at = datetime.utcnow() + timedelta(days=7)
+        marking = WeeklyBilanMarking(
+            coach_id=coach.id,
+            athlete_id=athlete_id,
+            week_start=current_week_start,
+            expires_at=expires_at
+        )
+        
+        db.session.add(marking)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'marking_id': marking.id}), 201
+
+    @app.route('/coach/bilan-hebdo/unmark/<int:athlete_id>', methods=['POST'])
+    def unmark_weekly_bilan(athlete_id):
+        """Unmark a weekly bilan"""
+        if 'user_id' not in session:
+            return jsonify({'error': 'unauthorized'}), 401
+        coach = User.query.get(session['user_id'])
+        if not coach or coach.role != 'coach':
+            return jsonify({'error': 'forbidden'}), 403
+        
+        # Calculate current week start
+        today = datetime.utcnow().date()
+        current_week_start = today - timedelta(days=today.weekday())
+        
+        # Find and delete marking
+        marking = WeeklyBilanMarking.query.filter_by(
+            coach_id=coach.id,
+            athlete_id=athlete_id,
+            week_start=current_week_start
+        ).first()
+        
+        if not marking:
+            return jsonify({'error': 'marking not found'}), 404
+        
+        db.session.delete(marking)
+        db.session.commit()
+        
+        return jsonify({'success': True}), 200
+
+    @app.route('/coach/bilan-hebdo/check-markings', methods=['GET'])
+    def check_weekly_markings():
+        """Get markings for all athletes this week"""
+        if 'user_id' not in session:
+            return jsonify({'error': 'unauthorized'}), 401
+        coach = User.query.get(session['user_id'])
+        if not coach or coach.role != 'coach':
+            return jsonify({'error': 'forbidden'}), 403
+        
+        today = datetime.utcnow().date()
+        current_week_start = today - timedelta(days=today.weekday())
+        
+        # Get all non-expired markings for this coach this week
+        markings = WeeklyBilanMarking.query.filter_by(
+            coach_id=coach.id,
+            week_start=current_week_start
+        ).all()
+        
+        # Filter out expired markings
+        active_markings = {m.athlete_id: m for m in markings if not m.is_expired()}
+        
+        return jsonify({'markings': {str(aid): True for aid in active_markings.keys()}}), 200
 
     @app.route('/athlete/availability')
     def athlete_availability():

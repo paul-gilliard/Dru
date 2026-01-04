@@ -167,6 +167,69 @@
         padding: 20px;
     }
 
+    /* Marked card styles */
+    .athlete-card.marked {
+        opacity: 0.6;
+    }
+
+    .athlete-card.marked .athlete-header {
+        background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+    }
+
+    /* Checkbox wrapper in header */
+    .card-header-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 15px;
+    }
+
+    .card-header-info {
+        flex: 1;
+    }
+
+    .check-wrapper {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .check-wrapper input[type="checkbox"] {
+        width: 24px;
+        height: 24px;
+        cursor: pointer;
+        accent-color: #667eea;
+    }
+
+    .check-label {
+        font-size: 0.75em;
+        color: white;
+        white-space: nowrap;
+        font-weight: 600;
+    }
+
+    /* Section for marked cards */
+    .marked-section {
+        margin-top: 50px;
+        padding-top: 30px;
+        border-top: 3px solid rgba(255,255,255,0.2);
+    }
+
+    .marked-section h2 {
+        color: white;
+        text-align: center;
+        margin-bottom: 30px;
+        font-size: 1.5em;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .marked-athletes-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 25px;
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
         .header-bilan h1 {
@@ -201,13 +264,21 @@
     </div>
 
     <!-- Athletes cards grid -->
-    <div class="athletes-grid">
+    <div class="athletes-grid" id="active-athletes">
         {% for athlete in athletes %}
-        <div class="athlete-card" id="athlete-card-{{ athlete.id }}">
+        <div class="athlete-card" id="athlete-card-{{ athlete.id }}" data-athlete-id="{{ athlete.id }}">
             <div class="athlete-header">
-                <h2 class="athlete-name">{{ athlete.username }}</h2>
-                <div class="athlete-weeks">
-                    Semaine: {{ current_week_start.strftime('%d %b') }} - {{ current_week_end.strftime('%d %b') }}
+                <div class="card-header-top">
+                    <div class="card-header-info">
+                        <h2 class="athlete-name">{{ athlete.username }}</h2>
+                        <div class="athlete-weeks">
+                            Semaine: {{ current_week_start.strftime('%d %b') }} - {{ current_week_end.strftime('%d %b') }}
+                        </div>
+                    </div>
+                    <div class="check-wrapper">
+                        <input type="checkbox" class="bilan-checkbox" id="check-{{ athlete.id }}" data-athlete-id="{{ athlete.id }}">
+                        <label class="check-label" for="check-{{ athlete.id }}">Bilan fait</label>
+                    </div>
                 </div>
             </div>
 
@@ -222,6 +293,13 @@
             <p style="font-size: 1.1em;">Aucun athlète pour le moment.</p>
         </div>
         {% endif %}
+    </div>
+
+    <!-- Section for marked athletes -->
+    <div class="marked-section" id="marked-section" style="display:none;">
+        <h2>✅ Bilans validés</h2>
+        <div class="marked-athletes-grid" id="marked-athletes">
+        </div>
     </div>
 </div>
 
@@ -347,8 +425,88 @@
         return diff > 0 ? 'diff-positive' : 'diff-negative';
     }
 
+    // Checkbox handling
+    const checkboxes = document.querySelectorAll('.bilan-checkbox');
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', async (e) => {
+            const athleteId = parseInt(e.target.dataset.athleteId);
+            const isChecked = e.target.checked;
+            
+            try {
+                const endpoint = isChecked ? 
+                    `/coach/bilan-hebdo/mark/${athleteId}` : 
+                    `/coach/bilan-hebdo/unmark/${athleteId}`;
+                
+                const response = await fetch(endpoint, { method: 'POST' });
+                
+                if (!response.ok) {
+                    console.error('Erreur:', response.statusText);
+                    e.target.checked = !isChecked;
+                    alert('Erreur lors de la mise à jour');
+                    return;
+                }
+                
+                // Update card appearance
+                updateCardAppearance(athleteId, isChecked);
+            } catch (error) {
+                console.error('Erreur:', error);
+                e.target.checked = !isChecked;
+                alert('Erreur lors de la mise à jour');
+            }
+        });
+    });
+
+    function updateCardAppearance(athleteId, isMarked) {
+        const card = document.getElementById(`athlete-card-${athleteId}`);
+        const activeGrid = document.getElementById('active-athletes');
+        const markedSection = document.getElementById('marked-section');
+        const markedGrid = document.getElementById('marked-athletes');
+        
+        if (isMarked) {
+            // Move card to marked section
+            card.classList.add('marked');
+            markedGrid.appendChild(card);
+            
+            // Show marked section if not visible
+            if (markedSection.style.display === 'none') {
+                markedSection.style.display = 'block';
+            }
+        } else {
+            // Move card back to active grid
+            card.classList.remove('marked');
+            activeGrid.appendChild(card);
+            
+            // Hide marked section if empty
+            if (markedGrid.children.length === 0) {
+                markedSection.style.display = 'none';
+            }
+        }
+    }
+
     // Load data when page loads
-    document.addEventListener('DOMContentLoaded', loadAthletesSummary);
+    async function initPage() {
+        // Load markings first
+        try {
+            const response = await fetch('/coach/bilan-hebdo/check-markings');
+            const data = await response.json();
+            
+            // Check marked athletes
+            for (const [athleteId, marked] of Object.entries(data.markings)) {
+                const checkbox = document.getElementById(`check-${athleteId}`);
+                if (checkbox) {
+                    checkbox.checked = true;
+                    updateCardAppearance(parseInt(athleteId), true);
+                }
+            }
+        } catch (error) {
+            console.error('Erreur lors du chargement des marquages:', error);
+        }
+        
+        // Load athlete data
+        await loadAthletesSummary();
+    }
+
+    document.addEventListener('DOMContentLoaded', initPage);
 </script>
 
 {% endblock %}
