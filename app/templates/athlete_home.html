@@ -118,6 +118,14 @@
             display: grid;
         }
 
+        .main-menu {
+            transition: opacity 0.3s ease;
+        }
+
+        .main-menu.hidden {
+            display: none;
+        }
+
         @keyframes slideIn {
             from {
                 opacity: 0;
@@ -159,12 +167,12 @@
             margin-bottom: 10px;
         }
 
-        .back-home {
+        .back-button {
             text-align: center;
             margin-top: 30px;
         }
 
-        .back-home button {
+        .back-button button {
             background: rgba(255,255,255,0.2);
             color: white;
             border: 2px solid white;
@@ -175,9 +183,13 @@
             transition: all 0.3s ease;
         }
 
-        .back-home button:hover {
+        .back-button button:hover {
             background: rgba(255,255,255,0.3);
             transform: scale(1.05);
+        }
+
+        .back-button.hidden {
+            display: none;
         }
 
         /* Responsive */
@@ -242,8 +254,7 @@
         </div>
 
         <!-- Menu principal -->
-        <div id="main-menu">
-            <!-- Bouton S'entrainer (avec sous-menu) -->
+        <div id="main-menu" class="main-menu">
             <div class="mosaic-grid">
                 <button class="mosaic-btn btn-training" onclick="toggleTrainingSubmenu()">
                     <span class="icon">💪</span>
@@ -262,54 +273,47 @@
                     <span class="label">Mon plan alimentaire</span>
                 </a>
             </div>
-
-            <!-- Sous-menu S'entrainer -->
-            <div id="training-submenu" class="submenu hidden-submenu">
-                <a href="{{ url_for('athlete_program') }}" class="submenu-btn">
-                    <span class="icon">📋</span>
-                    <span>Voir ma programmation</span>
-                </a>
-                <a href="{{ url_for('athlete_performance') }}" class="submenu-btn">
-                    <span class="icon">📊</span>
-                    <span>Session d'entrainement</span>
-                </a>
-                <button class="submenu-btn" onclick="closeTrainingSubmenu()" style="border-color: white; color: white;">
-                    <span class="icon">❌</span>
-                    <span>Retour</span>
-                </button>
-            </div>
         </div>
 
-        <!-- Bouton retour à l'accueil (visible seulement si submenu ouvert) -->
-        <div id="back-menu" class="back-home hidden-submenu" style="display: none;">
+        <!-- Sous-menu S'entrainer -->
+        <div id="training-submenu" class="submenu">
+            <a href="{{ url_for('athlete_program') }}" class="submenu-btn">
+                <span class="icon">📋</span>
+                <span>Voir ma programmation</span>
+            </a>
+            <a href="{{ url_for('athlete_performance') }}" class="submenu-btn">
+                <span class="icon">📊</span>
+                <span>Session d'entrainement</span>
+            </a>
+        </div>
+
+        <!-- Bouton retour (visible seulement si submenu ouvert) -->
+        <div id="back-button" class="back-button hidden">
             <button onclick="closeTrainingSubmenu()">
-                <span class="back-icon">←</span> Retour au menu
+                <span class="back-icon">←</span> Retour
             </button>
         </div>
     </div>
 
     <script>
         function toggleTrainingSubmenu() {
+            const mainMenu = document.getElementById('main-menu');
             const submenu = document.getElementById('training-submenu');
-            const backMenu = document.getElementById('back-menu');
+            const backButton = document.getElementById('back-button');
             
+            mainMenu.classList.toggle('hidden');
             submenu.classList.toggle('active');
-            submenu.classList.toggle('hidden-submenu');
-            
-            if (submenu.classList.contains('active')) {
-                backMenu.style.display = 'block';
-            } else {
-                backMenu.style.display = 'none';
-            }
+            backButton.classList.toggle('hidden');
         }
 
         function closeTrainingSubmenu() {
+            const mainMenu = document.getElementById('main-menu');
             const submenu = document.getElementById('training-submenu');
-            const backMenu = document.getElementById('back-menu');
+            const backButton = document.getElementById('back-button');
             
+            mainMenu.classList.remove('hidden');
             submenu.classList.remove('active');
-            submenu.classList.add('hidden-submenu');
-            backMenu.style.display = 'none';
+            backButton.classList.add('hidden');
         }
     </script>
 </body>
