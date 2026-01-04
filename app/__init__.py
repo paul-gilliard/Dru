@@ -44,9 +44,13 @@ def create_app():
         from app.models import Exercise, Food
         if Exercise.query.count() == 0 or Food.query.count() == 0:
             print("\n📋 Seeding database...")
-            from seeds import seed_all_data
-            seed_all_data()
-            print("✓ Database seeded\n")
+            try:
+                from seeds import seed_all_data
+                seed_all_data()
+                print("✓ Database seeded\n")
+            except Exception as e:
+                print(f"⚠️ Seeding error (continuing): {e}\n")
+                db.session.rollback()
     
     # Import routes after app is created to avoid circular imports
     from app import routes

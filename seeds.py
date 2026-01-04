@@ -310,7 +310,7 @@ def seed_all_data():
     Called from app init if tables are empty.
     Optimized with batch operations for performance.
     """
-    print("\n   📋 Seeding Exercises...")
+    print("   📋 Seeding Exercises...")
     
     # Get existing exercise names for faster lookup
     existing_names = {ex.name for ex in Exercise.query.all()}
@@ -322,7 +322,12 @@ def seed_all_data():
     
     if exercises_to_insert:
         db.session.add_all(exercises_to_insert)
-        db.session.commit()
+        try:
+            db.session.flush()
+        except Exception as e:
+            print(f"   ⚠️ Exercise insert error: {e}")
+            db.session.rollback()
+            return
     
     ex_count = Exercise.query.count()
     print(f"   ✓ {len(exercises_to_insert)} exercises inserted, total: {ex_count}")
@@ -350,7 +355,12 @@ def seed_all_data():
     
     if foods_to_insert:
         db.session.add_all(foods_to_insert)
-        db.session.commit()
+        try:
+            db.session.flush()
+        except Exception as e:
+            print(f"   ⚠️ Food insert error: {e}")
+            db.session.rollback()
+            return
     
     food_count = Food.query.count()
     print(f"   ✓ {len(foods_to_insert)} foods inserted, total: {food_count}")
