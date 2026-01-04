@@ -306,12 +306,6 @@
                 <div class="stat-value">{{ all_series|length }}</div>
                 <div class="stat-label">Séries totales</div>
             </div>
-            {% set active_days = 0 %}
-            {% for day in range(7) %}
-                {% if sessions_by_day.get(day) and sessions_by_day.get(day).exercises|length > 0 %}
-                    {% set active_days = active_days + 1 %}
-                {% endif %}
-            {% endfor %}
             <div class="stat-card">
                 <div class="stat-value">{{ active_days }}</div>
                 <div class="stat-label">Séances/semaine</div>

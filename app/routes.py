@@ -301,12 +301,17 @@ def register_routes(app):
         all_exercises = []
         all_series = []
         muscle_counts = {}
+        active_days = 0
         
         for s in prog.sessions:
             sessions_by_day[s.day_of_week] = {
                 'session': s,
                 'exercises': sorted(list(s.exercises), key=lambda e: getattr(e, 'position', 0))
             }
+            # Count active days
+            if s.exercises and len(s.exercises) > 0:
+                active_days += 1
+            
             # Collect all exercises and series
             for ex in s.exercises:
                 if ex not in all_exercises:
@@ -325,7 +330,7 @@ def register_routes(app):
         athlete = User.query.get(prog.athlete_id)
         return render_template('athlete_program.html', athlete=athlete, programs=programs, program=prog, 
                              sessions_by_day=sessions_by_day, all_exercises=all_exercises, 
-                             all_series=all_series, muscle_counts=muscle_counts)
+                             all_series=all_series, muscle_counts=muscle_counts, active_days=active_days)
 
     @app.route('/coach/availability', methods=['GET', 'POST'])
     def coach_availability():
