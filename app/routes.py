@@ -771,55 +771,59 @@ def register_routes(app):
     @app.route('/coach/stats/athlete/<int:athlete_id>/tonnage-by-muscle.json')
     def coach_stats_athlete_tonnage_by_muscle(athlete_id):
         """Get tonnage (reps x weight) per muscle group over time"""
-        if 'user_id' not in session:
-            return jsonify({'error':'unauth'}), 401
-        user = User.query.get(session['user_id'])
-        if not user or user.role != 'coach':
-            return jsonify({'error':'forbidden'}), 403
-        
-        # Get all performance entries for this athlete
-        entries = PerformanceEntry.query.filter_by(athlete_id=athlete_id).order_by(PerformanceEntry.entry_date.asc()).all()
-        
-        # Group by muscle_group and date
-        tonnage_data = {}
-        for e in entries:
-            if not e.exercise:
-                continue
+        try:
+            if 'user_id' not in session:
+                return jsonify({'error':'unauth'}), 401
+            user = User.query.get(session['user_id'])
+            if not user or user.role != 'coach':
+                return jsonify({'error':'forbidden'}), 403
             
-            # Get exercise to find muscle group
-            ex = Exercise.query.filter_by(name=e.exercise).first()
-            if not ex:
-                continue
+            # Get all performance entries for this athlete
+            entries = PerformanceEntry.query.filter_by(athlete_id=athlete_id).order_by(PerformanceEntry.entry_date.asc()).all()
             
-            muscle_group = ex.muscle_group
-            date_str = e.entry_date.isoformat()
+            # Group by muscle_group and date
+            tonnage_data = {}
+            for e in entries:
+                if not e.exercise:
+                    continue
+                
+                # Get exercise to find muscle group
+                ex = Exercise.query.filter_by(name=e.exercise).first()
+                if not ex:
+                    continue
+                
+                muscle_group = ex.muscle_group
+                date_str = e.entry_date.isoformat()
+                
+                if muscle_group not in tonnage_data:
+                    tonnage_data[muscle_group] = {}
+                
+                if date_str not in tonnage_data[muscle_group]:
+                    tonnage_data[muscle_group][date_str] = {'tonnage': 0, 'count': 0}
+                
+                # Calculate tonnage: reps x weight
+                if e.reps and e.load:
+                    tonnage = e.reps * e.load
+                    tonnage_data[muscle_group][date_str]['tonnage'] += tonnage
+                    tonnage_data[muscle_group][date_str]['count'] += 1
             
-            if muscle_group not in tonnage_data:
-                tonnage_data[muscle_group] = {}
+            # Convert to friendly format
+            out = {}
+            for muscle_group in sorted(tonnage_data.keys()):
+                dates = sorted(tonnage_data[muscle_group].keys())
+                out[muscle_group] = [
+                    {
+                        'date': date_str,
+                        'tonnage': tonnage_data[muscle_group][date_str]['tonnage'],
+                        'count': tonnage_data[muscle_group][date_str]['count']
+                    }
+                    for date_str in dates
+                ]
             
-            if date_str not in tonnage_data[muscle_group]:
-                tonnage_data[muscle_group][date_str] = {'tonnage': 0, 'count': 0}
-            
-            # Calculate tonnage: reps x weight
-            if e.reps and e.load:
-                tonnage = e.reps * e.load
-                tonnage_data[muscle_group][date_str]['tonnage'] += tonnage
-                tonnage_data[muscle_group][date_str]['count'] += 1
-        
-        # Convert to friendly format
-        out = {}
-        for muscle_group in sorted(tonnage_data.keys()):
-            dates = sorted(tonnage_data[muscle_group].keys())
-            out[muscle_group] = [
-                {
-                    'date': date_str,
-                    'tonnage': tonnage_data[muscle_group][date_str]['tonnage'],
-                    'count': tonnage_data[muscle_group][date_str]['count']
-                }
-                for date_str in dates
-            ]
-        
-        return jsonify(out)
+            return jsonify(out)
+        except Exception as e:
+            print(f"Error in tonnage route: {str(e)}")
+            return jsonify({'error': str(e)}), 500
 
     # ============ EXERCISE BANK ROUTES ============
     @app.route('/coach/exercises', methods=['GET', 'POST'])

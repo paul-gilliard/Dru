@@ -73,17 +73,24 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   async function loadTonnage(athleteId){
-    const res = await fetch(`/coach/stats/athlete/${athleteId}/tonnage-by-muscle.json`);
-    if (!res.ok) return;
-    const data = await res.json();
-    tonnageCache = data;
-    // populate muscle group select
-    muscleSelect.innerHTML = '<option value="">— choisir un groupe musculaire —</option>';
-    Object.keys(data).sort().forEach(muscle=>{
-      const opt = document.createElement('option'); opt.value = muscle; opt.textContent = muscle; muscleSelect.appendChild(opt);
-    });
-    // clear chart
-    document.getElementById('tonnage-chart-container').style.display = 'none';
+    try {
+      const res = await fetch(`/coach/stats/athlete/${athleteId}/tonnage-by-muscle.json`);
+      if (!res.ok) {
+        console.log('Tonnage load failed:', res.status);
+        return;
+      }
+      const data = await res.json();
+      tonnageCache = data;
+      // populate muscle group select
+      muscleSelect.innerHTML = '<option value="">— choisir un groupe musculaire —</option>';
+      Object.keys(data).sort().forEach(muscle=>{
+        const opt = document.createElement('option'); opt.value = muscle; opt.textContent = muscle; muscleSelect.appendChild(opt);
+      });
+      // clear chart
+      document.getElementById('tonnage-chart-container').style.display = 'none';
+    } catch (err) {
+      console.error('Error loading tonnage:', err);
+    }
   }
 
   function renderTonnage(muscleGroup){
