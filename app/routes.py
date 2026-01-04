@@ -901,6 +901,57 @@ def register_routes(app):
             'series': series_list
         }), 200
 
+    @app.route('/api/athlete/<int:athlete_id>/programs', methods=['GET'])
+    def api_athlete_programs(athlete_id):
+        """Get all programs for a specific athlete"""
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            return jsonify({'error': 'access denied'}), 403
+        
+        athlete = User.query.get(athlete_id)
+        if not athlete or athlete.role != 'athlete':
+            return jsonify({'error': 'athlete not found'}), 404
+        
+        programs = Program.query.filter_by(athlete_id=athlete_id).order_by(Program.name).all()
+        
+        return jsonify({
+            'programs': [{'id': p.id, 'name': p.name} for p in programs]
+        }), 200
+
+    @app.route('/api/program/<int:program_id>/exercises', methods=['GET'])
+    def api_program_exercises(program_id):
+        """Get all unique exercise names in a specific program"""
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            return jsonify({'error': 'access denied'}), 403
+        
+        program = Program.query.get(program_id)
+        if not program:
+            return jsonify({'error': 'program not found'}), 404
+        
+        # Get all sessions for this program
+        sessions = ProgramSession.query.filter_by(program_id=program_id).all()
+        
+        # Collect all unique exercise names with their muscle groups
+        exercises_dict = {}
+        for session in sessions:
+            for exercise in session.exercises:
+                if exercise.name not in exercises_dict:
+                    exercises_dict[exercise.name] = exercise.muscle or 'Unknown'
+        
+        # Sort by name
+        exercises = [{'name': name, 'muscle': muscle} for name, muscle in sorted(exercises_dict.items())]
+        
+        return jsonify({
+            'exercises': exercises
+        }), 200
+
     @app.route('/coach/stats')
     def coach_stats():
         if 'user_id' not in session:

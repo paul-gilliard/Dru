@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', function(){
   const athleteSelect = document.getElementById('stats-athlete-select');
+  const programSelect = document.getElementById('stats-program-select');
   const chartJournalCtx = document.getElementById('chart-journal').getContext('2d');
   const muscleSelect = document.getElementById('stats-muscle-select');
   const clearMuscle = document.getElementById('clear-muscle');
@@ -26,6 +27,7 @@ document.addEventListener('DOMContentLoaded', function(){
   let otherSeriesChart = null;
   let tonnageChart = null;
   let tonnageCache = null;
+  let selectedProgramId = null; // Track selected program
   let dateRange = { start: null, end: null }; // Date filter state
 
   // Filter data by date range
@@ -526,19 +528,105 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   athleteSelect.addEventListener('change', async function(){
-    const id = this.value;
-    if (!id) return;
-    await loadJournal(id);
-    await loadPerformance(id);
-    await loadTonnage(id);
-    await loadSummary(id);
+    const athleteId = this.value;
+    if (!athleteId) {
+      programSelect.style.display = 'none';
+      programSelect.innerHTML = '<option value="">— choisir un programme —</option>';
+      selectedProgramId = null;
+      return;
+    }
+    
+    // Load programs for this athlete
+    try {
+      const res = await fetch(`/api/athlete/${athleteId}/programs`);
+      if (!res.ok) return;
+      const data = await res.json();
+      
+      programSelect.innerHTML = '<option value="">— choisir un programme —</option>';
+      data.programs.forEach(prog => {
+        const opt = document.createElement('option');
+        opt.value = prog.id;
+        opt.textContent = prog.name;
+        programSelect.appendChild(opt);
+      });
+      
+      // Show program select if there are programs
+      if (data.programs.length > 0) {
+        programSelect.style.display = 'inline-block';
+      } else {
+        programSelect.style.display = 'none';
+      }
+    } catch (err) {
+      console.error('Error loading programs:', err);
+    }
+    
+    // Clear performance data since program needs to be selected
+    document.getElementById('main-series-container').style.display = 'none';
+    document.getElementById('other-series-container').style.display = 'none';
+    document.getElementById('perf-chart-container').style.display = 'none';
+    document.getElementById('other-series-chart-container').style.display = 'none';
+    
+    await loadJournal(athleteId);
+    await loadTonnage(athleteId);
+    await loadSummary(athleteId);
+  });
+
+  programSelect.addEventListener('change', async function(){
+    const programId = this.value;
+    const athleteId = athleteSelect.value;
+    
+    if (!programId) {
+      selectedProgramId = null;
+      document.getElementById('main-series-container').style.display = 'none';
+      document.getElementById('other-series-container').style.display = 'none';
+      document.getElementById('perf-chart-container').style.display = 'none';
+      document.getElementById('other-series-chart-container').style.display = 'none';
+      exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
+      return;
+    }
+    
+    selectedProgramId = programId;
+    
+    // Load exercises for this program
+    try {
+      const res = await fetch(`/api/program/${programId}/exercises`);
+      if (!res.ok) return;
+      const data = await res.json();
+      
+      // Rebuild perfCache with only exercises from this program
+      const programExercises = {};
+      data.exercises.forEach(ex => {
+        programExercises[ex.name] = ex.muscle;
+      });
+      
+      // Filter perfCache to only include exercises from this program
+      if (perfCache) {
+        const filteredPerfCache = {};
+        Object.keys(perfCache).forEach(exName => {
+          if (programExercises[exName] !== undefined) {
+            filteredPerfCache[exName] = perfCache[exName];
+          }
+        });
+        
+        // Update exercise select with filtered list
+        exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
+        Object.keys(filteredPerfCache).sort().forEach(ex => {
+          const opt = document.createElement('option');
+          opt.value = ex;
+          opt.textContent = ex;
+          exSelect.appendChild(opt);
+        });
+      }
+    } catch (err) {
+      console.error('Error loading program exercises:', err);
+    }
   });
 
   // Function to update exercise select based on selected muscle group
   function updateExercisesForMuscle(muscleGroup) {
     exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
     if (!muscleGroup) {
-      // Show all exercises
+      // Show exercises for selected program or all if no program selected
       if (perfCache) {
         Object.keys(perfCache).sort().forEach(ex => {
           const opt = document.createElement('option');
