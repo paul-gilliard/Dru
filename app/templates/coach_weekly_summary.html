@@ -1,0 +1,357 @@
+{% extends 'base.html' %}
+{% block title %}Easy Bilan Hebdo{% endblock %}
+{% block content %}
+
+<style>
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .bilan-container {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+
+    .header-bilan {
+        text-align: center;
+        color: white;
+        margin-bottom: 40px;
+    }
+
+    .header-bilan h1 {
+        font-size: 2.2em;
+        font-weight: 700;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .header-bilan p {
+        font-size: 1.1em;
+        opacity: 0.95;
+    }
+
+    /* Athletes grid */
+    .athletes-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 25px;
+        margin-bottom: 30px;
+    }
+
+    /* Athlete card */
+    .athlete-card {
+        background: white;
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+        transition: all 0.3s ease;
+        border-left: 6px solid #667eea;
+    }
+
+    .athlete-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 12px 40px rgba(0,0,0,0.2);
+    }
+
+    .athlete-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 20px;
+        border-bottom: 2px solid #f0f0f0;
+    }
+
+    .athlete-name {
+        font-size: 1.3em;
+        font-weight: 700;
+        margin: 0;
+    }
+
+    .athlete-weeks {
+        font-size: 0.9em;
+        opacity: 0.9;
+        margin-top: 5px;
+    }
+
+    .athlete-body {
+        padding: 20px;
+    }
+
+    .summary-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .summary-table tbody tr {
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .summary-table tbody tr:last-child {
+        border-bottom: none;
+    }
+
+    .summary-table td {
+        padding: 14px 12px;
+        vertical-align: middle;
+    }
+
+    .metric-name {
+        font-weight: 600;
+        color: #333;
+        min-width: 100px;
+    }
+
+    .metric-value {
+        text-align: center;
+        color: #667eea;
+        font-weight: 700;
+        min-width: 80px;
+    }
+
+    .metric-diff {
+        text-align: center;
+        font-size: 0.95em;
+        font-weight: 600;
+        min-width: 80px;
+    }
+
+    .diff-positive {
+        color: #10b981;
+    }
+
+    .diff-negative {
+        color: #ef4444;
+    }
+
+    .diff-neutral {
+        color: #6b7280;
+    }
+
+    .trend-arrow {
+        font-size: 1.2em;
+        margin-right: 5px;
+    }
+
+    .muscle-group-item {
+        background: #f9fafb;
+        border-radius: 6px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.9em;
+    }
+
+    .muscle-group-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .muscle-name {
+        font-weight: 600;
+        color: #333;
+    }
+
+    .muscle-diff {
+        font-weight: 600;
+        min-width: 70px;
+        text-align: right;
+    }
+
+    .no-data {
+        text-align: center;
+        color: #999;
+        font-style: italic;
+        padding: 20px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+        .header-bilan h1 {
+            font-size: 1.6em;
+        }
+
+        .athletes-grid {
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .summary-table {
+            font-size: 0.9em;
+        }
+
+        .summary-table td {
+            padding: 10px 8px;
+        }
+
+        .metric-value,
+        .metric-diff {
+            min-width: auto;
+        }
+    }
+</style>
+
+<div class="bilan-container">
+    <!-- Header -->
+    <div class="header-bilan">
+        <h1>📊 Easy Bilan Hebdo</h1>
+        <p>Synthèse semaine actuelle vs précédente pour chaque athlète</p>
+    </div>
+
+    <!-- Athletes cards grid -->
+    <div class="athletes-grid">
+        {% for athlete in athletes %}
+        <div class="athlete-card" id="athlete-card-{{ athlete.id }}">
+            <div class="athlete-header">
+                <h2 class="athlete-name">{{ athlete.username }}</h2>
+                <div class="athlete-weeks">
+                    {% set today = now().date() %}
+                    {% set current_week_start = today - timedelta(days=today.weekday()) %}
+                    {% set previous_week_start = current_week_start - timedelta(days=7) %}
+                    Semaine: {{ current_week_start.strftime('%d %b') }} - {{ (current_week_start + timedelta(days=6)).strftime('%d %b') }}
+                </div>
+            </div>
+
+            <div class="athlete-body">
+                <div id="summary-{{ athlete.id }}" class="summary-content"></div>
+            </div>
+        </div>
+        {% endfor %}
+
+        {% if not athletes %}
+        <div style="grid-column: 1/-1; text-align: center; color: white; padding: 40px;">
+            <p style="font-size: 1.1em;">Aucun athlète pour le moment.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+    const athletes = {{ athletes | map(attribute='id') | list | tojson }};
+
+    async function loadAthletesSummary() {
+        for (const athleteId of athletes) {
+            try {
+                const response = await fetch(`/coach/stats/athlete/${athleteId}/summary-7days.json`);
+                const data = await response.json();
+                renderSummary(athleteId, data);
+            } catch (error) {
+                console.error(`Erreur pour athlète ${athleteId}:`, error);
+                document.getElementById(`summary-${athleteId}`).innerHTML = '<div class="no-data">Erreur de chargement</div>';
+            }
+        }
+    }
+
+    function renderSummary(athleteId, data) {
+        const container = document.getElementById(`summary-${athleteId}`);
+        let html = '<table class="summary-table"><tbody>';
+
+        // Poids
+        if (data.weight_current !== null) {
+            const trend = getTrendArrow(data.weight_diff);
+            const diffClass = getDiffClass(data.weight_diff, 'weight');
+            html += `
+                <tr>
+                    <td class="metric-name">Poids</td>
+                    <td class="metric-value">${data.weight_current.toFixed(1)} kg</td>
+                    <td class="metric-diff ${diffClass}">
+                        ${trend} ${Math.abs(data.weight_diff || 0).toFixed(1)} kg
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Kcals
+        if (data.kcals_current !== null) {
+            const trend = getTrendArrow(data.kcals_diff);
+            const diffClass = getDiffClass(data.kcals_diff, 'kcals');
+            html += `
+                <tr>
+                    <td class="metric-name">Kcals</td>
+                    <td class="metric-value">${Math.round(data.kcals_current)}</td>
+                    <td class="metric-diff ${diffClass}">
+                        ${trend} ${Math.abs(Math.round(data.kcals_diff || 0))}
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Eau
+        if (data.water_current !== null) {
+            const trend = getTrendArrow(data.water_diff);
+            const diffClass = getDiffClass(data.water_diff, 'water');
+            html += `
+                <tr>
+                    <td class="metric-name">Eau</td>
+                    <td class="metric-value">${Math.round(data.water_current)} ml</td>
+                    <td class="metric-diff ${diffClass}">
+                        ${trend} ${Math.abs(Math.round(data.water_diff || 0))} ml
+                    </td>
+                </tr>
+            `;
+        }
+
+        // Sommeil
+        if (data.sleep_current !== null) {
+            const trend = getTrendArrow(data.sleep_diff);
+            const diffClass = getDiffClass(data.sleep_diff, 'sleep');
+            html += `
+                <tr>
+                    <td class="metric-name">Sommeil</td>
+                    <td class="metric-value">${data.sleep_current.toFixed(1)} h</td>
+                    <td class="metric-diff ${diffClass}">
+                        ${trend} ${Math.abs(data.sleep_diff || 0).toFixed(1)} h
+                    </td>
+                </tr>
+            `;
+        }
+
+        html += '</tbody></table>';
+
+        // Tonnage by muscle group
+        if (Object.keys(data.tonnage_diff_by_muscle || {}).length > 0) {
+            html += '<div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">';
+            html += '<h4 style="color: #333; font-size: 0.95em; margin: 0 0 12px 0;">Tonnage par groupe</h4>';
+            for (const [muscle, diff] of Object.entries(data.tonnage_diff_by_muscle)) {
+                const trend = getTrendArrow(diff);
+                const diffClass = getDiffClass(diff, 'tonnage');
+                const current = (data.tonnage_by_muscle?.[muscle] || 0).toFixed(0);
+                html += `
+                    <div class="muscle-group-item">
+                        <span class="muscle-name">${muscle}</span>
+                        <span class="muscle-diff ${diffClass}">
+                            ${trend} ${Math.abs(diff.toFixed(0))} kg·rep
+                        </span>
+                    </div>
+                `;
+            }
+            html += '</div>';
+        } else if (data.tonnage_diff_by_muscle) {
+            html += '<div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb; text-align: center; color: #999; font-size: 0.9em;">Pas de données de performance</div>';
+        }
+
+        container.innerHTML = html || '<div class="no-data">Pas de données disponibles</div>';
+    }
+
+    function getTrendArrow(diff) {
+        if (diff === null || diff === undefined) return '➖';
+        if (Math.abs(diff) < 0.1) return '➡️';
+        return diff > 0 ? '⬆️' : '⬇️';
+    }
+
+    function getDiffClass(diff, metric) {
+        if (diff === null || diff === undefined || Math.abs(diff) < 0.1) return 'diff-neutral';
+        
+        // Pour le poids : baisse = bon
+        if (metric === 'weight') return diff < 0 ? 'diff-positive' : 'diff-negative';
+        // Pour les autres : hausse = bon (généralement)
+        return diff > 0 ? 'diff-positive' : 'diff-negative';
+    }
+
+    // Load data when page loads
+    document.addEventListener('DOMContentLoaded', loadAthletesSummary);
+</script>
+
+{% endblock %}

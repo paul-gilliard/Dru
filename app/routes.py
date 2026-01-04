@@ -688,6 +688,17 @@ def register_routes(app):
         athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
         return render_template('coach_stats.html', coach=user, athletes=athletes)
 
+    @app.route('/coach/bilan-hebdo')
+    def coach_weekly_summary():
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            flash('Accès réservé aux coachs')
+            return redirect(url_for('home'))
+        athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
+        return render_template('coach_weekly_summary.html', coach=user, athletes=athletes)
+
     @app.route('/athlete/availability')
     def athlete_availability():
         # Afficher le calendrier des disponibilités du coach pour l'athlète
@@ -1049,10 +1060,19 @@ def register_routes(app):
                 tonnage_diff_by_muscle[muscle] = current - previous
             
             return jsonify({
+                'weight_current': current_weight_avg,
+                'weight_previous': previous_weight_avg,
                 'weight_diff': weight_diff,
+                'kcals_current': current_kcals_avg,
+                'kcals_previous': previous_kcals_avg,
                 'kcals_diff': kcals_diff,
+                'water_current': current_water_avg,
+                'water_previous': previous_water_avg,
                 'water_diff': water_diff,
+                'sleep_current': current_sleep_avg,
+                'sleep_previous': previous_sleep_avg,
                 'sleep_diff': sleep_diff,
+                'tonnage_by_muscle': current_tonnage_by_muscle,
                 'tonnage_diff_by_muscle': tonnage_diff_by_muscle
             })
         except Exception as e:
@@ -1927,8 +1947,9 @@ def register_routes(app):
             # l'onglet "Création utilisateur" utilise la route /coach (page principale coach)
             'create_user' : {'url': '/coach',               'endpoint': 'coach',              'label': 'Création utilisateur'},
             'programming' : {'url': '/coach/programming',  'endpoint': 'coach_programming',  'label': 'Création programmation'},
-            'exercises'   : {'url': '/coach/exercises',    'endpoint': 'coach_exercises',    'label': 'Banque d\'exercices'},
             'stats'       : {'url': '/coach/stats',         'endpoint': 'coach_stats',        'label': 'Suivi journal'},
+            'weekly'      : {'url': '/coach/bilan-hebdo',   'endpoint': 'coach_weekly_summary', 'label': 'Easy Bilan Hebdo'},
+            'exercises'   : {'url': '/coach/exercises',    'endpoint': 'coach_exercises',    'label': 'Banque d\'exercices'},
             'meal_plan'   : {'url': '/coach/meal-plan',    'endpoint': 'coach_meal_plan',    'label': 'Plan alimentaire'},
         }
         return {'coach_nav_items_static': items}
