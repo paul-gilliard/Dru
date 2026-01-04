@@ -3,12 +3,6 @@
 {% block content %}
 <h2>Entraînement — {{ athlete.username }}</h2>
 
-<nav style="margin-bottom:12px; display:flex; gap:12px;">
-  <a href="{{ url_for('athlete_program') }}" class="kv">Programme</a>
-  <a href="{{ url_for('athlete_journal') }}" class="kv">Journal</a>
-  <a href="{{ url_for('athlete_performance') }}" class="kv" style="font-weight:700">Entraînement</a>
-</nav>
-
 <div class="card">
   <h3>Sélections de séances</h3>
 

@@ -3,12 +3,6 @@
 {% block content %}
 <h2>Séance — {{ program_session.session_name or 'Séance' }}</h2>
 
-<nav style="margin-bottom:12px; display:flex; gap:12px;">
-  <a href="{{ url_for('athlete_program') }}" class="kv">Programme</a>
-  <a href="{{ url_for('athlete_journal') }}" class="kv">Journal</a>
-  <a href="{{ url_for('athlete_performance') }}" class="kv">Entraînement</a>
-</nav>
-
 <div class="card">
   <h3>{{ ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'][program_session.day_of_week] }}{% if program_session.session_name %} — {{ program_session.session_name }}{% endif %}</h3>
   <p style="margin-bottom:8px;">Exercices proposés :</p>

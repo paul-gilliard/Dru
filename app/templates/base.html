@@ -151,7 +151,11 @@
 <body>
     <nav>
         <div class="navbar-container" style="width: 100%; display: flex; align-items: center; justify-content: space-between;">
-            <a href="{{ url_for('home') }}" class="navbar-brand">🏋️ DRU</a>
+            {% if session.get('role') == 'athlete' %}
+                <a href="{{ url_for('athlete_home') }}" class="navbar-brand">🏋️ DRU</a>
+            {% else %}
+                <a href="{{ url_for('home') }}" class="navbar-brand">🏋️ DRU</a>
+            {% endif %}
             <button class="navbar-toggle" onclick="toggleNavbar()">☰</button>
         </div>
         <ul id="navbar-menu">
@@ -159,22 +163,19 @@
             {% if not (request.cookies.get('logged_in') or session.get('user_id')) %}
                 <li><a href="{{ url_for('login') }}">🔐 Login</a></li>
             {% else %}
-                <li><a href="{{ url_for('home') }}">🏠 Accueil</a></li>
-
-                {# liens coach (affichés si rôle != athlete) #}
-                {% if session.get('role') != 'athlete' %}
-                <li><a href="{{ url_for('coach_programming') }}">📋 Programmes</a></li>
-                <li><a href="{{ url_for('coach_meal_plans') }}">🍽️ Plans Alimentaires</a></li>
-                <li><a href="{{ url_for('coach_stats') }}">📊 Suivi</a></li>
-                <li><a href="{{ url_for('coach_exercises') }}">💪 Exercices</a></li>
-                <li><a href="{{ url_for('coach_foods') }}">🍎 Aliments</a></li>
-                <li><a href="{{ url_for('coach') }}">👥 Utilisateurs</a></li>
-                <li><a href="{{ url_for('coach_availability') }}">📅 Disponibilités</a></li>
-                {% endif %}
-
-                {# lien athlete (si rôle != coach) #}
-                {% if session.get('role') != 'coach' %}
-                <li><a href="{{ url_for('athlete_home') }}">⛹️ Mon Espace</a></li>
+                {# Pour les athlètes : navbar simplifiée avec juste le retour à l'accueil #}
+                {% if session.get('role') == 'athlete' %}
+                    <li><a href="{{ url_for('athlete_home') }}">← Retour au menu</a></li>
+                {% else %}
+                    {# Pour les coachs : navbar complète #}
+                    <li><a href="{{ url_for('home') }}">🏠 Accueil</a></li>
+                    <li><a href="{{ url_for('coach_programming') }}">📋 Programmes</a></li>
+                    <li><a href="{{ url_for('coach_meal_plans') }}">🍽️ Plans Alimentaires</a></li>
+                    <li><a href="{{ url_for('coach_stats') }}">📊 Suivi</a></li>
+                    <li><a href="{{ url_for('coach_exercises') }}">💪 Exercices</a></li>
+                    <li><a href="{{ url_for('coach_foods') }}">🍎 Aliments</a></li>
+                    <li><a href="{{ url_for('coach') }}">👥 Utilisateurs</a></li>
+                    <li><a href="{{ url_for('coach_availability') }}">📅 Disponibilités</a></li>
                 {% endif %}
 
                 <div class="user-info">
