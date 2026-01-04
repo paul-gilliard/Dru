@@ -308,31 +308,33 @@ def seed_all_data():
     """
     Seed both exercises and foods to database.
     Called from app init if tables are empty.
+    Optimized with batch operations for performance.
     """
     print("\n   📋 Seeding Exercises...")
-    ex_inserted = 0
-    ex_skipped = 0
+    
+    # Get existing exercise names for faster lookup
+    existing_names = {ex.name for ex in Exercise.query.all()}
+    exercises_to_insert = []
     
     for name, muscle_group in EXERCISES_DATA:
-        existing = Exercise.query.filter_by(name=name).first()
-        if existing:
-            ex_skipped += 1
-        else:
-            exercise = Exercise(name=name, muscle_group=muscle_group)
-            db.session.add(exercise)
-            ex_inserted += 1
+        if name not in existing_names:
+            exercises_to_insert.append(Exercise(name=name, muscle_group=muscle_group))
     
-    print(f"   ✓ {ex_inserted} exercises inserted, {ex_skipped} already exist")
+    if exercises_to_insert:
+        db.session.add_all(exercises_to_insert)
+        db.session.commit()
+    
+    ex_count = Exercise.query.count()
+    print(f"   ✓ {len(exercises_to_insert)} exercises inserted, total: {ex_count}")
     
     print("   🥗 Seeding Foods...")
-    food_inserted = 0
-    food_skipped = 0
+    
+    # Get existing food names for faster lookup
+    existing_foods = {food.name for food in Food.query.all()}
+    foods_to_insert = []
     
     for name, kcal, proteins, lipids, saturated_fats, carbs, simple_sugars, fiber, salt in FOODS_DATA:
-        existing = Food.query.filter_by(name=name).first()
-        if existing:
-            food_skipped += 1
-        else:
+        if name not in existing_foods:
             food = Food(
                 name=name,
                 kcal=kcal,
@@ -344,11 +346,12 @@ def seed_all_data():
                 fiber=fiber,
                 salt=salt
             )
-            db.session.add(food)
-            food_inserted += 1
+            foods_to_insert.append(food)
     
-    print(f"   ✓ {food_inserted} foods inserted, {food_skipped} already exist")
+    if foods_to_insert:
+        db.session.add_all(foods_to_insert)
+        db.session.commit()
     
-    # Commit all changes
-    db.session.commit()
-    print(f"   ✓ Database committed ({Exercise.query.count()} exercises, {Food.query.count()} foods)")
+    food_count = Food.query.count()
+    print(f"   ✓ {len(foods_to_insert)} foods inserted, total: {food_count}")
+    print(f"   ✓ Database ready ({Exercise.query.count()} exercises, {Food.query.count()} foods)")
