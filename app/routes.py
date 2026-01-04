@@ -422,29 +422,35 @@ def register_routes(app):
         
         # Créer un nouveau programme avec le même contenu
         new_name = request.form.get('new_name', f"{prog.name} (copie)").strip()
+        new_athlete_id = request.form.get('athlete_id')
         
         if not new_name:
             flash('Le nom du programme est requis')
             return redirect(url_for('coach_programming'))
         
+        if not new_athlete_id:
+            new_athlete_id = prog.athlete_id
+        else:
+            new_athlete_id = int(new_athlete_id)
+        
         # Créer le nouveau programme
-        new_prog = Program(athlete_id=prog.athlete_id, name=new_name)
+        new_prog = Program(athlete_id=new_athlete_id, name=new_name)
         db.session.add(new_prog)
         db.session.flush()  # Pour obtenir l'ID du nouveau programme
         
         # Copier les sessions du programme original
-        for session in prog.sessions:
-            new_session = TrainingSession(
+        for session_obj in prog.sessions:
+            new_session = ProgramSession(
                 program_id=new_prog.id,
-                day=session.day,
-                session_number=session.session_number
+                day=session_obj.day,
+                session_number=session_obj.session_number
             )
             db.session.add(new_session)
             db.session.flush()  # Pour obtenir l'ID de la nouvelle session
             
             # Copier les exercices
-            for ex in session.exercises:
-                new_ex = TrainingExercise(
+            for ex in session_obj.exercises:
+                new_ex = ExerciseEntry(
                     session_id=new_session.id,
                     exercise_id=ex.exercise_id,
                     sets=ex.sets,

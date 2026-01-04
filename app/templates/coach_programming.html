@@ -41,7 +41,7 @@
           <div class="action-group">
             <a href="{{ url_for('coach_programming_edit', program_id=p.id) }}" class="save-program-btn" style="text-decoration:none; display:inline-block; padding:8px 16px; background:#0b63d6; color:white; border-radius:6px; font-weight:600; cursor:pointer; border:none; font-size:0.95rem;">Éditer</a>
 
-            <button type="button" class="duplicate-btn" onclick="openDuplicateModal({{ p.id }}, '{{ p.name }}')" style="padding:8px 16px; background:#10b981; color:white; border-radius:6px; font-weight:600; cursor:pointer; border:none; font-size:0.95rem; margin-left:6px;">Dupliquer</button>
+            <button type="button" class="duplicate-btn" onclick="openDuplicateModal({{ p.id }}, '{{ p.name }}', {{ p.athlete_id }})" style="padding:8px 16px; background:#10b981; color:white; border-radius:6px; font-weight:600; cursor:pointer; border:none; font-size:0.95rem; margin-left:6px;">Dupliquer</button>
 
             <form method="post" action="{{ url_for('coach_programming_delete', program_id=p.id) }}" class="delete-form" data-program-name="{{ p.name }}">
               <button type="submit" class="delete-btn secondary">Supprimer</button>
@@ -80,6 +80,14 @@
         <label for="new_name" style="display:block; margin-bottom:8px; font-weight:600; color:#1e293b;">Nom du nouveau programme</label>
         <input type="text" id="new_name" name="new_name" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95rem; box-sizing:border-box;" placeholder="Ex: Programme copie">
       </div>
+      <div style="margin-bottom:20px;">
+        <label for="athlete_id" style="display:block; margin-bottom:8px; font-weight:600; color:#1e293b;">Athlète</label>
+        <select id="athlete_id" name="athlete_id" style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95rem; box-sizing:border-box;">
+          {% for a in athletes %}
+          <option value="{{ a.id }}">{{ a.username }}</option>
+          {% endfor %}
+        </select>
+      </div>
       <div style="display:flex; gap:12px; justify-content:flex-end;">
         <button type="button" onclick="closeDuplicateModal()" style="background:#e2e8f0; color:#1e293b; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:600; transition:all 0.2s ease;" onmouseover="this.style.background='#cbd5e1'" onmouseout="this.style.background='#e2e8f0'">Annuler</button>
         <button type="submit" style="background:#10b981; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:600; transition:all 0.2s ease;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">Dupliquer</button>
@@ -103,12 +111,18 @@
 
 <script>
   let duplicateProgramId = null;
+  let currentAthleteId = null;
 
-  function openDuplicateModal(programId, programName) {
+  function openDuplicateModal(programId, programName, athleteId) {
     duplicateProgramId = programId;
+    currentAthleteId = athleteId;
     const modal = document.getElementById('duplicate-modal');
     const input = document.getElementById('new_name');
+    const athleteSelect = document.getElementById('athlete_id');
+    
     input.value = programName + ' (copie)';
+    athleteSelect.value = athleteId;
+    
     modal.style.display = 'flex';
     input.focus();
   }
@@ -117,6 +131,7 @@
     const modal = document.getElementById('duplicate-modal');
     modal.style.display = 'none';
     duplicateProgramId = null;
+    currentAthleteId = null;
   }
 
   document.getElementById('duplicate-form').addEventListener('submit', function(e) {
