@@ -313,7 +313,11 @@ def seed_all_data():
     print("   📋 Seeding Exercises...")
     
     # Get existing exercise names for faster lookup
-    existing_names = {ex.name for ex in Exercise.query.all()}
+    try:
+        existing_names = {ex.name for ex in Exercise.query.all()}
+    except Exception:
+        existing_names = set()
+    
     exercises_to_insert = []
     
     for name, muscle_group in EXERCISES_DATA:
@@ -321,21 +325,23 @@ def seed_all_data():
             exercises_to_insert.append(Exercise(name=name, muscle_group=muscle_group))
     
     if exercises_to_insert:
-        db.session.add_all(exercises_to_insert)
         try:
+            db.session.add_all(exercises_to_insert)
             db.session.flush()
+            print(f"   ✓ {len(exercises_to_insert)} exercises inserted")
         except Exception as e:
             print(f"   ⚠️ Exercise insert error: {e}")
             db.session.rollback()
-            return
-    
-    ex_count = Exercise.query.count()
-    print(f"   ✓ {len(exercises_to_insert)} exercises inserted, total: {ex_count}")
+            # Continue with foods even if exercises fail
     
     print("   🥗 Seeding Foods...")
     
     # Get existing food names for faster lookup
-    existing_foods = {food.name for food in Food.query.all()}
+    try:
+        existing_foods = {food.name for food in Food.query.all()}
+    except Exception:
+        existing_foods = set()
+    
     foods_to_insert = []
     
     for name, kcal, proteins, lipids, saturated_fats, carbs, simple_sugars, fiber, salt in FOODS_DATA:
@@ -354,14 +360,19 @@ def seed_all_data():
             foods_to_insert.append(food)
     
     if foods_to_insert:
-        db.session.add_all(foods_to_insert)
         try:
+            db.session.add_all(foods_to_insert)
             db.session.flush()
+            print(f"   ✓ {len(foods_to_insert)} foods inserted")
         except Exception as e:
             print(f"   ⚠️ Food insert error: {e}")
             db.session.rollback()
             return
     
-    food_count = Food.query.count()
-    print(f"   ✓ {len(foods_to_insert)} foods inserted, total: {food_count}")
-    print(f"   ✓ Database ready ({Exercise.query.count()} exercises, {Food.query.count()} foods)")
+    # Final count
+    try:
+        final_ex = db.session.query(Exercise).count()
+        final_food = db.session.query(Food).count()
+        print(f"   ✓ Database has {final_ex} exercises and {final_food} foods")
+    except Exception:
+        pass

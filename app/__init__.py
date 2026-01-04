@@ -42,12 +42,26 @@ def create_app():
         
         # Seed exercises and foods if tables are empty
         from app.models import Exercise, Food
-        if Exercise.query.count() == 0 or Food.query.count() == 0:
+        
+        # Check if we need to seed - only check AFTER potential flush
+        need_seed = False
+        try:
+            ex_count = db.session.query(Exercise).count()
+            food_count = db.session.query(Food).count()
+            need_seed = (ex_count == 0 or food_count == 0)
+        except Exception:
+            # If query fails, assume we need to seed
+            need_seed = True
+        
+        if need_seed:
             print("\n📋 Seeding database...")
             try:
                 from seeds import seed_all_data
                 seed_all_data()
-                print("✓ Database seeded\n")
+                # Verify after seeding
+                ex_final = db.session.query(Exercise).count()
+                food_final = db.session.query(Food).count()
+                print(f"✓ Database seeded ({ex_final} exercises, {food_final} foods)\n")
             except Exception as e:
                 print(f"⚠️ Seeding error (continuing): {e}\n")
                 db.session.rollback()
