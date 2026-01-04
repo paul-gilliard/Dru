@@ -1813,6 +1813,36 @@ def register_routes(app):
         
         return jsonify(meal_plan.get_daily_totals()), 200
 
+    # ============ BILAN HEBDO API ============
+    @app.route('/api/coach/bilan-hebdo/unchecked-count', methods=['GET'])
+    def api_bilan_unchecked_count():
+        """Get count of athletes with unchecked weekly bilan"""
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            return jsonify({'error': 'access denied'}), 403
+        
+        # Get current week
+        today = datetime.utcnow().date()
+        current_week_start = today - timedelta(days=today.weekday())
+        
+        # Count athletes without a marking for this week
+        all_athletes = User.query.filter_by(role='athlete').all()
+        unchecked_count = 0
+        
+        for athlete in all_athletes:
+            marking = WeeklyBilanMarking.query.filter_by(
+                coach_id=user.id,
+                athlete_id=athlete.id,
+                week_start=current_week_start
+            ).first()
+            if not marking:
+                unchecked_count += 1
+        
+        return jsonify({'unchecked_count': unchecked_count}), 200
+
     @app.route('/seed-exercises')
     def seed_exercises_page():
         """Page to seed exercises"""

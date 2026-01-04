@@ -283,6 +283,24 @@
             }
         }
 
+        // Load unchecked bilan count on page load
+        function loadBilanBadgeCount() {
+            fetch('/api/coach/bilan-hebdo/unchecked-count')
+                .then(response => {
+                    if (response.ok) return response.json();
+                    throw new Error('Failed to fetch');
+                })
+                .then(data => {
+                    updateBilanBadge(data.unchecked_count);
+                })
+                .catch(error => {
+                    console.log('Bilan badge: Not a coach or API unavailable');
+                });
+        }
+
+        // Call on page load
+        document.addEventListener('DOMContentLoaded', loadBilanBadgeCount);
+
         // Close menu when clicking a link on mobile
         const navLinks = document.querySelectorAll('nav a');
         navLinks.forEach(link => {
