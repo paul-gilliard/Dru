@@ -111,7 +111,25 @@ def register_routes(app):
         return render_template('coach.html', users=users)
 
     @app.route('/athlete')
-    def athlete():
+    def athlete_home():
+        # Page d'accueil de l'athlète avec mosaïque de boutons
+        if 'user_id' not in session:
+            flash('Veuillez vous connecter')
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user:
+            session.clear()
+            flash('Utilisateur introuvable')
+            return redirect(url_for('login'))
+        # si ce n'est pas un athlete, rediriger vers home
+        if user.role != 'athlete':
+            flash('Accès réservé aux athlètes')
+            return redirect(url_for('home'))
+
+        return render_template('athlete_home.html', athlete=user)
+
+    @app.route('/athlete/program')
+    def athlete_program():
         # afficher la vue programme pour l'athlete connecté (liste + vue semaine)
         if 'user_id' not in session:
             flash('Veuillez vous connecter')
@@ -666,6 +684,76 @@ def register_routes(app):
             return redirect(url_for('home'))
         athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
         return render_template('coach_stats.html', coach=user, athletes=athletes)
+
+    @app.route('/athlete/availability')
+    def athlete_availability():
+        # Afficher le calendrier des disponibilités du coach pour l'athlète
+        if 'user_id' not in session:
+            flash('Veuillez vous connecter')
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user:
+            session.clear()
+            flash('Utilisateur introuvable')
+            return redirect(url_for('login'))
+        if user.role != 'athlete':
+            flash('Accès réservé aux athlètes')
+            return redirect(url_for('home'))
+
+        # Récupérer les 14 prochains jours de disponibilités
+        DAYS = 14
+        start = date.today()
+        days = [start + timedelta(days=i) for i in range(DAYS)]
+
+        # Récupérer les lieux distincts ou fallback
+        locs_q = Availability.query.with_entities(Availability.location).distinct().all()
+        locations = sorted([l[0] for l in locs_q]) if locs_q else ['boutique biotech merignac']
+        primary_location = locations[0]
+
+        # Récupérer les disponibilités
+        avs = Availability.query.filter(Availability.date >= start, Availability.date < start + timedelta(days=DAYS)).all()
+        avail_map = {}
+        for a in avs:
+            avail_map[(a.date, a.location, a.timeslot)] = a.available
+
+        # Construire la structure pour le template
+        calendar = []
+        for d in days:
+            # Déterminer les créneaux disponibles pour chaque lieu
+            slots_per_location = {}
+            for loc in locations:
+                slots_per_location[loc] = {
+                    'morning': bool(avail_map.get((d, loc, 'morning'), False)),
+                    'afternoon': bool(avail_map.get((d, loc, 'afternoon'), False)),
+                    'day': bool(avail_map.get((d, loc, 'day'), False))
+                }
+
+            calendar.append({
+                'date': d,
+                'slots_per_location': slots_per_location
+            })
+
+        return render_template('athlete_availability.html', calendar=calendar, locations=locations, athlete=user)
+
+    @app.route('/athlete/meal-plan')
+    def athlete_meal_plan():
+        # Afficher le plan alimentaire de l'athlète
+        if 'user_id' not in session:
+            flash('Veuillez vous connecter')
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user:
+            session.clear()
+            flash('Utilisateur introuvable')
+            return redirect(url_for('login'))
+        if user.role != 'athlete':
+            flash('Accès réservé aux athlètes')
+            return redirect(url_for('home'))
+
+        # Récupérer le plan alimentaire créé par un coach pour cet athlète
+        meal_plan = MealPlan.query.filter_by(athlete_id=user.id).first()
+
+        return render_template('athlete_meal_plan.html', athlete=user, meal_plan=meal_plan)
 
     @app.route('/coach/meal-plan')
     def coach_meal_plan():

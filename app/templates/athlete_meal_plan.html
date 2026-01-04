@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Mon Plan Alimentaire - Dru{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header bg-warning text-dark">
+                    <h4 class="mb-0">
+                        <a href="{{ url_for('athlete_home') }}" class="btn btn-sm btn-outline-dark me-2">← Retour</a>
+                        🍽️ Mon Plan Alimentaire
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h5>Votre plan alimentaire personnalisé</h5>
+                        <p class="mb-0">Cette page affichera bientôt votre plan alimentaire personnalisé créé par votre coach.</p>
+                    </div>
+
+                    {% if not meal_plan %}
+                    <div class="alert alert-warning">
+                        <strong>⚠️ Pas de plan alimentaire pour le moment</strong>
+                        <p class="mb-0">Contactez votre coach pour qu'il vous crée un plan alimentaire adapté à vos objectifs.</p>
+                    </div>
+                    {% else %}
+                    <h5>{{ meal_plan.name }}</h5>
+                    <p><em>Créé le {{ meal_plan.created_at.strftime('%d/%m/%Y') }}</em></p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
