@@ -27,6 +27,8 @@ document.addEventListener('DOMContentLoaded', function(){
   let otherSeriesChart = null;
   let tonnageChart = null;
   let tonnageCache = null;
+  let perfCache = null;
+  let programExercises = {}; // Track exercises from selected program
   let selectedProgramId = null; // Track selected program
   let dateRange = { start: null, end: null }; // Date filter state
 
@@ -577,11 +579,14 @@ document.addEventListener('DOMContentLoaded', function(){
     
     if (!programId) {
       selectedProgramId = null;
+      programExercises = {};
       document.getElementById('main-series-container').style.display = 'none';
       document.getElementById('other-series-container').style.display = 'none';
       document.getElementById('perf-chart-container').style.display = 'none';
       document.getElementById('other-series-chart-container').style.display = 'none';
       exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
+      muscleSelect.innerHTML = '<option value="">— choisir un groupe musculaire —</option>';
+      document.getElementById('tonnage-chart-container').style.display = 'none';
       return;
     }
     
@@ -590,11 +595,14 @@ document.addEventListener('DOMContentLoaded', function(){
     // Load exercises for this program
     try {
       const res = await fetch(`/api/program/${programId}/exercises`);
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.error('Failed to load program exercises:', res.status);
+        return;
+      }
       const data = await res.json();
       
-      // Rebuild perfCache with only exercises from this program
-      const programExercises = {};
+      // Store program exercises globally
+      programExercises = {};
       data.exercises.forEach(ex => {
         programExercises[ex.name] = ex.muscle;
       });
@@ -617,18 +625,39 @@ document.addEventListener('DOMContentLoaded', function(){
           exSelect.appendChild(opt);
         });
       }
+      
+      // Filter tonnage by program exercises' muscle groups
+      if (tonnageCache) {
+        const programMuscles = new Set();
+        Object.values(programExercises).forEach(muscle => {
+          if (muscle) programMuscles.add(muscle);
+        });
+        
+        // Update muscle select with only muscles from this program
+        muscleSelect.innerHTML = '<option value="">— choisir un groupe musculaire —</option>';
+        Array.from(programMuscles).sort().forEach(muscle => {
+          const opt = document.createElement('option');
+          opt.value = muscle;
+          opt.textContent = muscle;
+          muscleSelect.appendChild(opt);
+        });
+      }
     } catch (err) {
       console.error('Error loading program exercises:', err);
     }
   });
 
-  // Function to update exercise select based on selected muscle group
+  // Function to update exercise select based on selected muscle group and program
   function updateExercisesForMuscle(muscleGroup) {
     exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
     if (!muscleGroup) {
       // Show exercises for selected program or all if no program selected
       if (perfCache) {
         Object.keys(perfCache).sort().forEach(ex => {
+          // If a program is selected, only show exercises from that program
+          if (selectedProgramId && programExercises[ex] === undefined) {
+            return;
+          }
           const opt = document.createElement('option');
           opt.value = ex;
           opt.textContent = ex;
@@ -637,11 +666,16 @@ document.addEventListener('DOMContentLoaded', function(){
       }
       return;
     }
-    // Show only exercises for selected muscle group
+    // Show only exercises for selected muscle group (and from selected program if any)
     if (perfCache) {
       Object.keys(perfCache).sort().forEach(ex => {
         const exData = perfCache[ex];
+        // Check if exercise belongs to the selected muscle group
         if (exData.muscle_group === muscleGroup) {
+          // If a program is selected, only show exercises from that program
+          if (selectedProgramId && programExercises[ex] === undefined) {
+            return;
+          }
           const opt = document.createElement('option');
           opt.value = ex;
           opt.textContent = ex;
