@@ -129,28 +129,28 @@ def register_routes(app):
         username = user.username
         
         # Supprimer toutes les données liées à cet utilisateur dans cet ordre :
-        # 1. WeeklyBilanMarking
+        # 1. MealEntry (d'abord, car elle référence MealPlan)
+        meal_plan_ids = [mp.id for mp in MealPlan.query.filter_by(athlete_id=user_id).all()]
+        if meal_plan_ids:
+            MealEntry.query.filter(MealEntry.meal_plan_id.in_(meal_plan_ids)).delete(synchronize_session=False)
+        
+        # 2. MealPlan
+        MealPlan.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
+        
+        # 3. WeeklyBilanMarking
         WeeklyBilanMarking.query.filter(
             (WeeklyBilanMarking.coach_id == user_id) | 
             (WeeklyBilanMarking.athlete_id == user_id)
         ).delete(synchronize_session=False)
         
-        # 2. Program (athlète uniquement si c'est un athlète)
+        # 4. Program
         Program.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
         
-        # 3. JournalEntry
+        # 5. JournalEntry
         JournalEntry.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
         
-        # 4. PerformanceEntry
+        # 6. PerformanceEntry
         PerformanceEntry.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
-        
-        # 5. MealPlan
-        MealPlan.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
-        
-        # 6. MealEntry (via les meal_plans)
-        meal_plan_ids = [mp.id for mp in MealPlan.query.filter_by(athlete_id=user_id).all()]
-        if meal_plan_ids:
-            MealEntry.query.filter(MealEntry.meal_plan_id.in_(meal_plan_ids)).delete(synchronize_session=False)
         
         # 7. Maintenant supprimer l'utilisateur
         db.session.delete(user)
