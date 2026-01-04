@@ -134,27 +134,31 @@ document.addEventListener('DOMContentLoaded', function(){
     const load = mainSeriesData.map(d => d.load !== null ? d.load : null);
     
     performanceChart = new Chart(perfCtx, {
-      type: 'line',
+      type: 'bar',
       data: {
         labels: labels,
         datasets: [
           {
             label: 'Reps',
             data: reps,
+            backgroundColor: 'rgba(11, 99, 214, 0.7)',
             borderColor: '#0b63d6',
-            backgroundColor: 'rgba(11, 99, 214, 0.1)',
-            tension: 0.2,
+            borderWidth: 1,
             yAxisID: 'y',
-            pointBackgroundColor: '#0b63d6'
+            type: 'bar'
           },
           {
             label: 'Poids (kg)',
             data: load,
             borderColor: '#ef4444',
-            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-            tension: 0.2,
+            backgroundColor: 'transparent',
+            tension: 0.3,
             yAxisID: 'y1',
-            pointBackgroundColor: '#ef4444'
+            pointBackgroundColor: '#ef4444',
+            pointRadius: 5,
+            pointBorderWidth: 2,
+            type: 'line',
+            borderWidth: 2
           }
         ]
       },
@@ -164,13 +168,20 @@ document.addEventListener('DOMContentLoaded', function(){
           y: {
             type: 'linear',
             position: 'left',
-            title: { display: true, text: 'Reps' }
+            title: { display: true, text: 'Reps', font: { weight: 'bold' } },
+            beginAtZero: true
           },
           y1: {
             type: 'linear',
             position: 'right',
-            title: { display: true, text: 'Poids (kg)' },
+            title: { display: true, text: 'Poids (kg)', font: { weight: 'bold' } },
             grid: { drawOnChartArea: false }
+          }
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top'
           }
         }
       }
