@@ -882,8 +882,14 @@ def register_routes(app):
         current_week_start = today - timedelta(days=today.weekday())
         current_week_end = current_week_start + timedelta(days=6)
         
+        # Get objectives for each athlete
+        athlete_objectives = {}
+        for athlete in athletes:
+            athlete_objectives[athlete.id] = Objective.query.filter_by(athlete_id=athlete.id).order_by(Objective.created_at.desc()).all()
+        
         return render_template('coach_weekly_summary.html', coach=user, athletes=athletes, 
-                             current_week_start=current_week_start, current_week_end=current_week_end)
+                             current_week_start=current_week_start, current_week_end=current_week_end,
+                             athlete_objectives=athlete_objectives)
 
     @app.route('/coach/bilan-hebdo/mark/<int:athlete_id>', methods=['POST'])
     def mark_weekly_bilan(athlete_id):

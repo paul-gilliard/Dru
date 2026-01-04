@@ -167,6 +167,58 @@
         padding: 20px;
     }
 
+    /* Objectives section */
+    .objectives-section {
+        margin-top: 20px;
+        padding-top: 16px;
+        border-top: 1px solid #e5e7eb;
+    }
+
+    .objectives-title {
+        font-size: 0.95em;
+        font-weight: 700;
+        color: #333;
+        margin: 0 0 10px 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .objectives-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .objective-item {
+        background: #f9fafb;
+        border-left: 3px solid #667eea;
+        padding: 10px 12px;
+        border-radius: 4px;
+        font-size: 0.9em;
+    }
+
+    .objective-item strong {
+        color: #333;
+        font-weight: 600;
+        display: block;
+        margin-bottom: 2px;
+    }
+
+    .objective-item small {
+        color: #999;
+        display: block;
+        font-size: 0.85em;
+    }
+
+    .no-objectives {
+        text-align: center;
+        color: #bbb;
+        font-size: 0.9em;
+        font-style: italic;
+        padding: 10px;
+    }
+
     /* Marked card styles */
     .athlete-card.marked {
         opacity: 0.6;
@@ -317,6 +369,33 @@
 
             <div class="athlete-body">
                 <div id="summary-{{ athlete.id }}" class="summary-content"></div>
+
+                <!-- Objectives section -->
+                {% if athlete_objectives.get(athlete.id) %}
+                    <div class="objectives-section">
+                        <h4 class="objectives-title">🎯 Objectifs</h4>
+                        <div class="objectives-list">
+                            {% for objective in athlete_objectives[athlete.id][:3] %}
+                                <div class="objective-item">
+                                    <strong>{{ objective.title }}</strong>
+                                    {% if objective.description %}
+                                        <small>{{ objective.description[:80] }}{% if objective.description|length > 80 %}...{% endif %}</small>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                            {% if athlete_objectives[athlete.id]|length > 3 %}
+                                <div class="objective-item" style="text-align: center; font-style: italic; color: #999; border-left-color: #ddd;">
+                                    +{{ athlete_objectives[athlete.id]|length - 3 }} objectif(s) de plus
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="objectives-section">
+                        <h4 class="objectives-title">🎯 Objectifs</h4>
+                        <div class="no-objectives">Aucun objectif pour le moment</div>
+                    </div>
+                {% endif %}
             </div>
         </div>
         {% endfor %}
