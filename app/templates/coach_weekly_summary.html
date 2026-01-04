@@ -315,6 +315,35 @@
         gap: 25px;
     }
 
+    /* Loading spinner */
+    .summary-loader {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 30px;
+        gap: 12px;
+        color: #667eea;
+    }
+
+    .summary-loader.hidden {
+        display: none;
+    }
+
+    .spinner-small {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border: 3px solid #e5e7eb;
+        border-top-color: #667eea;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
     /* Responsive */
     @media (max-width: 768px) {
         .header-bilan h1 {
@@ -368,7 +397,11 @@
             </div>
 
             <div class="athlete-body">
-                <div id="summary-{{ athlete.id }}" class="summary-content"></div>
+                <div id="loader-{{ athlete.id }}" class="summary-loader">
+                    <div class="spinner-small"></div>
+                    <span>Chargement des stats...</span>
+                </div>
+                <div id="summary-{{ athlete.id }}" class="summary-content" style="display:none;"></div>
 
                 <!-- Objectives section -->
                 {% if athlete_objectives.get(athlete.id) %}
@@ -427,6 +460,8 @@
             } catch (error) {
                 console.error(`Erreur pour athlète ${athleteId}:`, error);
                 document.getElementById(`summary-${athleteId}`).innerHTML = '<div class="no-data">Erreur de chargement</div>';
+                document.getElementById(`loader-${athleteId}`).classList.add('hidden');
+                document.getElementById(`summary-${athleteId}`).style.display = 'block';
             }
         }
     }
@@ -520,6 +555,10 @@
         }
 
         container.innerHTML = html || '<div class="no-data">Pas de données disponibles</div>';
+        
+        // Hide loader and show content
+        document.getElementById(`loader-${athleteId}`).classList.add('hidden');
+        container.style.display = 'block';
     }
 
     function getTrendArrow(diff) {
