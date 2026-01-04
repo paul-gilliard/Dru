@@ -5,39 +5,185 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Flask Jinja App{% endblock %}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style>
+        /* Modern Navbar */
+        nav {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-bottom: 2px solid #0b63d6;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+        }
+
+        nav ul {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 12px 20px;
+            list-style: none;
+            flex-wrap: wrap;
+        }
+
+        nav li {
+            list-style: none;
+        }
+
+        nav a {
+            display: inline-block;
+            color: #e2e8f0;
+            text-decoration: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        nav a:hover {
+            background: #0b63d6;
+            color: #fff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(11, 99, 214, 0.3);
+        }
+
+        nav a:active {
+            transform: translateY(0);
+        }
+
+        /* Responsive menu toggle */
+        .navbar-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: #e2e8f0;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 8px 12px;
+        }
+
+        /* User info styling */
+        nav .user-info {
+            margin-left: auto;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: #94a3b8;
+            font-size: 0.9rem;
+        }
+
+        nav .logout-btn {
+            background: #ef4444;
+            color: white;
+            padding: 8px 14px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+        }
+
+        nav .logout-btn:hover {
+            background: #dc2626;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 768px) {
+            .navbar-toggle {
+                display: block;
+            }
+
+            nav ul {
+                flex-direction: column;
+                gap: 4px;
+                max-height: 0;
+                overflow: hidden;
+                transition: max-height 0.3s ease;
+                padding: 12px 20px 0;
+            }
+
+            nav ul.active {
+                max-height: 500px;
+                padding: 12px 20px;
+            }
+
+            nav a {
+                width: 100%;
+                text-align: left;
+            }
+
+            nav .user-info {
+                margin-left: 0;
+                flex-direction: column;
+                align-items: flex-start;
+                width: 100%;
+                gap: 8px;
+            }
+
+            nav .logout-btn {
+                width: 100%;
+            }
+        }
+
+        /* Navbar container */
+        .navbar-container {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .navbar-brand {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #0b63d6;
+            text-decoration: none;
+            white-space: nowrap;
+        }
+    </style>
 </head>
 <body>
     <nav>
-        <ul>
+        <div class="navbar-container" style="width: 100%; display: flex; align-items: center; justify-content: space-between;">
+            <a href="{{ url_for('home') }}" class="navbar-brand">🏋️ DRU</a>
+            <button class="navbar-toggle" onclick="toggleNavbar()">☰</button>
+        </div>
+        <ul id="navbar-menu">
             {# Si personne n'est connecté : n'afficher que le lien Login #}
             {% if not (request.cookies.get('logged_in') or session.get('user_id')) %}
-                <li><a href="{{ url_for('login') }}">Login</a></li>
+                <li><a href="{{ url_for('login') }}">🔐 Login</a></li>
             {% else %}
-                <li><a href="{{ url_for('home') }}">Home</a></li>
+                <li><a href="{{ url_for('home') }}">🏠 Accueil</a></li>
 
                 {# liens coach (affichés si rôle != athlete) #}
                 {% if session.get('role') != 'athlete' %}
-                <li><a href="{{ url_for('coach_availability') }}">Saisie Dispo boutique</a></li>
-                <li><a href="{{ url_for('coach') }}">Création utilisateur</a></li>
-                <li><a href="{{ url_for('coach_programming') }}">Création programmation</a></li>
-                <li><a href="{{ url_for('coach_exercises') }}">Banque exercice</a></li>
-                <li><a href="{{ url_for('coach_stats') }}">Suivi Athlete</a></li>
+                <li><a href="{{ url_for('coach_availability') }}">📅 Disponibilités</a></li>
+                <li><a href="{{ url_for('coach') }}">👥 Utilisateurs</a></li>
+                <li><a href="{{ url_for('coach_programming') }}">📋 Programmes</a></li>
+                <li><a href="{{ url_for('coach_exercises') }}">💪 Exercices</a></li>
+                <li><a href="{{ url_for('coach_stats') }}">📊 Suivi</a></li>
                 {% endif %}
 
                 {# lien athlete (si rôle != coach) #}
                 {% if session.get('role') != 'coach' %}
-                <li><a href="{{ url_for('athlete') }}">Athlete</a></li>
+                <li><a href="{{ url_for('athlete') }}">⛹️ Mon Espace</a></li>
                 {% endif %}
 
-                <li class="text-muted">Salut, {{ request.cookies.get('username') or session.get('username') or 'Utilisateur' }}</li>
-                <li>
-                  <form method="post" action="{{ url_for('logout') }}" style="display:inline">
-                    <button type="submit" class="secondary">Déconnexion</button>
-                  </form>
-                </li>
+                <div class="user-info">
+                    <span>👤 {{ request.cookies.get('username') or session.get('username') or 'Utilisateur' }}</span>
+                    <form method="post" action="{{ url_for('logout') }}" style="display:inline">
+                        <button type="submit" class="logout-btn">Déconnexion</button>
+                    </form>
+                </div>
             {% endif %}
         </ul>
     </nav>
+    
     <div class="container">
         {% with messages = get_flashed_messages() %}
             {% if messages %}
@@ -50,5 +196,23 @@
         {% endwith %}
         {% block content %}{% endblock %}
     </div>
+
+    <script>
+        function toggleNavbar() {
+            const menu = document.getElementById('navbar-menu');
+            menu.classList.toggle('active');
+        }
+
+        // Close menu when clicking a link on mobile
+        const navLinks = document.querySelectorAll('nav a');
+        navLinks.forEach(link => {
+            link.addEventListener('click', () => {
+                const menu = document.getElementById('navbar-menu');
+                if (window.innerWidth <= 768) {
+                    menu.classList.remove('active');
+                }
+            });
+        });
+    </script>
 </body>
 </html>

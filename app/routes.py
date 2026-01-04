@@ -39,10 +39,8 @@ def register_routes(app):
                 session['role'] = user.role
                 flash('Connecté')
 
-                if user.username == 'admin' or user.role == 'coach':
-                    resp = redirect(url_for('coach'))
-                else:
-                    resp = redirect(url_for('home'))
+                # Redirect to home for all users (navbar provides navigation)
+                resp = redirect(url_for('home'))
 
                 resp.set_cookie('logged_in', '1', max_age=7*24*3600, httponly=False)
                 resp.set_cookie('username', user.username, max_age=7*24*3600, httponly=False)
