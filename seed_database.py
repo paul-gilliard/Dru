@@ -1,12 +1,69 @@
 #!/usr/bin/env python3
 """
-Script pour insérer les aliments dans la table food
-Utilisation: python insert_foods_simple.py
+Database Seeding Script
+Handles migration and data seeding for Exercises and Foods tables
+Run with: python seed_database.py
 """
 from app import create_app, db
-from app.models import Food
+from app.models import Exercise, Food
 
-foods_data = [
+# ============================================================================
+# EXERCISES DATA
+# ============================================================================
+EXERCISES_DATA = [
+    ("Développé couché", "PEC"),
+    ("Écarté couché", "PEC"),
+    ("Peck deck", "PEC"),
+    ("Butterfly bras fermés", "PEC"),
+    ("Pullover bras fléchis", "PEC"),
+    ("Pompes", "PEC"),
+    ("Décliné haltère", "PEC"),
+    ("Leg press", "LEGS"),
+    ("Squat barre", "LEGS"),
+    ("Squat hack machine", "LEGS"),
+    ("Leg curl machine", "ISCHIO"),
+    ("Leg extension", "QUAD"),
+    ("Presse à cuisses", "LEGS"),
+    ("Fente avec haltères", "LEGS"),
+    ("Curl jambes debout", "ISCHIO"),
+    ("Relevé mollet machine", "MOLLET"),
+    ("Relevé mollet debout", "MOLLET"),
+    ("Tirage poitrine", "DOS"),
+    ("Tirage nuque", "DOS"),
+    ("Rowing barre", "DOS"),
+    ("Rowing haltère", "DOS"),
+    ("Lat pulldown", "DOS"),
+    ("Chin ups", "DOS"),
+    ("Traction barre", "DOS"),
+    ("Face pull", "EPAULES"),
+    ("Élévation latérale haltères", "EPAULES"),
+    ("Développé militaire", "EPAULES"),
+    ("Shrugs haltères", "EPAULES"),
+    ("Machine épaules", "EPAULES"),
+    ("Curl haltères", "BICEPS"),
+    ("Curl barre droite", "BICEPS"),
+    ("Curl barre W", "BICEPS"),
+    ("Curl machine", "BICEPS"),
+    ("Curl poulies basses", "BICEPS"),
+    ("Dips", "TRICEPS"),
+    ("Pushdown triceps", "TRICEPS"),
+    ("Kickback triceps", "TRICEPS"),
+    ("Extension triceps poulie haute", "TRICEPS"),
+    ("Crunch machine", "ABDOS"),
+    ("Crunch au sol", "ABDOS"),
+    ("Abs machine", "ABDOS"),
+    ("Planche abdominale", "ABDOS"),
+    ("Ab wheel", "ABDOS"),
+    ("Élévation latérale panatta", "EPAULES"),
+    ("Extension triceps poulie basse", "TRICEPS"),
+    ("Crunch poulie", "ABDOS"),
+    ("Pendulum squat", "LEGS"),
+]
+
+# ============================================================================
+# FOODS DATA
+# ============================================================================
+FOODS_DATA = [
     ("Abricot Sec", 158, 4, 0.5, None, 36.5, None, None, None),
     ("After Eight menthe", 423, 2.1, 13, None, 74, None, None, None),
     ("Amandes", 580, 19, 54, None, 4.5, None, 8.5, None),
@@ -252,24 +309,38 @@ foods_data = [
     ("Yaourt nature maigre", 207, 4.8, 10, None, 23, None, None, None),
 ]
 
-def main():
-    app = create_app()
+# ============================================================================
+# SEEDING FUNCTIONS
+# ============================================================================
+
+def seed_exercises():
+    """Seed exercises table"""
+    print("\n📋 Seeding Exercises...")
+    inserted = 0
+    skipped = 0
     
-    with app.app_context():
-        print("\n📦 Insertion des aliments...\n")
-        
-        inserted = 0
-        skipped = 0
-        
-        for name, kcal, proteins, lipids, saturated_fats, carbs, simple_sugars, fiber, salt in foods_data:
-            # Vérifier si l'aliment existe déjà
-            existing = Food.query.filter_by(name=name).first()
-            
-            if existing:
-                skipped += 1
-                continue
-            
-            # Créer et ajouter le nouvel aliment
+    for name, muscle_group in EXERCISES_DATA:
+        existing = Exercise.query.filter_by(name=name).first()
+        if existing:
+            skipped += 1
+        else:
+            exercise = Exercise(name=name, muscle_group=muscle_group)
+            db.session.add(exercise)
+            inserted += 1
+    
+    return inserted, skipped
+
+def seed_foods():
+    """Seed foods table"""
+    print("🥗 Seeding Foods...")
+    inserted = 0
+    skipped = 0
+    
+    for name, kcal, proteins, lipids, saturated_fats, carbs, simple_sugars, fiber, salt in FOODS_DATA:
+        existing = Food.query.filter_by(name=name).first()
+        if existing:
+            skipped += 1
+        else:
             food = Food(
                 name=name,
                 kcal=kcal,
@@ -283,22 +354,48 @@ def main():
             )
             db.session.add(food)
             inserted += 1
-            
-            # Afficher la progression tous les 50
-            if inserted % 50 == 0:
-                print(f"  ✓ {inserted} aliments insérés...")
+    
+    return inserted, skipped
+
+def main():
+    """Main seeding function"""
+    app = create_app()
+    
+    with app.app_context():
+        print("\n" + "="*70)
+        print("🚀 DATABASE SEEDING")
+        print("="*70)
         
-        # Commit tous les changements
         try:
+            # Create all tables
+            print("\n🔧 Creating database tables...")
+            db.create_all()
+            print("   ✓ Tables created/verified")
+            
+            # Seed exercises
+            ex_inserted, ex_skipped = seed_exercises()
+            print(f"   ✓ {ex_inserted} new exercises inserted, {ex_skipped} already exist")
+            
+            # Seed foods
+            food_inserted, food_skipped = seed_foods()
+            print(f"   ✓ {food_inserted} new foods inserted, {food_skipped} already exist")
+            
+            # Commit all changes
             db.session.commit()
-            print(f"\n✅ SUCCÈS!")
-            print(f"   - {inserted} nouveaux aliments insérés")
-            if skipped > 0:
-                print(f"   - {skipped} aliments déjà existants (ignorés)")
-            print(f"   - Total en base: {Food.query.count()} aliments\n")
+            
+            # Summary
+            print("\n" + "="*70)
+            print("✅ SEEDING COMPLETE!")
+            print("="*70)
+            print(f"📊 Summary:")
+            print(f"   • Exercises: {Exercise.query.count()} total in database")
+            print(f"   • Foods: {Food.query.count()} total in database")
+            print("="*70 + "\n")
+            
         except Exception as e:
             db.session.rollback()
-            print(f"\n❌ Erreur lors du commit: {e}\n")
+            print(f"\n❌ ERROR: {e}\n")
+            raise
 
 if __name__ == '__main__':
     main()
