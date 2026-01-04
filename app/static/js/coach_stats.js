@@ -8,6 +8,10 @@ document.addEventListener('DOMContentLoaded', function(){
   const toggleKcals = document.getElementById('toggle-kcals');
   const toggleWater = document.getElementById('toggle-water');
   const toggleSleep = document.getElementById('toggle-sleep');
+  const datePreset = document.getElementById('date-preset');
+  const dateStart = document.getElementById('date-start');
+  const dateEnd = document.getElementById('date-end');
+  const applyDateFilter = document.getElementById('apply-date-filter');
 
   let journalChart = new Chart(chartJournalCtx, {
     type: 'line',
@@ -22,11 +26,63 @@ document.addEventListener('DOMContentLoaded', function(){
   let otherSeriesChart = null;
   let tonnageChart = null;
   let tonnageCache = null;
+  let dateRange = { start: null, end: null }; // Date filter state
+
+  // Filter data by date range
+  function filterByDateRange(data) {
+    if (!dateRange.start && !dateRange.end) return data;
+    return data.filter(entry => {
+      const entryDate = new Date(entry.date);
+      const start = dateRange.start ? new Date(dateRange.start) : null;
+      const end = dateRange.end ? new Date(dateRange.end) : null;
+      if (start && entryDate < start) return false;
+      if (end && entryDate > end) return false;
+      return true;
+    });
+  }
+
+  // Set date preset
+  datePreset.addEventListener('change', function() {
+    if (!this.value) {
+      dateStart.value = '';
+      dateEnd.value = '';
+      dateRange = { start: null, end: null };
+    } else {
+      const days = parseInt(this.value);
+      const end = new Date();
+      const start = new Date(end);
+      start.setDate(start.getDate() - days);
+      dateStart.value = start.toISOString().split('T')[0];
+      dateEnd.value = end.toISOString().split('T')[0];
+      dateRange = { start: dateStart.value, end: dateEnd.value };
+    }
+    const athleteId = athleteSelect.value;
+    if (athleteId) {
+      loadJournal(athleteId);
+      loadPerformance(athleteId);
+      loadTonnage(athleteId);
+      loadSummary(athleteId);
+    }
+  });
+
+  // Apply custom date filter
+  applyDateFilter.addEventListener('click', function() {
+    dateRange = { start: dateStart.value, end: dateEnd.value };
+    datePreset.value = ''; // Clear preset when using custom dates
+    const athleteId = athleteSelect.value;
+    if (athleteId) {
+      loadJournal(athleteId);
+      loadPerformance(athleteId);
+      loadTonnage(athleteId);
+      loadSummary(athleteId);
+    }
+  });
 
   async function loadJournal(athleteId){
     const res = await fetch(`/coach/stats/athlete/${athleteId}/journal.json`);
     if (!res.ok) return;
-    const data = await res.json();
+    let data = await res.json();
+    data = filterByDateRange(data); // Apply date filter
     const labels = data.map(d=>d.date);
     const weight = data.map(d=> d.weight === null ? null : Number(d.weight));
     const kcals = data.map(d=> d.kcals === null ? null : Number(d.kcals));
@@ -83,7 +139,17 @@ document.addEventListener('DOMContentLoaded', function(){
   async function loadPerformance(athleteId){
     const res = await fetch(`/coach/stats/athlete/${athleteId}/performance.json`);
     if (!res.ok) return;
-    const data = await res.json();
+    let data = await res.json();
+    
+    // Filter performance data by date range
+    if (dateRange.start || dateRange.end) {
+      const filteredData = {};
+      Object.keys(data).forEach(ex => {
+        filteredData[ex] = filterByDateRange(data[ex]);
+      });
+      data = filteredData;
+    }
+    
     perfCache = data;
     // populate exercise select
     exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
@@ -106,7 +172,17 @@ document.addEventListener('DOMContentLoaded', function(){
         console.log('Tonnage load failed:', res.status);
         return;
       }
-      const data = await res.json();
+      let data = await res.json();
+      
+      // Filter tonnage data by date range
+      if (dateRange.start || dateRange.end) {
+        const filteredData = {};
+        Object.keys(data).forEach(muscle => {
+          filteredData[muscle] = filterByDateRange(data[muscle]);
+        });
+        data = filteredData;
+      }
+      
       tonnageCache = data;
       // populate muscle group select
       muscleSelect.innerHTML = '<option value="">— choisir un groupe musculaire —</option>';

@@ -25,6 +25,28 @@
       <input id="toggle-sleep" type="checkbox"> Sommeil
     </label>
   </div>
+  
+  <!-- Date filters -->
+  <div style="margin-top:12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <select id="date-preset" style="padding:6px 8px;">
+      <option value="">— Tous les données —</option>
+      <option value="7">Derniers 7 jours</option>
+      <option value="30">Derniers 30 jours</option>
+      <option value="90">Derniers 90 jours</option>
+    </select>
+    
+    <div style="display:flex; gap:8px; align-items:center;">
+      <label>Du:</label>
+      <input id="date-start" type="date" style="padding:6px 8px;">
+    </div>
+    
+    <div style="display:flex; gap:8px; align-items:center;">
+      <label>Au:</label>
+      <input id="date-end" type="date" style="padding:6px 8px;">
+    </div>
+    
+    <button id="apply-date-filter" type="button" class="secondary">Appliquer</button>
+  </div>
 </div>
 
 <div class="card" style="margin-top:12px;">
