@@ -336,54 +336,65 @@
 
                     <div class="meal-body">
                         {% if meals %}
-                            {% set meal_kcals = 0 %}
-                            {% set meal_proteins = 0 %}
-                            {% set meal_carbs = 0 %}
-                            {% set meal_lipids = 0 %}
+                            <div class="food-items-list">
+                                {% for meal_entry in meals %}
+                                    {% if meal_entry.food %}
+                                        {% set quantity_factor = (meal_entry.quantity or 100) / 100.0 %}
+                                        {% set kcals = (meal_entry.food.kcal or 0) * quantity_factor %}
+                                        {% set proteins = (meal_entry.food.proteins or 0) * quantity_factor %}
+                                        {% set carbs = (meal_entry.food.carbs or 0) * quantity_factor %}
+                                        {% set lipids = (meal_entry.food.lipids or 0) * quantity_factor %}
 
-                            {% for meal_entry in meals %}
-                                {% if meal_entry.food %}
-                                    {% set quantity_factor = (meal_entry.quantity or 100) / 100.0 %}
-                                    {% set kcals = (meal_entry.food.kcal or 0) * quantity_factor %}
-                                    {% set proteins = (meal_entry.food.proteins or 0) * quantity_factor %}
-                                    {% set carbs = (meal_entry.food.carbs or 0) * quantity_factor %}
-                                    {% set lipids = (meal_entry.food.lipids or 0) * quantity_factor %}
-                                    {% set meal_kcals = meal_kcals + kcals %}
-                                    {% set meal_proteins = meal_proteins + proteins %}
-                                    {% set meal_carbs = meal_carbs + carbs %}
-                                    {% set meal_lipids = meal_lipids + lipids %}
-
-                                    <div class="food-item">
-                                        <div class="food-name">{{ meal_entry.food.name }}</div>
-                                        <div class="food-quantity">{{ meal_entry.quantity|int }}g</div>
-                                        <div class="food-macros">
-                                            {{ '%.0f'|format(kcals) }}kcal • 
-                                            {{ '%.1f'|format(proteins) }}P • 
-                                            {{ '%.1f'|format(carbs) }}C • 
-                                            {{ '%.1f'|format(lipids) }}L
+                                        <div class="food-item">
+                                            <div class="food-name">{{ meal_entry.food.name }}</div>
+                                            <div class="food-quantity">{{ meal_entry.quantity|int }}g</div>
+                                            <div class="food-macros">
+                                                {{ '%.0f'|format(kcals) }}kcal • 
+                                                {{ '%.1f'|format(proteins) }}P • 
+                                                {{ '%.1f'|format(carbs) }}C • 
+                                                {{ '%.1f'|format(lipids) }}L
+                                            </div>
                                         </div>
-                                    </div>
-                                {% endif %}
-                            {% endfor %}
+                                        <script>
+                                            window['meal_{{ meal_num }}_totals'] = window['meal_{{ meal_num }}_totals'] || {kcals: 0, proteins: 0, carbs: 0, lipids: 0};
+                                            window['meal_{{ meal_num }}_totals'].kcals += {{ kcals }};
+                                            window['meal_{{ meal_num }}_totals'].proteins += {{ proteins }};
+                                            window['meal_{{ meal_num }}_totals'].carbs += {{ carbs }};
+                                            window['meal_{{ meal_num }}_totals'].lipids += {{ lipids }};
+                                        </script>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
 
                             <div class="meal-totals">
                                 <div class="meal-total-row">
                                     <span>Kcals</span>
-                                    <strong>{{ '%.0f'|format(meal_kcals) }}</strong>
+                                    <strong id="meal_{{ meal_num }}_kcals">0</strong>
                                 </div>
                                 <div class="meal-total-row">
                                     <span>Protéines</span>
-                                    <strong>{{ '%.1f'|format(meal_proteins) }}g</strong>
+                                    <strong id="meal_{{ meal_num }}_proteins">0g</strong>
                                 </div>
                                 <div class="meal-total-row">
                                     <span>Glucides</span>
-                                    <strong>{{ '%.1f'|format(meal_carbs) }}g</strong>
+                                    <strong id="meal_{{ meal_num }}_carbs">0g</strong>
                                 </div>
                                 <div class="meal-total-row">
                                     <span>Lipides</span>
-                                    <strong>{{ '%.1f'|format(meal_lipids) }}g</strong>
+                                    <strong id="meal_{{ meal_num }}_lipids">0g</strong>
                                 </div>
                             </div>
+                            <script>
+                                window.addEventListener('load', function() {
+                                    if (window['meal_{{ meal_num }}_totals']) {
+                                        const t = window['meal_{{ meal_num }}_totals'];
+                                        document.getElementById('meal_{{ meal_num }}_kcals').textContent = Math.round(t.kcals);
+                                        document.getElementById('meal_{{ meal_num }}_proteins').textContent = t.proteins.toFixed(1) + 'g';
+                                        document.getElementById('meal_{{ meal_num }}_carbs').textContent = t.carbs.toFixed(1) + 'g';
+                                        document.getElementById('meal_{{ meal_num }}_lipids').textContent = t.lipids.toFixed(1) + 'g';
+                                    }
+                                });
+                            </script>
                         {% else %}
                             <div class="empty-meal">Pas d'aliments</div>
                         {% endif %}
