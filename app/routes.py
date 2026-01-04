@@ -316,15 +316,20 @@ def register_routes(app):
             for ex in s.exercises:
                 if ex not in all_exercises:
                     all_exercises.append(ex)
-                series_list = ex.get_series_list() if hasattr(ex, 'get_series_list') else []
-                all_series.extend(series_list)
+                
+                # Count series based on 'sets' field
+                if ex.sets:
+                    all_series.extend([f'Série {i}' for i in range(1, ex.sets + 1)])
                 
                 # Count by muscle group
                 muscle = ex.muscle or 'Autre'
                 if muscle not in muscle_counts:
-                    muscle_counts[muscle] = []
-                if ex not in muscle_counts[muscle]:
-                    muscle_counts[muscle].append(ex)
+                    muscle_counts[muscle] = {'exercises': [], 'series_count': 0}
+                if ex not in muscle_counts[muscle]['exercises']:
+                    muscle_counts[muscle]['exercises'].append(ex)
+                    # Add series count for this exercise
+                    if ex.sets:
+                        muscle_counts[muscle]['series_count'] += ex.sets
 
         programs = Program.query.filter_by(athlete_id=prog.athlete_id).order_by(Program.created_at.desc()).all()
         athlete = User.query.get(prog.athlete_id)

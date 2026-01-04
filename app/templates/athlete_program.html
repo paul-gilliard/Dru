@@ -310,15 +310,9 @@
                 <div class="stat-value">{{ active_days }}</div>
                 <div class="stat-label">Séances/semaine</div>
             </div>
-            {% for muscle, exs in muscle_counts.items() %}
+            {% for muscle, data in muscle_counts.items() %}
                 <div class="stat-card">
-                    <div class="stat-value">
-                        {% set muscle_series = 0 %}
-                        {% for e in exs %}
-                            {% set muscle_series = muscle_series + (e.get_series_list()|length) %}
-                        {% endfor %}
-                        {{ muscle_series }}
-                    </div>
+                    <div class="stat-value">{{ data.series_count }}</div>
                     <div class="stat-label">{{ muscle }}</div>
                 </div>
             {% endfor %}
