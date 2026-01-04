@@ -3,79 +3,341 @@
 {% block title %}Disponibilités du Coach - Dru{% endblock %}
 
 {% block content %}
-<div class="container mt-5">
-    <div class="row">
-        <div class="col-md-10 offset-md-1">
-            <div class="card">
-                <div class="card-header bg-success text-white">
-                    <h4 class="mb-0">
-                        <a href="{{ url_for('athlete_home') }}" class="btn btn-sm btn-outline-light me-2">← Retour</a>
-                        📅 Prochaines Disponibilités (14 jours)
-                    </h4>
+<style>
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    .availability-container {
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+
+    .header-availability {
+        text-align: center;
+        color: white;
+        margin-bottom: 40px;
+    }
+
+    .header-availability h1 {
+        font-size: 2em;
+        font-weight: 700;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .location-info {
+        background: rgba(255,255,255,0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 15px 20px;
+        color: white;
+        margin-bottom: 30px;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .location-info strong {
+        display: block;
+        font-size: 0.9em;
+        opacity: 0.9;
+        margin-bottom: 5px;
+    }
+
+    .location-name {
+        font-size: 1.1em;
+        font-weight: 600;
+    }
+
+    /* Tableau responsive */
+    .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+
+    .day-card {
+        background: white;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        border-left: 5px solid #667eea;
+        transition: all 0.3s ease;
+    }
+
+    .day-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+
+    .day-date {
+        font-size: 1.1em;
+        font-weight: 700;
+        color: #333;
+        margin-bottom: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .day-weekday {
+        font-size: 0.85em;
+        color: #667eea;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .availability-slots {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .slot-item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        font-size: 0.95em;
+    }
+
+    .slot-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.85em;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .badge-available {
+        background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+        color: white;
+    }
+
+    .badge-full {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .no-slot {
+        color: #999;
+        font-style: italic;
+    }
+
+    .info-box {
+        background: rgba(255,255,255,0.15);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        padding: 20px;
+        color: white;
+        border: 1px solid rgba(255,255,255,0.2);
+        margin-bottom: 30px;
+        text-align: center;
+    }
+
+    .info-box strong {
+        display: block;
+        font-size: 1.1em;
+        margin-bottom: 8px;
+    }
+
+    .no-availability {
+        background: rgba(255,193,7,0.2);
+        border: 1px solid rgba(255,193,7,0.4);
+        color: white;
+        padding: 25px;
+        border-radius: 12px;
+        text-align: center;
+    }
+
+    .no-availability strong {
+        display: block;
+        font-size: 1.2em;
+        margin-bottom: 10px;
+    }
+
+    /* Tableau version desktop */
+    .table-wrapper {
+        display: none;
+        overflow-x: auto;
+        margin-bottom: 30px;
+    }
+
+    .availability-table {
+        width: 100%;
+        border-collapse: collapse;
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+
+    .availability-table thead {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+
+    .availability-table th,
+    .availability-table td {
+        padding: 15px;
+        text-align: center;
+        border-bottom: 1px solid #eee;
+    }
+
+    .availability-table th {
+        font-weight: 600;
+        text-transform: uppercase;
+        font-size: 0.85em;
+    }
+
+    .availability-table tbody tr:hover {
+        background: #f8f9fa;
+    }
+
+    .availability-table td:first-child {
+        text-align: left;
+        font-weight: 600;
+        color: #333;
+    }
+
+    /* Mode desktop */
+    @media (min-width: 992px) {
+        .calendar-grid {
+            display: none;
+        }
+
+        .table-wrapper {
+            display: block;
+        }
+    }
+
+    /* Mode mobile */
+    @media (max-width: 768px) {
+        .header-availability h1 {
+            font-size: 1.5em;
+        }
+
+        .day-card {
+            padding: 15px;
+        }
+
+        .day-date {
+            font-size: 1em;
+        }
+
+        .location-info {
+            padding: 12px 15px;
+        }
+    }
+</style>
+
+<div class="availability-container">
+    <!-- En-tête -->
+    <div class="header-availability">
+        <h1>📅 Disponibilités</h1>
+        <p>Créneaux de votre coach pour les 14 prochains jours</p>
+    </div>
+
+    {% if calendar %}
+        <!-- Info localisation -->
+        <div class="location-info">
+            <strong>📍 Emplacements disponibles :</strong>
+            <div class="location-name">{{ ', '.join(locations) }}</div>
+        </div>
+
+        <!-- Vue Grille (Mobile) -->
+        <div class="calendar-grid">
+            {% for day in calendar %}
+            <div class="day-card">
+                <div class="day-date">
+                    <div>
+                        <div class="day-weekday">{{ day.date.strftime('%a') }}</div>
+                        {{ day.date.strftime('%d %b') }}
+                    </div>
                 </div>
-                <div class="card-body">
-                    {% if calendar %}
-                    <p class="mb-4"><strong>Emplacements disponibles :</strong> {{ ', '.join(locations) }}</p>
-
-                    <div class="table-responsive">
-                        <table class="table table-striped table-hover">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Date</th>
-                                    {% for loc in locations %}
-                                    <th>{{ loc }}</th>
-                                    {% endfor %}
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for day in calendar %}
-                                <tr>
-                                    <td>
-                                        <strong>{{ day.date.strftime('%a %d %b') }}</strong>
-                                        <div class="text-muted small">{{ day.date.isoformat() }}</div>
-                                    </td>
-                                    {% for loc in locations %}
-                                    <td>
-                                        {% set slots = day.slots_per_location[loc] %}
-                                        {% if slots.day %}
-                                            <span class="badge bg-success">Journée complète</span>
-                                        {% elif slots.morning or slots.afternoon %}
-                                            <div>
-                                                {% if slots.morning %}
-                                                    <span class="badge bg-info">Matin</span>
-                                                {% endif %}
-                                                {% if slots.afternoon %}
-                                                    <span class="badge bg-info">Après-midi</span>
-                                                {% endif %}
-                                            </div>
-                                        {% else %}
-                                            <span class="text-muted">-</span>
-                                        {% endif %}
-                                    </td>
-                                    {% endfor %}
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="alert alert-info mt-4">
-                        <strong>ℹ️ Info :</strong> Vous pouvez voir les créneaux disponibles chez votre coach. 
-                        Contactez-le directement pour fixer vos séances d'entraînement.
-                    </div>
-                    {% else %}
-                    <div class="alert alert-warning">
-                        <strong>⚠️ Aucune disponibilité</strong>
-                        <p class="mb-0">Votre coach n'a pas encore entré ses disponibilités. Revenez plus tard ou contactez-le directement.</p>
-                    </div>
-                    {% endif %}
-
-                    <div class="mt-4">
-                        <a href="{{ url_for('athlete_home') }}" class="btn btn-primary">← Retour au menu</a>
-                    </div>
+                <div class="availability-slots">
+                    {% for loc in locations %}
+                        {% set slots = day.slots_per_location[loc] %}
+                        {% if slots.day %}
+                            <div class="slot-item">
+                                <span class="slot-badge badge-full">Journée complète</span>
+                            </div>
+                        {% elif slots.morning or slots.afternoon %}
+                            <div class="slot-item">
+                                {% if slots.morning %}
+                                    <span class="slot-badge badge-available">Matin</span>
+                                {% endif %}
+                                {% if slots.afternoon %}
+                                    <span class="slot-badge badge-available">Après-midi</span>
+                                {% endif %}
+                            </div>
+                        {% else %}
+                            <div class="slot-item no-slot">Aucun créneau</div>
+                        {% endif %}
+                    {% endfor %}
                 </div>
             </div>
+            {% endfor %}
         </div>
-    </div>
+
+        <!-- Vue Tableau (Desktop) -->
+        <div class="table-wrapper">
+            <table class="availability-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        {% for loc in locations %}
+                        <th>{{ loc }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for day in calendar %}
+                    <tr>
+                        <td>{{ day.date.strftime('%a %d %b') }}</td>
+                        {% for loc in locations %}
+                        <td>
+                            {% set slots = day.slots_per_location[loc] %}
+                            {% if slots.day %}
+                                <span class="slot-badge badge-full">Journée complète</span>
+                            {% elif slots.morning or slots.afternoon %}
+                                <div>
+                                    {% if slots.morning %}
+                                        <span class="slot-badge badge-available">Matin</span>
+                                    {% endif %}
+                                    {% if slots.afternoon %}
+                                        <span class="slot-badge badge-available">Après-midi</span>
+                                    {% endif %}
+                                </div>
+                            {% else %}
+                                <span class="no-slot">—</span>
+                            {% endif %}
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Info -->
+        <div class="info-box">
+            <strong>ℹ️ Comment réserver ?</strong>
+            <p style="margin-bottom: 0;">Contactez votre coach directement pour confirmer une séance à l'un de ces créneaux.</p>
+        </div>
+
+    {% else %}
+        <div class="no-availability">
+            <strong>⚠️ Aucune disponibilité</strong>
+            <p style="margin-bottom: 0;">Votre coach n'a pas encore entré ses disponibilités. Revenez plus tard ou contactez-le directement.</p>
+        </div>
+    {% endif %}
 </div>
+
 {% endblock %}
