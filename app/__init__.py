@@ -29,6 +29,25 @@ def create_app():
         db.create_all()
         print("✓ Database tables created")
         
+        # Fix Food table schema if needed (proteins and lipids should be nullable)
+        try:
+            from sqlalchemy import inspect
+            from app.models import Food
+            inspector = inspect(db.engine)
+            food_columns = {col['name']: col for col in inspector.get_columns('food')}
+            
+            # Check if proteins column is nullable (it should be)
+            if 'proteins' in food_columns and not food_columns['proteins']['nullable']:
+                print("\n🔧 Fixing Food table schema (proteins/lipids should be nullable)...")
+                db.session.execute(db.text("DROP TABLE IF EXISTS food"))
+                db.session.commit()
+                Food.__table__.create(db.engine)
+                db.session.commit()
+                print("✓ Food table schema fixed\n")
+        except Exception as e:
+            # Silently continue if schema check fails
+            pass
+        
         # Créer l'utilisateur admin par défaut s'il n'existe pas
         from app.models import User
         admin = User.query.filter_by(username='admin').first()
