@@ -1239,8 +1239,8 @@ def register_routes(app):
         
         # Get all exercises in this program
         program_exercises = set()
-        for session in program.sessions:
-            for ex_entry in session.exercises:
+        for prog_session in program.sessions:
+            for ex_entry in prog_session.exercises:
                 program_exercises.add(ex_entry.name)
         
         # Get performance entries only for exercises in this program
@@ -1423,8 +1423,8 @@ def register_routes(app):
             
             # Get all exercises in this program
             program_exercises = set()
-            for session in program.sessions:
-                for ex_entry in session.exercises:
+            for prog_session in program.sessions:
+                for ex_entry in prog_session.exercises:
                     program_exercises.add(ex_entry.name)
             
             # Get performance entries only for exercises in this program
