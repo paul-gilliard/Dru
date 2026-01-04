@@ -188,6 +188,15 @@
         font-weight: 600;
         text-align: center;
         box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: 2px solid transparent;
+    }
+
+    .validation-badge:hover {
+        background: rgba(16, 185, 129, 1);
+        transform: scale(1.05);
+        border-color: rgba(255,255,255,0.5);
     }
 
     .validation-badge .days {
@@ -509,6 +518,16 @@
             `;
             card.style.position = 'relative';
             card.appendChild(badge);
+            
+            // Add click handler to badge for unmarking
+            badge.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const checkbox = document.getElementById(`check-${athleteId}`);
+                if (checkbox) {
+                    checkbox.checked = false;
+                    checkbox.dispatchEvent(new Event('change'));
+                }
+            });
             
             // Show marked section if not visible
             if (markedSection.style.display === 'none') {
