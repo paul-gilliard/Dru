@@ -65,6 +65,26 @@
             padding: 8px 12px;
         }
 
+        /* Athlete mobile back button */
+        .athlete-back-btn {
+            display: none;
+            background: #0b63d6;
+            color: white;
+            border: none;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.95rem;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s ease;
+        }
+
+        .athlete-back-btn:hover {
+            background: #0a50c4;
+            transform: translateY(-2px);
+        }
+
         /* User info styling */
         nav .user-info {
             margin-left: auto;
@@ -130,6 +150,19 @@
             nav .logout-btn {
                 width: 100%;
             }
+
+            /* For athletes on mobile: hide hamburger and menu, show simple back button */
+            body:has(nav .athlete-only-navbar) .navbar-toggle {
+                display: none;
+            }
+
+            body:has(nav .athlete-only-navbar) nav ul {
+                display: none;
+            }
+
+            body:has(nav .athlete-only-navbar) .athlete-back-btn {
+                display: block;
+            }
         }
 
         /* Navbar container */
@@ -157,8 +190,11 @@
                 <a href="{{ url_for('home') }}" class="navbar-brand">🏋️ DRU</a>
             {% endif %}
             <button class="navbar-toggle" onclick="toggleNavbar()">☰</button>
+            {% if session.get('role') == 'athlete' %}
+                <a href="{{ url_for('athlete_home') }}" class="athlete-back-btn">← Retour au menu</a>
+            {% endif %}
         </div>
-        <ul id="navbar-menu">
+        <ul id="navbar-menu" {% if session.get('role') == 'athlete' %}class="athlete-only-navbar"{% endif %}>
             {# Si personne n'est connecté : n'afficher que le lien Login #}
             {% if not (request.cookies.get('logged_in') or session.get('user_id')) %}
                 <li><a href="{{ url_for('login') }}">🔐 Login</a></li>
