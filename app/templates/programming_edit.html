@@ -77,6 +77,11 @@
 </style>
 <h2 style="margin-bottom: 20px;">Éditer : {{ program.name }} — {{ program.athlete.username }}</h2>
 
+<div style="margin-bottom: 16px; display: flex; gap: 8px;">
+  <button id="collapse-all-btn" type="button" style="background: #0b63d6; color: white; padding: 10px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.95rem;">Tout réduire</button>
+  <button id="expand-all-btn" type="button" style="background: #666; color: white; padding: 10px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.95rem;">Tout agrandir</button>
+</div>
+
 <div class="card programming-edit-root">
   <!-- form id important pour soumission depuis les boutons flottants -->
   <form id="program-form" method="post" action="{{ url_for('coach_programming_edit', program_id=program.id) }}">

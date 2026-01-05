@@ -1,4 +1,33 @@
 document.addEventListener('click', function(e){
+  // Collapse all exercises
+  if (e.target.matches('#collapse-all-btn')) {
+    e.preventDefault();
+    document.querySelectorAll('.exercise-block').forEach(block => {
+      if (!block.classList.contains('collapsed')) {
+        block.classList.add('collapsed');
+        const toggleBtn = block.querySelector('.toggle-collapse');
+        if (toggleBtn) toggleBtn.textContent = '+';
+        const nameDisplay = block.querySelector('.exercise-name-display');
+        const select = block.querySelector('.exercise-select');
+        if (nameDisplay && select) {
+          nameDisplay.textContent = select.value || '—';
+        }
+      }
+    });
+  }
+  
+  // Expand all exercises
+  if (e.target.matches('#expand-all-btn')) {
+    e.preventDefault();
+    document.querySelectorAll('.exercise-block').forEach(block => {
+      if (block.classList.contains('collapsed')) {
+        block.classList.remove('collapsed');
+        const toggleBtn = block.querySelector('.toggle-collapse');
+        if (toggleBtn) toggleBtn.textContent = '−';
+      }
+    });
+  }
+  
   // Toggle collapse/expand exercise
   if (e.target.matches('.toggle-collapse')) {
     e.preventDefault();
