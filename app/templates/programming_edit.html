@@ -1,6 +1,37 @@
 {% extends 'base.html' %}
 {% block title %}Éditer programme — {{ program.name }}{% endblock %}
 {% block content %}
+<style>
+  .exercise-block {
+    cursor: grab;
+    transition: all 0.2s ease;
+  }
+  
+  .exercise-block:hover {
+    background-color: #f0f0f0 !important;
+  }
+  
+  .exercise-block.dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+  }
+  
+  .exercise-block.drag-over {
+    background-color: #e0e7ff !important;
+    border: 2px solid #0b63d6 !important;
+  }
+  
+  .drag-handle {
+    cursor: grab;
+    color: #999;
+    font-size: 1.2rem;
+    margin-right: 10px;
+  }
+  
+  .drag-handle:hover {
+    color: #0b63d6;
+  }
+</style>
 <h2 style="margin-bottom: 20px;">Éditer : {{ program.name }} — {{ program.athlete.username }}</h2>
 
 <div class="card programming-edit-root">
@@ -23,18 +54,20 @@
           <div class="exercises-container" id="exercises_day_{{ day }}" style="display:flex; flex-direction:column; gap:20px;">
             {% if sessions_by_day[day] %}
               {% for ex in sessions_by_day[day].exercises %}
-              <div class="exercise-block" data-exercise-id="{{ ex.id }}" data-day="{{ day }}" style="border:1px solid rgba(15,23,42,0.1); border-radius:10px; padding:14px; background:#f9fafb;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                  <div style="flex:1;">
-                    <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Exercice</label>
-                    <select name="ex_name_{{ day }}[]" class="exercise-select" data-value="{{ ex.name or '' }}" style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem;" required><option>-- Sélectionner --</option></select>
+              <div class="exercise-block" data-exercise-id="{{ ex.id }}" data-day="{{ day }}" draggable="true" style="border:1px solid rgba(15,23,42,0.1); border-radius:10px; padding:14px; background:#f9fafb; display:flex; gap:12px;">
+                <div class="drag-handle" title="Glisser pour réorganiser">⋮⋮</div>
+                <div style="flex: 1;">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                    <div style="flex:1;">
+                      <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Exercice</label>
+                      <select name="ex_name_{{ day }}[]" class="exercise-select" data-value="{{ ex.name or '' }}" style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem;" required><option>-- Sélectionner --</option></select>
+                    </div>
+                    <div style="margin-left:12px;">
+                      <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Muscle</label>
+                      <div class="exercise-muscle" style="padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem; background:#f3f4f6; min-width:100px; text-align:center;">{{ ex.muscle or '—' }}</div>
+                    </div>
+                    <button type="button" class="delete-exercise btn-remove" style="margin-top:20px; background:#ef4444; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Supprimer</button>
                   </div>
-                  <div style="margin-left:12px;">
-                    <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Muscle</label>
-                    <div class="exercise-muscle" style="padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem; background:#f3f4f6; min-width:100px; text-align:center;">{{ ex.muscle or '—' }}</div>
-                  </div>
-                  <button type="button" class="delete-exercise btn-remove" style="margin-top:20px; background:#ef4444; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Supprimer</button>
-                </div>
 
                 <!-- Séries pour cet exercice -->
                 <div class="series-list" style="margin-bottom:12px;">
@@ -134,17 +167,19 @@
 
 <!-- Exercise and series templates (hidden) -->
 <template id="exercise-template">
-  <div class="exercise-block" style="border:1px solid rgba(15,23,42,0.1); border-radius:10px; padding:14px; background:#f9fafb;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-      <div style="flex:1;">
-        <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Exercice</label>
-        <select name="__EX_NAME__" class="exercise-select" style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem;" required><option>-- Sélectionner --</option></select>
-      </div>
-      <div style="margin-left:12px;">
-        <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Muscle</label>
-        <div class="exercise-muscle" style="padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem; background:#f3f4f6; min-width:100px; text-align:center;">—</div>
-      </div>
-      <button type="button" class="delete-exercise" style="margin-top:20px; background:#ef4444; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Supprimer</button>
+  <div class="exercise-block" draggable="true" style="border:1px solid rgba(15,23,42,0.1); border-radius:10px; padding:14px; background:#f9fafb; display:flex; gap:12px;">
+    <div class="drag-handle" title="Glisser pour réorganiser">⋮⋮</div>
+    <div style="flex: 1;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div style="flex:1;">
+          <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Exercice</label>
+          <select name="__EX_NAME__" class="exercise-select" style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem;" required><option>-- Sélectionner --</option></select>
+        </div>
+        <div style="margin-left:12px;">
+          <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Muscle</label>
+          <div class="exercise-muscle" style="padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem; background:#f3f4f6; min-width:100px; text-align:center;">—</div>
+        </div>
+        <button type="button" class="delete-exercise" style="margin-top:20px; background:#ef4444; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Supprimer</button>
     </div>
 
     <div class="series-list" style="margin-bottom:12px;">

@@ -460,3 +460,94 @@ function parseSeriesDescription(row, description) {
     recapContent.innerHTML = html;
   }
 })();
+
+// Drag and drop functionality for reordering exercises
+let draggedElement = null;
+
+// Handle save button click - submit the form
+document.addEventListener('click', function(e) {
+  if (e.target.matches('.save-program-btn')) {
+    // Submit the form
+    const form = document.getElementById('program-form');
+    if (form) {
+      form.submit();
+    }
+  }
+});
+
+document.addEventListener('dragstart', function(e) {
+  if (e.target.matches('.exercise-block')) {
+    draggedElement = e.target;
+    e.target.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', e.target.innerHTML);
+  }
+});
+
+document.addEventListener('dragover', function(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  
+  // Add drag-over styling to container or exercise blocks
+  if (e.target.matches('.exercise-block') && e.target !== draggedElement) {
+    e.target.classList.add('drag-over');
+  }
+  if (e.target.matches('.exercises-container')) {
+    e.target.style.backgroundColor = '#f0f0f0';
+  }
+});
+
+document.addEventListener('dragleave', function(e) {
+  if (e.target.matches('.exercise-block')) {
+    e.target.classList.remove('drag-over');
+  }
+  if (e.target.matches('.exercises-container')) {
+    e.target.style.backgroundColor = '';
+  }
+});
+
+document.addEventListener('drop', function(e) {
+  e.preventDefault();
+  
+  const dropTarget = e.target.closest('.exercise-block') || e.target.closest('.exercises-container');
+  
+  if (draggedElement && dropTarget && dropTarget !== draggedElement) {
+    if (dropTarget.matches('.exercise-block')) {
+      // Swap position with target exercise in the same container
+      const container = draggedElement.closest('.exercises-container');
+      const targetContainer = dropTarget.closest('.exercises-container');
+      
+      if (container === targetContainer) {
+        // Same day: swap order
+        const allBlocks = Array.from(container.querySelectorAll('.exercise-block'));
+        const draggedIndex = allBlocks.indexOf(draggedElement);
+        const targetIndex = allBlocks.indexOf(dropTarget);
+        
+        if (draggedIndex < targetIndex) {
+          dropTarget.after(draggedElement);
+        } else {
+          dropTarget.before(draggedElement);
+        }
+      }
+    } else if (dropTarget.matches('.exercises-container')) {
+      // Move to different container (different day)
+      dropTarget.appendChild(draggedElement);
+      draggedElement.setAttribute('data-day', dropTarget.id.split('_')[2]);
+    }
+  }
+  
+  // Clean up styling
+  document.querySelectorAll('.exercise-block.drag-over').forEach(el => {
+    el.classList.remove('drag-over');
+  });
+  document.querySelectorAll('.exercises-container').forEach(el => {
+    el.style.backgroundColor = '';
+  });
+});
+
+document.addEventListener('dragend', function(e) {
+  if (e.target.matches('.exercise-block')) {
+    e.target.classList.remove('dragging');
+    draggedElement = null;
+  }
+});
