@@ -1,4 +1,22 @@
 document.addEventListener('click', function(e){
+  // Toggle collapse/expand exercise
+  if (e.target.matches('.toggle-collapse')) {
+    e.preventDefault();
+    e.stopPropagation();
+    const exerciseBlock = e.target.closest('.exercise-block');
+    const isCollapsed = exerciseBlock.classList.toggle('collapsed');
+    const select = exerciseBlock.querySelector('.exercise-select');
+    
+    // Update button text
+    e.target.textContent = isCollapsed ? '+' : '−';
+    
+    // Update exercise name display
+    const nameDisplay = exerciseBlock.querySelector('.exercise-name-display');
+    if (select) {
+      nameDisplay.textContent = select.value || '—';
+    }
+  }
+  
   // Add new exercise
   if (e.target.matches('.add-exercise, .btn-add-exercise')) {
     const day = e.target.getAttribute('data-day');
@@ -40,6 +58,9 @@ document.addEventListener('click', function(e){
     // Add listener for exercise select change
     exerciseSelect.addEventListener('change', function() {
       updateMuscleName(this);
+      // Update exercise name display for collapsed view
+      const nameDisplay = exerciseBlock.querySelector('.exercise-name-display');
+      nameDisplay.textContent = this.value || '—';
     });
     
     container.appendChild(clone);
@@ -138,6 +159,11 @@ function populateExerciseSelects(container = null) {
           select.value = currentValue;
           // Also update muscle display for existing exercises
           updateMuscleName(select);
+          // Update exercise name display for collapsed view
+          const nameDisplay = select.closest('.exercise-block').querySelector('.exercise-name-display');
+          if (nameDisplay && select.value) {
+            nameDisplay.textContent = select.value;
+          }
         }
       });
     })
