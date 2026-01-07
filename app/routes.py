@@ -1763,12 +1763,16 @@ def register_routes(app):
                 PerformanceEntry.entry_date <= previous_week_end
             ).all()
             
+            # Pre-load all exercises into a dictionary to avoid N+1 queries
+            all_exercises = Exercise.query.all()
+            exercise_by_name = {ex.name: ex for ex in all_exercises}
+            
             # Calculate tonnage by muscle for current week
             current_tonnage_by_muscle = {}
             for e in current_perfs:
                 if not e.exercise or not e.reps or not e.load:
                     continue
-                ex = Exercise.query.filter_by(name=e.exercise).first()
+                ex = exercise_by_name.get(e.exercise)
                 if not ex:
                     continue
                 muscle_group = ex.muscle_group
@@ -1781,7 +1785,7 @@ def register_routes(app):
             for e in previous_perfs:
                 if not e.exercise or not e.reps or not e.load:
                     continue
-                ex = Exercise.query.filter_by(name=e.exercise).first()
+                ex = exercise_by_name.get(e.exercise)
                 if not ex:
                     continue
                 muscle_group = ex.muscle_group
@@ -1797,6 +1801,46 @@ def register_routes(app):
                 previous = previous_tonnage_by_muscle.get(muscle, 0)
                 tonnage_diff_by_muscle[muscle] = current - previous
             
+            # Calculate exercise-level details for each muscle
+            tonnage_by_exercise_and_muscle = {}
+            for muscle in all_muscles:
+                tonnage_by_exercise_and_muscle[muscle] = {
+                    'current_tonnage_by_exercise': {},
+                    'previous_tonnage_by_exercise': {},
+                    'tonnage_diff_by_exercise': {}
+                }
+            
+            # Fill exercise details for current week
+            for e in current_perfs:
+                if not e.exercise or not e.reps or not e.load:
+                    continue
+                ex = exercise_by_name.get(e.exercise)
+                if not ex:
+                    continue
+                muscle_group = ex.muscle_group
+                if e.exercise not in tonnage_by_exercise_and_muscle[muscle_group]['current_tonnage_by_exercise']:
+                    tonnage_by_exercise_and_muscle[muscle_group]['current_tonnage_by_exercise'][e.exercise] = 0
+                tonnage_by_exercise_and_muscle[muscle_group]['current_tonnage_by_exercise'][e.exercise] += e.reps * e.load
+            
+            # Fill exercise details for previous week
+            for e in previous_perfs:
+                if not e.exercise or not e.reps or not e.load:
+                    continue
+                ex = exercise_by_name.get(e.exercise)
+                if not ex:
+                    continue
+                muscle_group = ex.muscle_group
+                if e.exercise not in tonnage_by_exercise_and_muscle[muscle_group]['previous_tonnage_by_exercise']:
+                    tonnage_by_exercise_and_muscle[muscle_group]['previous_tonnage_by_exercise'][e.exercise] = 0
+                tonnage_by_exercise_and_muscle[muscle_group]['previous_tonnage_by_exercise'][e.exercise] += e.reps * e.load
+            
+            # Calculate exercise diffs
+            for muscle in all_muscles:
+                for exercise in set(tonnage_by_exercise_and_muscle[muscle]['current_tonnage_by_exercise'].keys()) | set(tonnage_by_exercise_and_muscle[muscle]['previous_tonnage_by_exercise'].keys()):
+                    current = tonnage_by_exercise_and_muscle[muscle]['current_tonnage_by_exercise'].get(exercise, 0)
+                    previous = tonnage_by_exercise_and_muscle[muscle]['previous_tonnage_by_exercise'].get(exercise, 0)
+                    tonnage_by_exercise_and_muscle[muscle]['tonnage_diff_by_exercise'][exercise] = current - previous
+            
             return jsonify({
                 'weight_current': current_weight_avg,
                 'weight_previous': previous_weight_avg,
@@ -1811,7 +1855,8 @@ def register_routes(app):
                 'sleep_previous': previous_sleep_avg,
                 'sleep_diff': sleep_diff,
                 'tonnage_by_muscle': current_tonnage_by_muscle,
-                'tonnage_diff_by_muscle': tonnage_diff_by_muscle
+                'tonnage_diff_by_muscle': tonnage_diff_by_muscle,
+                'tonnage_by_exercise_and_muscle': tonnage_by_exercise_and_muscle
             })
         except Exception as e:
             print(f"Error in summary route: {str(e)}")
@@ -2047,6 +2092,10 @@ def register_routes(app):
                 PerformanceEntry.entry_date <= two_weeks_ago_start + timedelta(days=6)
             ).all()
             
+            # Pre-load all exercises into a dictionary to avoid N+1 queries
+            all_exercises = Exercise.query.all()
+            exercise_by_name = {ex.name: ex for ex in all_exercises}
+            
             # Calculate tonnage by muscle for current week
             current_tonnage_by_muscle = {}
             for e in current_perfs:
@@ -2094,7 +2143,7 @@ def register_routes(app):
             for e in current_perfs:
                 if not e.exercise or not e.reps or not e.load:
                     continue
-                ex = Exercise.query.filter_by(name=e.exercise).first()
+                ex = exercise_by_name.get(e.exercise)
                 if not ex:
                     continue
                 muscle_group = ex.muscle_group
@@ -2106,7 +2155,7 @@ def register_routes(app):
             for e in previous_perfs:
                 if not e.exercise or not e.reps or not e.load:
                     continue
-                ex = Exercise.query.filter_by(name=e.exercise).first()
+                ex = exercise_by_name.get(e.exercise)
                 if not ex:
                     continue
                 muscle_group = ex.muscle_group
@@ -2300,12 +2349,16 @@ def register_routes(app):
                 PerformanceEntry.entry_date <= four_weeks_ago_start + timedelta(days=6)
             ).all()
             
+            # Pre-load all exercises into a dictionary to avoid N+1 queries
+            all_exercises = Exercise.query.all()
+            exercise_by_name = {ex.name: ex for ex in all_exercises}
+            
             # Calculate tonnage by muscle for current week
             current_tonnage_by_muscle = {}
             for e in current_perfs:
                 if not e.exercise or not e.reps or not e.load:
                     continue
-                ex = Exercise.query.filter_by(name=e.exercise).first()
+                ex = exercise_by_name.get(e.exercise)
                 if not ex:
                     continue
                 muscle_group = ex.muscle_group
@@ -2318,7 +2371,7 @@ def register_routes(app):
             for e in previous_perfs:
                 if not e.exercise or not e.reps or not e.load:
                     continue
-                ex = Exercise.query.filter_by(name=e.exercise).first()
+                ex = exercise_by_name.get(e.exercise)
                 if not ex:
                     continue
                 muscle_group = ex.muscle_group
@@ -2334,6 +2387,46 @@ def register_routes(app):
                 previous = previous_tonnage_by_muscle.get(muscle, 0)
                 tonnage_diff_by_muscle[muscle] = current - previous
             
+            # Calculate exercise-level details for each muscle
+            tonnage_by_exercise_and_muscle = {}
+            for muscle in all_muscles:
+                tonnage_by_exercise_and_muscle[muscle] = {
+                    'current_tonnage_by_exercise': {},
+                    'previous_tonnage_by_exercise': {},
+                    'tonnage_diff_by_exercise': {}
+                }
+            
+            # Fill exercise details for current week
+            for e in current_perfs:
+                if not e.exercise or not e.reps or not e.load:
+                    continue
+                ex = exercise_by_name.get(e.exercise)
+                if not ex:
+                    continue
+                muscle_group = ex.muscle_group
+                if e.exercise not in tonnage_by_exercise_and_muscle[muscle_group]['current_tonnage_by_exercise']:
+                    tonnage_by_exercise_and_muscle[muscle_group]['current_tonnage_by_exercise'][e.exercise] = 0
+                tonnage_by_exercise_and_muscle[muscle_group]['current_tonnage_by_exercise'][e.exercise] += e.reps * e.load
+            
+            # Fill exercise details for previous week
+            for e in previous_perfs:
+                if not e.exercise or not e.reps or not e.load:
+                    continue
+                ex = exercise_by_name.get(e.exercise)
+                if not ex:
+                    continue
+                muscle_group = ex.muscle_group
+                if e.exercise not in tonnage_by_exercise_and_muscle[muscle_group]['previous_tonnage_by_exercise']:
+                    tonnage_by_exercise_and_muscle[muscle_group]['previous_tonnage_by_exercise'][e.exercise] = 0
+                tonnage_by_exercise_and_muscle[muscle_group]['previous_tonnage_by_exercise'][e.exercise] += e.reps * e.load
+            
+            # Calculate exercise diffs
+            for muscle in all_muscles:
+                for exercise in set(tonnage_by_exercise_and_muscle[muscle]['current_tonnage_by_exercise'].keys()) | set(tonnage_by_exercise_and_muscle[muscle]['previous_tonnage_by_exercise'].keys()):
+                    current = tonnage_by_exercise_and_muscle[muscle]['current_tonnage_by_exercise'].get(exercise, 0)
+                    previous = tonnage_by_exercise_and_muscle[muscle]['previous_tonnage_by_exercise'].get(exercise, 0)
+                    tonnage_by_exercise_and_muscle[muscle]['tonnage_diff_by_exercise'][exercise] = current - previous
+            
             return jsonify({
                 'weight_current': current_weight_avg,
                 'weight_previous': previous_weight_avg,
@@ -2348,7 +2441,8 @@ def register_routes(app):
                 'sleep_previous': previous_sleep_avg,
                 'sleep_diff': sleep_diff,
                 'tonnage_by_muscle': current_tonnage_by_muscle,
-                'tonnage_diff_by_muscle': tonnage_diff_by_muscle
+                'tonnage_diff_by_muscle': tonnage_diff_by_muscle,
+                'tonnage_by_exercise_and_muscle': tonnage_by_exercise_and_muscle
             })
         except Exception as e:
             print(f"Error in summary-28days route: {str(e)}")
