@@ -139,6 +139,11 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   let perfCache = null;
+  let muscleDetailCache = {
+    '7days': {},
+    '14days': {},
+    '28days': {}
+  }; // Cache for muscle details to avoid re-fetching
   async function loadPerformance(athleteId){
     // Use program-specific endpoint if program is selected
     const url = selectedProgramId 
@@ -253,6 +258,12 @@ document.addEventListener('DOMContentLoaded', function(){
       // Fill tonnage rows with detail buttons
       const tonnageBody = document.getElementById('summary-tonnage-body');
       tonnageBody.innerHTML = '';
+      
+      // Pre-cache muscle details from the data returned
+      if (data.tonnage_by_exercise_and_muscle) {
+        muscleDetailCache['7days'] = data.tonnage_by_exercise_and_muscle;
+      }
+      
       Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid #e5e7eb';
@@ -324,6 +335,12 @@ document.addEventListener('DOMContentLoaded', function(){
       // Fill tonnage rows with detail buttons
       const tonnageBody = document.getElementById('summary-14days-tonnage-body');
       tonnageBody.innerHTML = '';
+      
+      // Pre-cache muscle details from the data returned
+      if (data.tonnage_by_exercise_and_muscle) {
+        muscleDetailCache['14days'] = data.tonnage_by_exercise_and_muscle;
+      }
+      
       Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid #e5e7eb';
@@ -901,12 +918,20 @@ document.addEventListener('DOMContentLoaded', function(){
       if (!athleteId || !muscle) return;
       
       try {
-        const res = await fetch(`/coach/stats/athlete/${athleteId}/summary-${summary}-muscle-detail/${encodeURIComponent(muscle)}.json`);
-        if (!res.ok) {
-          alert('Erreur lors du chargement des détails');
-          return;
+        let data = null;
+        
+        // Try to get data from cache first
+        if (muscleDetailCache[summary] && muscleDetailCache[summary][muscle]) {
+          data = muscleDetailCache[summary][muscle];
+        } else {
+          // Fall back to API call if not in cache
+          const res = await fetch(`/coach/stats/athlete/${athleteId}/summary-${summary}-muscle-detail/${encodeURIComponent(muscle)}.json`);
+          if (!res.ok) {
+            alert('Erreur lors du chargement des détails');
+            return;
+          }
+          data = await res.json();
         }
-        const data = await res.json();
         
         // Build detail HTML
         let html = `<h4>${muscle}</h4>`;
