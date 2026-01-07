@@ -34,9 +34,10 @@
 
   .exercises-container {
     gap: 10px !important;
-    flex: 1;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
   }
 
   .exercise-block {
@@ -53,6 +54,8 @@
     flex-wrap: nowrap;
     overflow-x: auto;
     scroll-behavior: smooth;
+    min-width: 600px;
+    flex-shrink: 0;
   }
   
   .exercise-block:hover {
@@ -437,7 +440,7 @@
           <input type="text" name="session_name_{{ day }}" value="{{ sessions_by_day[day].session_name if sessions_by_day[day] else '' }}" placeholder="Nom séance" style="flex: 1; max-width: 200px; font-size: 0.9rem; padding: 6px 8px;">
         </div>
 
-        <div class="exercises-container" id="exercises_day_{{ day }}" style="display:flex; flex-direction:column; gap:10px;">
+        <div class="exercises-container" id="exercises_day_{{ day }}">
           {% if sessions_by_day[day] %}
             {% for ex in sessions_by_day[day].exercises %}
             <div class="exercise-block" data-exercise-id="{{ ex.id }}" data-day="{{ day }}" draggable="true">
