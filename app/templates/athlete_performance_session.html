@@ -606,6 +606,9 @@
         const isoDate = today.toISOString().split('T')[0];
         dateInput.value = isoDate;
       }
+      
+      // Déclencher le filtre après initialisation
+      filterByDate(dateInput.value);
     }
 
     function savePerformanceDate() {

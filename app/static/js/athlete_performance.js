@@ -14,10 +14,16 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   function filterByDate(d) {
+    console.log('Filtering by date:', d);
+    console.log('Total rows in table:', rows.length);
+    let visibleCount = 0;
     rows.forEach(r=>{
       const rdate = r.getAttribute('data-entry-date');
-      r.style.display = (d === '' || rdate === d) ? '' : 'none';
+      const isVisible = (d === '' || rdate === d);
+      r.style.display = isVisible ? '' : 'none';
+      if (isVisible) visibleCount++;
     });
+    console.log('Visible rows after filter:', visibleCount);
   }
 
   // initial filter after date input has been set (including via localStorage)
