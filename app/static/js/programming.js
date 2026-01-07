@@ -393,35 +393,6 @@ function parseSeriesDescription(row, description) {
       });
     });
   }
-                mainSeriesNumber = idx + 1;
-              }
-            });
-            
-            // Create hidden input for this exercise's series
-            const seriesInput = document.createElement('input');
-            seriesInput.type = 'hidden';
-            seriesInput.name = `ex_series_${day}[]`;
-            seriesInput.value = seriesDescription.trim();
-            form.appendChild(seriesInput);
-            
-            // Add main series number
-            const mainInput = document.createElement('input');
-            mainInput.type = 'hidden';
-            mainInput.name = `ex_main_${day}[]`;
-            mainInput.value = mainSeriesNumber || '';
-            form.appendChild(mainInput);
-          });
-        }
-        
-        // submit form
-        if (form) {
-          // disable buttons to prevent multiple submit
-          saveFloat.disabled = true;
-          form.submit();
-        }
-      });
-    });
-  }
 
   if (cancelFloat) {
     cancelFloat.addEventListener('click', function(){
