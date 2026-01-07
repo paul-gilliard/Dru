@@ -932,44 +932,55 @@ document.addEventListener('DOMContentLoaded', function(){
       const muscle = e.target.getAttribute('data-muscle');
       const summary = e.target.getAttribute('data-summary');
       
+      // Show modal with spinner
+      document.getElementById('muscle-detail-modal').style.display = 'flex';
+      document.getElementById('muscle-detail-title').textContent = `Détail par exercice - ${muscle}`;
+      document.getElementById('muscle-detail-content').innerHTML = `
+        <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+          <div class="spinner"></div>
+          <span style="color:#94a3b8; font-size:0.9rem;">Chargement des détails...</span>
+        </div>
+      `;
+      
       // Get data from cache (preloaded on athlete selection)
       if (!muscleDetailCache[summary] || !muscleDetailCache[summary][muscle]) {
-        alert('Données non disponibles');
+        document.getElementById('muscle-detail-content').innerHTML = '<p style="color:#ef4444;">Données non disponibles</p>';
         return;
       }
 
       const data = muscleDetailCache[summary][muscle];
       
-      // Build detail HTML
-      let html = `<h4>${muscle}</h4>`;
-      html += '<table style="width:100%; border-collapse:collapse; margin-top:12px;">';
-      html += `<tr style="background:#f3f4f6; border-bottom:2px solid #d1d5db;">
-        <th style="padding:8px; text-align:left; font-weight:600;">Exercice</th>
-        <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Semaine courante</th>
-        <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Il y a 2 sem.</th>
-        <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Évolution</th>
-      </tr>`;
-      
-      Object.keys(data.tonnage_diff_by_exercise || {}).sort().forEach(exercise => {
-        const current = data.current_tonnage_by_exercise[exercise] || 0;
-        const previous = data.previous_tonnage_by_exercise[exercise] || 0;
-        const diff = data.tonnage_diff_by_exercise[exercise] || 0;
-        const arrow = diff > 0 ? '📈' : (diff < 0 ? '📉' : '→');
-        const diffStr = diff >= 0 ? `+${diff.toFixed(0)}` : `${diff.toFixed(0)}`;
-        
-        html += `<tr style="border-bottom:1px solid #e5e7eb;">
-          <td style="padding:8px;">${exercise}</td>
-          <td style="padding:8px; text-align:center;">${current.toFixed(0)}</td>
-          <td style="padding:8px; text-align:center;">${previous.toFixed(0)}</td>
-          <td style="padding:8px; text-align:center;">${diffStr} ${arrow}</td>
+      // Simulate small delay for UX feedback
+      setTimeout(() => {
+        // Build detail HTML
+        let html = `<h4 style="margin-top:0;">${muscle}</h4>`;
+        html += '<table style="width:100%; border-collapse:collapse; margin-top:12px;">';
+        html += `<tr style="background:#f3f4f6; border-bottom:2px solid #d1d5db;">
+          <th style="padding:8px; text-align:left; font-weight:600;">Exercice</th>
+          <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Semaine courante</th>
+          <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Il y a 2 sem.</th>
+          <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Évolution</th>
         </tr>`;
-      });
-      
-      html += '</table>';
-      
-      document.getElementById('muscle-detail-title').textContent = `Détail par exercice - ${muscle}`;
-      document.getElementById('muscle-detail-content').innerHTML = html;
-      document.getElementById('muscle-detail-modal').style.display = 'flex';
+        
+        Object.keys(data.tonnage_diff_by_exercise || {}).sort().forEach(exercise => {
+          const current = data.current_tonnage_by_exercise[exercise] || 0;
+          const previous = data.previous_tonnage_by_exercise[exercise] || 0;
+          const diff = data.tonnage_diff_by_exercise[exercise] || 0;
+          const arrow = diff > 0 ? '📈' : (diff < 0 ? '📉' : '→');
+          const diffStr = diff >= 0 ? `+${diff.toFixed(0)}` : `${diff.toFixed(0)}`;
+          
+          html += `<tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:8px;">${exercise}</td>
+            <td style="padding:8px; text-align:center;">${current.toFixed(0)}</td>
+            <td style="padding:8px; text-align:center;">${previous.toFixed(0)}</td>
+            <td style="padding:8px; text-align:center;">${diffStr} ${arrow}</td>
+          </tr>`;
+        });
+        
+        html += '</table>';
+        
+        document.getElementById('muscle-detail-content').innerHTML = html;
+      }, 200); // Small delay for visual feedback
     }
   });
 });
