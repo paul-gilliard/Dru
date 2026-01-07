@@ -791,7 +791,15 @@ def register_routes(app):
 
         # GET : lister exercices de la séance avec leurs séries
         session_exercises = sorted(ps.exercises, key=lambda x: x.position)
-        perf_entries = PerformanceEntry.query.filter_by(athlete_id=user.id, program_session_id=ps.id).order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.created_at.desc()).all()
+        
+        # Charger les performances : soit liées à cette session, soit sans session_id
+        perf_entries = PerformanceEntry.query.filter(
+            PerformanceEntry.athlete_id == user.id,
+            db.or_(
+                PerformanceEntry.program_session_id == ps.id,
+                PerformanceEntry.program_session_id == None
+            )
+        ).order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.created_at.desc()).all()
         
         # Préparer données JSON pour détecter doublons côté frontend
         perf_entries_json = [
@@ -967,15 +975,21 @@ def register_routes(app):
         
         try:
             entry_date = datetime.strptime(entry_date_str, '%Y-%m-%d').date()
-        except Exception:
+        except Exception as e:
+            print(f'[API] Date parse error: {e}')
             return jsonify({'error': 'invalid date format'}), 400
         
-        # Get performances for this date and session
-        perf_entries = PerformanceEntry.query.filter_by(
-            athlete_id=user.id,
-            program_session_id=session_id,
-            entry_date=entry_date
+        # Get performances for this date - either linked to this session OR without any session_id
+        perf_entries = PerformanceEntry.query.filter(
+            PerformanceEntry.athlete_id == user.id,
+            PerformanceEntry.entry_date == entry_date,
+            db.or_(
+                PerformanceEntry.program_session_id == session_id,
+                PerformanceEntry.program_session_id == None
+            )
         ).order_by(PerformanceEntry.created_at.desc()).all()
+        
+        print(f'[API] Query for athlete {user.id}, session {session_id}, date {entry_date}: found {len(perf_entries)} entries')
         
         entries_data = [{
             'id': p.id,
