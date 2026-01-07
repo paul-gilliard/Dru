@@ -143,7 +143,34 @@ document.addEventListener('DOMContentLoaded', function(){
     '7days': {},
     '14days': {},
     '28days': {}
-  }; // Cache for muscle details to avoid re-fetching
+  }; // Cache for muscle details - preloaded on athlete selection
+
+  // Preload all muscle details for all periods when athlete is selected
+  async function preloadAllMuscleDetails(athleteId) {
+    try {
+      // Load all details in parallel for faster loading
+      const [data7, data14, data28] = await Promise.all([
+        fetch(`/coach/stats/athlete/${athleteId}/summary-7days.json`).then(r => r.ok ? r.json() : null),
+        fetch(`/coach/stats/athlete/${athleteId}/summary-14days.json`).then(r => r.ok ? r.json() : null),
+        fetch(`/coach/stats/athlete/${athleteId}/summary-28days.json`).then(r => r.ok ? r.json() : null)
+      ]);
+
+      // Extract and cache muscle details from each response
+      if (data7?.tonnage_by_exercise_and_muscle) {
+        muscleDetailCache['7days'] = data7.tonnage_by_exercise_and_muscle;
+      }
+      if (data14?.tonnage_by_exercise_and_muscle) {
+        muscleDetailCache['14days'] = data14.tonnage_by_exercise_and_muscle;
+      }
+      if (data28?.tonnage_by_exercise_and_muscle) {
+        muscleDetailCache['28days'] = data28.tonnage_by_exercise_and_muscle;
+      }
+      
+      console.log('Muscle details preloaded for all periods');
+    } catch (err) {
+      console.error('Error preloading muscle details:', err);
+    }
+  }
   async function loadPerformance(athleteId){
     // Use program-specific endpoint if program is selected
     const url = selectedProgramId 
@@ -259,11 +286,6 @@ document.addEventListener('DOMContentLoaded', function(){
       const tonnageBody = document.getElementById('summary-tonnage-body');
       tonnageBody.innerHTML = '';
       
-      // Pre-cache muscle details from the data returned
-      if (data.tonnage_by_exercise_and_muscle) {
-        muscleDetailCache['7days'] = data.tonnage_by_exercise_and_muscle;
-      }
-      
       Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid #e5e7eb';
@@ -335,11 +357,6 @@ document.addEventListener('DOMContentLoaded', function(){
       // Fill tonnage rows with detail buttons
       const tonnageBody = document.getElementById('summary-14days-tonnage-body');
       tonnageBody.innerHTML = '';
-      
-      // Pre-cache muscle details from the data returned
-      if (data.tonnage_by_exercise_and_muscle) {
-        muscleDetailCache['14days'] = data.tonnage_by_exercise_and_muscle;
-      }
       
       Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
         const tr = document.createElement('tr');
@@ -755,6 +772,7 @@ document.addEventListener('DOMContentLoaded', function(){
     await loadSummary(athleteId);
     await loadSummary14days(athleteId);
     await loadSummary28days(athleteId);
+    await preloadAllMuscleDetails(athleteId);
   });
 
   programSelect.addEventListener('change', async function(){
@@ -908,65 +926,50 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   });
 
-  // Event delegation for muscle detail buttons
-  document.addEventListener('click', async function(e) {
+  // Event delegation for muscle detail buttons - data is preloaded in cache
+  document.addEventListener('click', function(e) {
     if (e.target.matches('.show-muscle-detail')) {
       const muscle = e.target.getAttribute('data-muscle');
       const summary = e.target.getAttribute('data-summary');
-      const athleteId = athleteSelect.value;
       
-      if (!athleteId || !muscle) return;
-      
-      try {
-        let data = null;
-        
-        // Try to get data from cache first
-        if (muscleDetailCache[summary] && muscleDetailCache[summary][muscle]) {
-          data = muscleDetailCache[summary][muscle];
-        } else {
-          // Fall back to API call if not in cache
-          const res = await fetch(`/coach/stats/athlete/${athleteId}/summary-${summary}-muscle-detail/${encodeURIComponent(muscle)}.json`);
-          if (!res.ok) {
-            alert('Erreur lors du chargement des détails');
-            return;
-          }
-          data = await res.json();
-        }
-        
-        // Build detail HTML
-        let html = `<h4>${muscle}</h4>`;
-        html += '<table style="width:100%; border-collapse:collapse; margin-top:12px;">';
-        html += `<tr style="background:#f3f4f6; border-bottom:2px solid #d1d5db;">
-          <th style="padding:8px; text-align:left; font-weight:600;">Exercice</th>
-          <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Semaine courante</th>
-          <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Il y a 2 sem.</th>
-          <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Évolution</th>
-        </tr>`;
-        
-        Object.keys(data.tonnage_diff_by_exercise || {}).sort().forEach(exercise => {
-          const current = data.current_tonnage_by_exercise[exercise] || 0;
-          const previous = data.previous_tonnage_by_exercise[exercise] || 0;
-          const diff = data.tonnage_diff_by_exercise[exercise] || 0;
-          const arrow = diff > 0 ? '📈' : (diff < 0 ? '📉' : '→');
-          const diffStr = diff >= 0 ? `+${diff.toFixed(0)}` : `${diff.toFixed(0)}`;
-          
-          html += `<tr style="border-bottom:1px solid #e5e7eb;">
-            <td style="padding:8px;">${exercise}</td>
-            <td style="padding:8px; text-align:center;">${current.toFixed(0)}</td>
-            <td style="padding:8px; text-align:center;">${previous.toFixed(0)}</td>
-            <td style="padding:8px; text-align:center;">${diffStr} ${arrow}</td>
-          </tr>`;
-        });
-        
-        html += '</table>';
-        
-        document.getElementById('muscle-detail-title').textContent = `Détail par exercice - ${muscle}`;
-        document.getElementById('muscle-detail-content').innerHTML = html;
-        document.getElementById('muscle-detail-modal').style.display = 'flex';
-      } catch (err) {
-        console.error('Error loading muscle detail:', err);
-        alert('Erreur lors du chargement');
+      // Get data from cache (preloaded on athlete selection)
+      if (!muscleDetailCache[summary] || !muscleDetailCache[summary][muscle]) {
+        alert('Données non disponibles');
+        return;
       }
+
+      const data = muscleDetailCache[summary][muscle];
+      
+      // Build detail HTML
+      let html = `<h4>${muscle}</h4>`;
+      html += '<table style="width:100%; border-collapse:collapse; margin-top:12px;">';
+      html += `<tr style="background:#f3f4f6; border-bottom:2px solid #d1d5db;">
+        <th style="padding:8px; text-align:left; font-weight:600;">Exercice</th>
+        <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Semaine courante</th>
+        <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Il y a 2 sem.</th>
+        <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Évolution</th>
+      </tr>`;
+      
+      Object.keys(data.tonnage_diff_by_exercise || {}).sort().forEach(exercise => {
+        const current = data.current_tonnage_by_exercise[exercise] || 0;
+        const previous = data.previous_tonnage_by_exercise[exercise] || 0;
+        const diff = data.tonnage_diff_by_exercise[exercise] || 0;
+        const arrow = diff > 0 ? '📈' : (diff < 0 ? '📉' : '→');
+        const diffStr = diff >= 0 ? `+${diff.toFixed(0)}` : `${diff.toFixed(0)}`;
+        
+        html += `<tr style="border-bottom:1px solid #e5e7eb;">
+          <td style="padding:8px;">${exercise}</td>
+          <td style="padding:8px; text-align:center;">${current.toFixed(0)}</td>
+          <td style="padding:8px; text-align:center;">${previous.toFixed(0)}</td>
+          <td style="padding:8px; text-align:center;">${diffStr} ${arrow}</td>
+        </tr>`;
+      });
+      
+      html += '</table>';
+      
+      document.getElementById('muscle-detail-title').textContent = `Détail par exercice - ${muscle}`;
+      document.getElementById('muscle-detail-content').innerHTML = html;
+      document.getElementById('muscle-detail-modal').style.display = 'flex';
     }
   });
 });
