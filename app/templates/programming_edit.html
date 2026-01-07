@@ -2,18 +2,50 @@
 {% block title %}Éditer programme — {{ program.name }}{% endblock %}
 {% block content %}
 <style>
+  .programming-edit-root {
+    padding: 20px !important;
+  }
+
+  .day-row {
+    padding: 16px !important;
+    border-left: 4px solid #0b63d6;
+    background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+  }
+
+  .day-row h4 {
+    font-size: 1rem !important;
+    margin-bottom: 12px !important;
+  }
+
+  .day-row h5 {
+    display: none;
+  }
+
+  .exercises-container {
+    gap: 12px !important;
+  }
+
   .exercise-block {
     cursor: grab;
     transition: all 0.2s ease;
+    border: 1px solid rgba(11, 99, 214, 0.2) !important;
+    border-radius: 8px !important;
+    padding: 12px !important;
+    background: #ffffff !important;
+    display: flex !important;
+    gap: 10px !important;
   }
   
   .exercise-block:hover {
-    background-color: #f0f0f0 !important;
+    background-color: #f8f9fb !important;
+    border-color: rgba(11, 99, 214, 0.4) !important;
+    box-shadow: 0 2px 8px rgba(11, 99, 214, 0.1) !important;
   }
   
   .exercise-block.dragging {
-    opacity: 0.5;
+    opacity: 0.6;
     cursor: grabbing;
+    background: #e0e7ff !important;
   }
   
   .exercise-block.drag-over {
@@ -23,18 +55,20 @@
   
   .drag-handle {
     cursor: grab;
-    color: #999;
-    font-size: 1.2rem;
-    margin-right: 10px;
+    color: #cbd5e1;
+    font-size: 1rem;
+    margin-right: 0;
+    flex-shrink: 0;
+    align-self: center;
   }
   
   .drag-handle:hover {
     color: #0b63d6;
   }
-  
+
   .exercise-block.collapsed {
-    padding: 8px 14px !important;
-    gap: 12px !important;
+    padding: 8px 12px !important;
+    gap: 8px !important;
     align-items: center !important;
   }
   
@@ -55,31 +89,134 @@
     font-weight: 600;
     color: #0b63d6;
     flex: 1;
-    padding-left: 8px;
+    padding-left: 4px;
+    font-size: 0.95rem;
   }
   
   .toggle-collapse {
-    background: #0b63d6;
+    background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%);
     color: white;
     border: none;
-    padding: 6px 10px;
-    border-radius: 4px;
+    padding: 5px 9px;
+    border-radius: 5px;
     cursor: pointer;
-    font-size: 0.8rem;
-    font-weight: 600;
+    font-size: 0.75rem;
+    font-weight: 700;
     transition: all 0.2s ease;
     white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 28px;
   }
   
   .toggle-collapse:hover {
-    background: #0a50c4;
+    background: linear-gradient(135deg, #0952b8 0%, #0741a0 100%);
+    box-shadow: 0 2px 6px rgba(11, 99, 214, 0.3);
+  }
+
+  .exercise-muscle {
+    font-size: 0.85rem !important;
+    padding: 6px 10px !important;
+  }
+
+  .series-row {
+    padding: 8px !important;
+    gap: 6px !important;
+    grid-template-columns: 40px 1fr 1fr 1fr 90px !important;
+    font-size: 0.9rem;
+  }
+
+  .series-row input {
+    padding: 6px 8px !important;
+    font-size: 0.85rem !important;
+  }
+
+  .series-row label {
+    font-size: 0.75rem !important;
+    margin-bottom: 0 !important;
+  }
+
+  .series-list {
+    margin-bottom: 10px !important;
+  }
+
+  .series-list label:first-of-type {
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+  }
+
+  .add-series {
+    padding: 5px 10px !important;
+    font-size: 0.8rem !important;
+    background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%) !important;
+    color: white !important;
+    border-radius: 5px !important;
+  }
+
+  .delete-exercise, .delete-series {
+    padding: 5px 8px !important;
+    font-size: 0.75rem !important;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+    color: white !important;
+    border-radius: 4px !important;
+  }
+
+  .delete-exercise:hover, .delete-series:hover {
+    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3) !important;
+  }
+
+  .form-row-horizontal {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .form-group-inline {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .form-group-inline label {
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .form-group-inline input {
+    font-size: 0.9rem;
+    padding: 6px 8px;
+  }
+
+  textarea[name*="ex_rem_"] {
+    font-size: 0.85rem !important;
+    min-height: 50px !important;
+    padding: 8px !important;
+  }
+
+  .add-exercise {
+    background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%) !important;
+    color: white !important;
+    padding: 8px 14px !important;
+    font-size: 0.9rem !important;
+    border-radius: 6px !important;
+    margin-top: 8px;
+  }
+
+  .add-exercise:hover {
+    box-shadow: 0 4px 12px rgba(11, 99, 214, 0.2) !important;
+  }
+
+  .series-number {
+    margin-bottom: 0 !important;
   }
 </style>
-<h2 style="margin-bottom: 20px;">Éditer : {{ program.name }} — {{ program.athlete.username }}</h2>
 
-<div style="margin-bottom: 16px; display: flex; gap: 8px;">
-  <button id="collapse-all-btn" type="button" style="background: #0b63d6; color: white; padding: 10px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.95rem;">Tout réduire</button>
-  <button id="expand-all-btn" type="button" style="background: #666; color: white; padding: 10px 16px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.95rem;">Tout agrandir</button>
+<div style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center;">
+  <h2 style="margin: 0; font-size: 1.3rem;">{{ program.name }} <span style="font-size: 0.9rem; color: #666;">— {{ program.athlete.username }}</span></h2>
+  <div style="margin-left: auto; display: flex; gap: 8px;">
+    <button id="collapse-all-btn" type="button" style="background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%); color: white; padding: 8px 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.85rem;">− Tout réduire</button>
+    <button id="expand-all-btn" type="button" style="background: linear-gradient(135deg, #666 0%, #555 100%); color: white; padding: 8px 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.85rem;">+ Tout agrandir</button>
+  </div>
 </div>
 
 <div class="card programming-edit-root">
@@ -89,79 +226,73 @@
     <div class="programming-edit" style="display:flex; flex-direction:column; gap:16px;">
       {% for day in range(7) %}
       <div class="card day-row">
-        <h4 style="margin-bottom:12px; color:#0b63d6; font-size:1.1rem;">{{ ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'][day] }}</h4>
-        <div class="form-row-horizontal">
-          <div class="form-group-inline">
-            <label>Nom de la séance</label>
-            <input type="text" name="session_name_{{ day }}" value="{{ sessions_by_day[day].session_name if sessions_by_day[day] else '' }}" placeholder="Ex: Jambes">
-          </div>
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+          <h4 style="margin: 0; color: #0b63d6; font-size: 1rem;">{{ ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'][day] }}</h4>
+          <input type="text" name="session_name_{{ day }}" value="{{ sessions_by_day[day].session_name if sessions_by_day[day] else '' }}" placeholder="Nom séance" style="flex: 1; max-width: 200px; font-size: 0.9rem; padding: 6px 8px;">
         </div>
 
-        <div style="margin-top:14px;">
-          <h5 style="margin-bottom:12px; color:#374151;">{{ ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'][day] }}</h5>
-          <div class="exercises-container" id="exercises_day_{{ day }}" style="display:flex; flex-direction:column; gap:20px;">
-            {% if sessions_by_day[day] %}
-              {% for ex in sessions_by_day[day].exercises %}
-              <div class="exercise-block" data-exercise-id="{{ ex.id }}" data-day="{{ day }}" draggable="true" style="border:1px solid rgba(15,23,42,0.1); border-radius:10px; padding:14px; background:#f9fafb; display:flex; gap:12px;">
-                <div class="drag-handle" title="Glisser pour réorganiser">⋮⋮</div>
-                <div class="exercise-name-display">{{ ex.name or '—' }}</div>
-                <button type="button" class="toggle-collapse" title="Réduire/Agrandir">−</button>
-                
-                <div class="exercise-details" style="flex: 1;">
-                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                    <div style="flex:1;">
-                      <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Exercice</label>
-                      <select name="ex_name_{{ day }}[]" class="exercise-select" data-value="{{ ex.name or '' }}" style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem;" required><option>-- Sélectionner --</option></select>
-                    </div>
-                    <div style="margin-left:12px;">
-                      <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Muscle</label>
-                      <div class="exercise-muscle" style="padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem; background:#f3f4f6; min-width:100px; text-align:center;">{{ ex.muscle or '—' }}</div>
-                    </div>
-                    <button type="button" class="delete-exercise btn-remove" style="margin-top:20px; background:#ef4444; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Supprimer</button>
+        <div class="exercises-container" id="exercises_day_{{ day }}" style="display:flex; flex-direction:column; gap:10px;">
+          {% if sessions_by_day[day] %}
+            {% for ex in sessions_by_day[day].exercises %}
+            <div class="exercise-block" data-exercise-id="{{ ex.id }}" data-day="{{ day }}" draggable="true">
+              <div class="drag-handle" title="Glisser pour réorganiser">⋮⋮</div>
+              <div class="exercise-name-display">{{ ex.name or '—' }}</div>
+              <button type="button" class="toggle-collapse" title="Réduire/Agrandir">−</button>
+              
+              <div class="exercise-details" style="flex: 1;">
+                <div style="display:grid; grid-template-columns: 1fr 120px 80px; gap:10px; align-items:start; margin-bottom:10px;">
+                  <div>
+                    <label style="font-size:0.8rem; font-weight:600; color:#0b63d6;">Exercice</label>
+                    <select name="ex_name_{{ day }}[]" class="exercise-select" data-value="{{ ex.name or '' }}" style="width:100%; padding:6px 8px; border-radius:5px; border:1px solid rgba(15,23,42,0.15); font-size:0.9rem;" required><option>-- Sélectionner --</option></select>
+                  </div>
+                  <div>
+                    <label style="font-size:0.8rem; font-weight:600; color:#0b63d6;">Muscle</label>
+                    <div class="exercise-muscle" style="padding:6px 8px; border-radius:5px; border:1px solid rgba(15,23,42,0.15); font-size:0.85rem; background:#f3f4f6; text-align:center;">{{ ex.muscle or '—' }}</div>
+                  </div>
+                  <button type="button" class="delete-exercise btn-remove" style="margin-top:18px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color:white; padding:6px 10px; border-radius:5px; border:none; cursor:pointer; font-weight:600; font-size:0.75rem;">Suppr.</button>
+                </div>
+
+                <!-- Séries pour cet exercice -->
+                <div class="series-list">
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <label style="font-weight:600; color:#374151; font-size:0.85rem;">Séries</label>
+                    <button type="button" class="add-series" data-exercise-id="{{ ex.id }}" data-day="{{ day }}" style="background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%); color:white; padding:5px 9px; border-radius:5px; border:none; cursor:pointer; font-size:0.75rem; font-weight:600;">+ Ajouter</button>
                   </div>
 
-                  <!-- Séries pour cet exercice -->
-                  <div class="series-list" style="margin-bottom:12px;">
-                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                      <label style="font-weight:600; color:#374151; font-size:0.95rem;">Séries</label>
-                      <button type="button" class="add-series" data-exercise-id="{{ ex.id }}" data-day="{{ day }}" style="background:#0b63d6; color:white; padding:6px 12px; border-radius:6px; border:none; cursor:pointer; font-size:0.9rem; font-weight:600;">+ Ajouter série</button>
-                    </div>
-
-                    <div class="series-items" style="display:flex; flex-direction:column; gap:8px;">
-                      {% set series_list = ex.get_series_list() %}
-                      {% if series_list %}
-                        {% for s in series_list %}
-                        <div class="series-row" style="display:grid; grid-template-columns: 60px 1fr 1fr 1fr 120px; gap:8px; align-items:center; padding:8px; background:#ffffff; border:1px solid rgba(15,23,42,0.1); border-radius:6px;" data-series-description="{{ s.description }}" data-series-number="{{ s.number }}" data-is-main="{{ s.is_main|lower }}">
-                          <div><label style="font-size:0.85rem; color:#666; font-weight:600;">S{{ s.number }}</label></div>
-                          <div><input type="text" placeholder="Reps" value="" style="width:100%; padding:8px; font-size:0.95rem; border-radius:4px; border:1px solid rgba(15,23,42,0.15); font-weight:500;"></div>
-                          <div><input type="number" placeholder="Rest (min)" value="" step="0.1" style="width:100%; padding:8px; font-size:0.95rem; border-radius:4px; border:1px solid rgba(15,23,42,0.15); font-weight:500;"></div>
-                          <div><input type="number" placeholder="RIR" value="" step="0.5" style="width:100%; padding:8px; font-size:0.95rem; border-radius:4px; border:1px solid rgba(15,23,42,0.15); font-weight:500;"></div>
-                      <div style="display:flex; align-items:center; gap:6px; justify-content:flex-end;">
-                          <input type="checkbox" class="series-main-checkbox" style="width:20px; height:20px; cursor:pointer;" {% if s.is_main %}checked{% endif %}>
-                          <label style="font-size:0.85rem; color:#0b63d6; cursor:pointer; user-select:none; font-weight:600; white-space:nowrap;">P*</label>
-                          <button type="button" class="delete-series" style="background:#ef4444; color:white; padding:6px 10px; border-radius:4px; border:none; cursor:pointer; font-size:0.8rem; font-weight:600;">✕</button>
+                  <div class="series-items" style="display:flex; flex-direction:column; gap:6px;">
+                    {% set series_list = ex.get_series_list() %}
+                    {% if series_list %}
+                      {% for s in series_list %}
+                      <div class="series-row" data-series-description="{{ s.description }}" data-series-number="{{ s.number }}" data-is-main="{{ s.is_main|lower }}">
+                        <div><label class="series-number" style="font-size:0.75rem; color:#666; font-weight:600;">S{{ s.number }}</label></div>
+                        <div><input type="text" placeholder="Reps" value="" style="width:100%;"></div>
+                        <div><input type="number" placeholder="Rest (min)" value="" step="0.1" style="width:100%;"></div>
+                        <div><input type="number" placeholder="RIR" value="" step="0.5" style="width:100%;"></div>
+                        <div style="display:flex; align-items:center; gap:4px; justify-content:flex-end;">
+                          <input type="checkbox" class="series-main-checkbox" style="width:16px; height:16px; cursor:pointer;" {% if s.is_main %}checked{% endif %}>
+                          <label style="font-size:0.7rem; color:#0b63d6; cursor:pointer; user-select:none; font-weight:600; white-space:nowrap;">P*</label>
+                          <button type="button" class="delete-series" style="margin-left: 2px;">✕</button>
                         </div>
                       </div>
-                        {% endfor %}
-                      {% endif %}
-                    </div>
-                    <div style="margin-top:8px; font-size:0.8rem; color:#666;">* = Principale: la série dont on suivra très précisément l'évolution dans les stats</div>
+                      {% endfor %}
+                    {% endif %}
                   </div>
+                  <div style="margin-top:6px; font-size:0.75rem; color:#999;">* Principal</div>
+                </div>
 
-                  <!-- Remarque générale -->
-                  <div>
-                    <label style="font-size:0.9rem; font-weight:600; color:#374151;">Remarque générale</label>
-                    <textarea name="ex_rem_{{ day }}[]" placeholder="Notes..." style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.9rem; min-height:60px; resize:vertical;">{{ ex.remark }}</textarea>
-                  </div>
+                <!-- Remarque générale -->
+                <div style="margin-top: 8px;">
+                  <label style="font-size:0.8rem; font-weight:600; color:#374151;">Notes</label>
+                  <textarea name="ex_rem_{{ day }}[]" placeholder="Remarques..." style="width:100%;">{{ ex.remark }}</textarea>
                 </div>
               </div>
-              {% endfor %}
-            {% endif %}
-          </div>
+            </div>
+            {% endfor %}
+          {% endif %}
+        </div>
 
-          <div style="margin-top:12px;">
-            <button type="button" class="add-exercise btn-add-exercise" data-day="{{ day }}" style="background:#0b63d6; color:white; padding:10px 16px; border-radius:8px; border:none; cursor:pointer; font-weight:700; font-size:0.95rem;">+ Ajouter un exercice</button>
-          </div>
+        <div style="margin-top:8px;">
+          <button type="button" class="add-exercise btn-add-exercise" data-day="{{ day }}" style="background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%); color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600; font-size:0.85rem;">+ Ajouter exercice</button>
         </div>
       </div>
       {% endfor %}
@@ -171,9 +302,9 @@
 
 <!-- Floating actions (always visible left) -->
 <div class="floating-actions" aria-hidden="false">
-  <button id="save-float" class="save-program-btn" title="Enregistrer le programme">Enregistrer</button>
-  <button id="cancel-float" class="cancel-btn" data-return-url="{{ url_for('coach_programming') }}" title="Ne pas enregistrer">Annuler</button>
-  <button id="recap-float" class="secondary" title="Voir le récapitulatif">Voir recap</button>
+  <button id="save-float" class="save-program-btn" title="Enregistrer le programme" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);">✓ Enregistrer</button>
+  <button id="cancel-float" class="cancel-btn" data-return-url="{{ url_for('coach_programming') }}" title="Ne pas enregistrer" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);">✕ Annuler</button>
+  <button id="recap-float" class="secondary" title="Voir le récapitulatif" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);">📋 Recap</button>
 </div>
 
 <!-- Confirmation modal (hidden by default) -->
