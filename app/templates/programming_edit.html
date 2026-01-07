@@ -169,6 +169,25 @@
     display: none !important;
   }
 
+  /* Afficher le numéro d'ordre en mode réduit */
+  .exercise-order-number {
+    display: none;
+    font-weight: 700;
+    font-size: 0.8rem;
+    background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    min-width: 28px;
+    text-align: center;
+  }
+
+  .exercise-block.collapsed .exercise-order-number {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
   .exercise-header-expanded > div {
     display: flex;
     flex-direction: column;
@@ -214,25 +233,39 @@
 
   .series-items {
     display: flex !important;
-    gap: 4px !important;
-    flex-wrap: nowrap;
+    gap: 6px !important;
+    flex-wrap: wrap;
+    align-items: flex-start;
   }
 
   .series-row {
-    padding: 4px !important;
-    gap: 3px !important;
-    grid-template-columns: 25px 0.6fr 0.6fr 0.6fr 60px !important;
+    padding: 6px 8px !important;
+    gap: 4px !important;
+    display: inline-flex !important;
+    align-items: center;
     font-size: 0.75rem !important;
     border: 1px solid rgba(15,23,42,0.1) !important;
     border-radius: 4px !important;
     flex-shrink: 0;
     white-space: nowrap;
+    background: #ffffff !important;
+  }
+
+  .series-row > div {
+    display: flex !important;
+    align-items: center;
+    gap: 3px;
+  }
+
+  .series-row > div:first-child {
+    min-width: 25px;
   }
 
   .series-row input {
     padding: 3px 4px !important;
     font-size: 0.75rem !important;
-    min-width: 50px;
+    width: 45px !important;
+    min-width: 45px !important;
   }
 
   .series-row label {
@@ -299,7 +332,6 @@
     flex: 1;
     padding-left: 4px;
     font-size: 0.85rem;
-  }
   }
   
   .toggle-collapse {
@@ -445,6 +477,8 @@
             {% for ex in sessions_by_day[day].exercises %}
             <div class="exercise-block" data-exercise-id="{{ ex.id }}" data-day="{{ day }}" draggable="true">
               <div class="drag-handle" title="Glisser pour réorganiser">≡</div>
+              
+              <div class="exercise-order-number"></div>
               
               <div class="exercise-header">
                 <div class="exercise-badge">{{ ex.series_count or 0 }}S</div>
@@ -619,6 +653,9 @@
 <script>
   // Collapse all exercises by default on page load
   document.addEventListener('DOMContentLoaded', function() {
+    // Initialize order numbers
+    updateExerciseOrderNumbers();
+    
     setTimeout(() => {
       const collapseBtn = document.getElementById('collapse-all-btn');
       if (collapseBtn) {

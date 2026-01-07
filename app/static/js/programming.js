@@ -1,3 +1,16 @@
+// Fonction pour mettre à jour les numéros d'ordre des exercices réduits
+function updateExerciseOrderNumbers() {
+  document.querySelectorAll('.exercises-container').forEach(container => {
+    const exercises = container.querySelectorAll('.exercise-block');
+    exercises.forEach((exercise, index) => {
+      const orderNumber = exercise.querySelector('.exercise-order-number');
+      if (orderNumber) {
+        orderNumber.textContent = index + 1;
+      }
+    });
+  });
+}
+
 document.addEventListener('click', function(e){
   // Collapse all exercises
   if (e.target.matches('#collapse-all-btn')) {
@@ -14,6 +27,7 @@ document.addEventListener('click', function(e){
         }
       }
     });
+    updateExerciseOrderNumbers();
   }
   
   // Expand all exercises
@@ -26,6 +40,7 @@ document.addEventListener('click', function(e){
         if (toggleBtn) toggleBtn.textContent = '−';
       }
     });
+    updateExerciseOrderNumbers();
   }
   
   // Toggle collapse/expand exercise
@@ -44,6 +59,9 @@ document.addEventListener('click', function(e){
     if (select) {
       nameDisplay.textContent = select.value || '—';
     }
+    
+    // Update order numbers
+    updateExerciseOrderNumbers();
   }
   
   // Add new exercise
@@ -82,6 +100,7 @@ document.addEventListener('click', function(e){
     deleteExerciseBtn.addEventListener('click', function(evt) {
       evt.preventDefault();
       exerciseBlock.remove();
+      updateExerciseOrderNumbers();
     });
     
     // Add listener for exercise select change
@@ -96,6 +115,9 @@ document.addEventListener('click', function(e){
     
     // Fill the newly created exercise select with exercise options
     populateExerciseSelects(exerciseBlock);
+    
+    // Update order numbers
+    updateExerciseOrderNumbers();
   }
 
   // Add new series row
@@ -582,6 +604,9 @@ document.addEventListener('drop', function(e) {
       dropTarget.appendChild(draggedElement);
       draggedElement.setAttribute('data-day', dropTarget.id.split('_')[2]);
     }
+    
+    // Update order numbers after reordering
+    updateExerciseOrderNumbers();
   }
   
   // Clean up styling
