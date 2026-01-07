@@ -329,28 +329,33 @@ function parseSeriesDescription(row, description) {
     saveFloat.addEventListener('click', function(){
       showConfirm('Enregistrer le programme ? Toutes les modifications seront sauvegardées.', function(){
         // Remove any existing series hidden inputs first
-        const existingInputs = form.querySelectorAll('input[name*="ex_series_"][type="hidden"], input[name*="ex_main_"][type="hidden"]');
+        const existingInputs = form.querySelectorAll('input[name*="ex_series_"][type="hidden"], input[name*="ex_main_"][type="hidden"], input[name*="ex_data_"][type="hidden"]');
         existingInputs.forEach(input => input.remove());
         
-        // Build hidden inputs for series data synchronized with ex_name order
+        // Build hidden inputs for exercise data (name, series, remark) synchronized in order
         for (let day = 0; day < 7; day++) {
           const dayContainer = document.getElementById(`exercises_day_${day}`);
           if (!dayContainer) continue;
           
           const exerciseBlocks = dayContainer.querySelectorAll('.exercise-block');
-          exerciseBlocks.forEach(exerciseBlock => {
+          exerciseBlocks.forEach((exerciseBlock, exIdx) => {
+            const select = exerciseBlock.querySelector('.exercise-select');
+            const exerciseName = select?.value || '';
+            const remarkTextarea = exerciseBlock.querySelector(`textarea[name="ex_rem_${day}[]"]`);
+            const remark = remarkTextarea?.value || '';
+            
             const seriesRows = exerciseBlock.querySelectorAll('.series-row');
             let seriesDescription = '';
             let mainSeriesNumber = null;
             
-            seriesRows.forEach((row, idx) => {
+            seriesRows.forEach((row, sIdx) => {
               const reps = row.querySelector('input[placeholder="Reps"]')?.value || '';
               const rest = row.querySelector('input[placeholder="Rest (min)"]')?.value || '';
               const rir = row.querySelector('input[placeholder="RIR"]')?.value || '';
               const isMain = row.querySelector('.series-main-checkbox')?.checked || false;
               
-              // Build series line: "S1: 8 reps, Rest: 0.5min, RIR: 2"
-              let line = `S${idx + 1}:`;
+              // Build series line: "S1: 15-20 reps, Rest: 0.5min, RIR: 2"
+              let line = `S${sIdx + 1}:`;
               if (reps) line += ` ${reps} reps`;
               if (rest) line += `, Rest: ${rest}min`;
               if (rir) line += `, RIR: ${rir}`;
@@ -358,6 +363,36 @@ function parseSeriesDescription(row, description) {
               seriesDescription += line + '\n';
               
               if (isMain) {
+                mainSeriesNumber = sIdx + 1;
+              }
+            });
+            
+            // Create a single JSON object for this exercise with all its data
+            const exerciseData = {
+              name: exerciseName,
+              series_description: seriesDescription.trim(),
+              main_series: mainSeriesNumber,
+              remark: remark
+            };
+            
+            // Create hidden input with JSON-encoded data
+            const dataInput = document.createElement('input');
+            dataInput.type = 'hidden';
+            dataInput.name = `ex_data_${day}[]`;
+            dataInput.value = JSON.stringify(exerciseData);
+            form.appendChild(dataInput);
+          });
+        }
+        
+        // submit form
+        if (form) {
+          // disable buttons to prevent multiple submit
+          saveFloat.disabled = true;
+          form.submit();
+        }
+      });
+    });
+  }
                 mainSeriesNumber = idx + 1;
               }
             });

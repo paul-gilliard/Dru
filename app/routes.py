@@ -445,7 +445,7 @@ def register_routes(app):
 
         if request.method == 'POST':
             # Save entire program: remove existing sessions/exercises and recreate from form arrays
-            # Form fields format: session_name_<day>, and for exercises arrays: ex_name_<day>[], ex_series_<day>[], ex_main_<day>[], ex_rem_<day>[]
+            # New format: ex_data_<day>[] contains JSON with all exercise data
             # Clean old -- delete using ORM so SQLAlchemy applique la cascade et supprime les ExerciseEntry liées
             old_sessions = ProgramSession.query.filter_by(program_id=prog.id).all()
             for s in old_sessions:
@@ -454,32 +454,38 @@ def register_routes(app):
 
             for day in range(7):
                 sess_name = request.form.get(f'session_name_{day}', '').strip()
-                # exercises come as lists (maybe empty)
-                ex_names = request.form.getlist(f'ex_name_{day}[]')
-                ex_series = request.form.getlist(f'ex_series_{day}[]')
-                ex_main = request.form.getlist(f'ex_main_{day}[]')
-                ex_rem = request.form.getlist(f'ex_rem_{day}[]')
+                # New format: get ex_data_<day>[] which contains JSON-encoded exercise data
+                ex_data_list = request.form.getlist(f'ex_data_{day}[]')
 
-                if sess_name or any(n.strip() for n in ex_names):
+                if sess_name or ex_data_list:
                     ps = ProgramSession(program_id=prog.id, day_of_week=day, session_name=sess_name or None)
                     db.session.add(ps)
                     db.session.flush()  # to get ps.id
+                    
                     position = 0
-                    for idx, name in enumerate(ex_names):
-                        name = (name or '').strip()
+                    for ex_data_json in ex_data_list:
+                        try:
+                            import json
+                            ex_data = json.loads(ex_data_json)
+                        except (json.JSONDecodeError, TypeError):
+                            # Fallback for old format
+                            continue
+                        
+                        name = (ex_data.get('name') or '').strip()
                         if not name:
                             continue
+                        
                         # Fetch muscle group from Exercise bank
                         exercise = Exercise.query.filter_by(name=name).first()
                         muscle = exercise.muscle_group if exercise else None
                         
                         # Parse main_series
-                        main_series_val = None
-                        try:
-                            ms = ex_main[idx] if idx < len(ex_main) else None
-                            main_series_val = int(ms) if ms and ms.strip() else None
-                        except (ValueError, IndexError, TypeError):
-                            main_series_val = None
+                        main_series_val = ex_data.get('main_series')
+                        if main_series_val:
+                            try:
+                                main_series_val = int(main_series_val) if main_series_val else None
+                            except (ValueError, TypeError):
+                                main_series_val = None
                         
                         ee = ExerciseEntry(
                             session_id=ps.id,
@@ -491,8 +497,8 @@ def register_routes(app):
                             rir=None,
                             intensification=None,
                             muscle=muscle,
-                            remark=(ex_rem[idx] if idx < len(ex_rem) else None),
-                            series_description=(ex_series[idx] if idx < len(ex_series) else None),
+                            remark=ex_data.get('remark'),
+                            series_description=ex_data.get('series_description'),
                             main_series=main_series_val
                         )
                         db.session.add(ee)
