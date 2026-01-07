@@ -106,6 +106,11 @@ class ExerciseEntry(db.Model):
                 'is_main': i == self.main_series
             })
         return series
+    
+    @property
+    def series_count(self):
+        """Return number of series"""
+        return len(self.get_series_list())
 
 class JournalEntry(db.Model):
     id = db.Column(db.Integer, primary_key=True)

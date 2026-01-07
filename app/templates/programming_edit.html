@@ -54,49 +54,103 @@
 
   .exercise-block {
     cursor: grab;
-    transition: all 0.2s ease;
-    border: 1px solid rgba(11, 99, 214, 0.2) !important;
+    transition: all 0.3s ease;
+    border: 1px solid rgba(11, 99, 214, 0.15) !important;
     border-radius: 8px !important;
-    padding: 12px !important;
-    background: #ffffff !important;
+    padding: 10px !important;
+    background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%) !important;
     display: flex !important;
-    gap: 10px !important;
+    gap: 8px !important;
+    position: relative;
   }
   
   .exercise-block:hover {
-    background-color: #f8f9fb !important;
-    border-color: rgba(11, 99, 214, 0.4) !important;
-    box-shadow: 0 2px 8px rgba(11, 99, 214, 0.1) !important;
+    background: linear-gradient(135deg, #f0f6ff 0%, #f9fafb 100%) !important;
+    border-color: rgba(11, 99, 214, 0.35) !important;
+    box-shadow: 0 3px 12px rgba(11, 99, 214, 0.12) !important;
   }
   
   .exercise-block.dragging {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: grabbing;
-    background: #e0e7ff !important;
+    background: linear-gradient(135deg, #e0e7ff 0%, #e8ebff 100%) !important;
   }
   
   .exercise-block.drag-over {
-    background-color: #e0e7ff !important;
+    background: linear-gradient(135deg, #dbeafe 0%, #e8ebff 100%) !important;
     border: 2px solid #0b63d6 !important;
   }
   
   .drag-handle {
     cursor: grab;
     color: #cbd5e1;
-    font-size: 1rem;
+    font-size: 0.9rem;
     margin-right: 0;
     flex-shrink: 0;
     align-self: center;
+    padding: 4px 6px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
   }
   
   .drag-handle:hover {
     color: #0b63d6;
+    background: rgba(11, 99, 214, 0.1);
   }
 
   .exercise-block.collapsed {
-    padding: 8px 12px !important;
+    padding: 8px 10px !important;
     gap: 8px !important;
     align-items: center !important;
+  }
+
+  .exercise-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .exercise-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%);
+    color: white;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    min-width: 50px;
+    text-align: center;
+  }
+
+  .exercise-badge.muscle {
+    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  }
+
+  .exercise-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .exercise-name {
+    font-weight: 700;
+    color: #0b63d6;
+    font-size: 0.95rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .exercise-meta {
+    font-size: 0.75rem;
+    color: #999;
   }
   
   .exercise-details {
@@ -107,10 +161,10 @@
     display: none;
   }
   
-  .exercise-block.collapsed .exercise-name-display {
-    display: inline-block;
+  .exercise-block.collapsed .exercise-header-expanded {
+    display: none;
   }
-  
+
   .exercise-name-display {
     display: none;
     font-weight: 600;
@@ -118,6 +172,7 @@
     flex: 1;
     padding-left: 4px;
     font-size: 0.95rem;
+  }
   }
   
   .toggle-collapse {
@@ -262,12 +317,20 @@
           {% if sessions_by_day[day] %}
             {% for ex in sessions_by_day[day].exercises %}
             <div class="exercise-block" data-exercise-id="{{ ex.id }}" data-day="{{ day }}" draggable="true">
-              <div class="drag-handle" title="Glisser pour réorganiser">⋮⋮</div>
-              <div class="exercise-name-display">{{ ex.name or '—' }}</div>
+              <div class="drag-handle" title="Glisser pour réorganiser">≡</div>
+              
+              <div class="exercise-header">
+                <div class="exercise-badge">{{ ex.series_count or 0 }}S</div>
+                <div class="exercise-info">
+                  <div class="exercise-name">{{ ex.name or '—' }}</div>
+                  <div class="exercise-meta">{{ ex.muscle or 'N/A' }}</div>
+                </div>
+              </div>
+              
               <button type="button" class="toggle-collapse" title="Réduire/Agrandir">−</button>
               
-              <div class="exercise-details" style="flex: 1;">
-                <div style="display:grid; grid-template-columns: 1fr 120px 80px; gap:10px; align-items:start; margin-bottom:10px;">
+              <div class="exercise-details" style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                <div class="exercise-header-expanded" style="display: grid; grid-template-columns: 1fr 100px 70px; gap: 10px; align-items: start;">
                   <div>
                     <label style="font-size:0.8rem; font-weight:600; color:#0b63d6;">Exercice</label>
                     <select name="ex_name_{{ day }}[]" class="exercise-select" data-value="{{ ex.name or '' }}" style="width:100%; padding:6px 8px; border-radius:5px; border:1px solid rgba(15,23,42,0.15); font-size:0.9rem;" required><option>-- Sélectionner --</option></select>
