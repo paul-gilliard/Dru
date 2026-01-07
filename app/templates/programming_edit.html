@@ -2,6 +2,35 @@
 {% block title %}Éditer programme — {{ program.name }}{% endblock %}
 {% block content %}
 <style>
+  .programming-edit {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 16px !important;
+  }
+
+  .day-row {
+    min-height: 200px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .day-row h4 {
+    font-size: 1rem !important;
+    margin-bottom: 8px !important;
+  }
+
+  @media (max-width: 1200px) {
+    .programming-edit {
+      grid-template-columns: repeat(2, 1fr) !important;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .programming-edit {
+      grid-template-columns: 1fr !important;
+    }
+  }
+
   .programming-edit-root {
     padding: 20px !important;
   }
@@ -12,17 +41,15 @@
     background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
   }
 
-  .day-row h4 {
-    font-size: 1rem !important;
-    margin-bottom: 12px !important;
-  }
-
   .day-row h5 {
     display: none;
   }
 
   .exercises-container {
-    gap: 12px !important;
+    gap: 10px !important;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
   }
 
   .exercise-block {
@@ -400,4 +427,15 @@
 
 
 <script src="{{ url_for('static', filename='js/programming.js') }}"></script>
+<script>
+  // Collapse all exercises by default on page load
+  document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(() => {
+      const collapseBtn = document.getElementById('collapse-all-btn');
+      if (collapseBtn) {
+        collapseBtn.click();
+      }
+    }, 100);
+  });
+</script>
 {% endblock %}
