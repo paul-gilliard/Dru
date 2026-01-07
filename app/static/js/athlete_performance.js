@@ -20,8 +20,10 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
-  // initial filter
-  if (dateInput) filterByDate(dateInput.value);
+  // initial filter after date input has been set (including via localStorage)
+  setTimeout(() => {
+    if (dateInput) filterByDate(dateInput.value);
+  }, 50);
 
   // change listener
   if (dateInput) dateInput.addEventListener('change', function(){
