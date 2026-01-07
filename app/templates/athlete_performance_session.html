@@ -299,10 +299,28 @@
         cursor: pointer;
         font-weight: 600;
         transition: all 0.3s ease;
+        margin-right: 4px;
     }
 
     .edit-btn:hover {
         background: #764ba2;
+        transform: translateY(-1px);
+    }
+
+    .delete-btn {
+        background: #ef4444;
+        color: white;
+        border: none;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 0.85em;
+        cursor: pointer;
+        font-weight: 600;
+        transition: all 0.3s ease;
+    }
+
+    .delete-btn:hover {
+        background: #dc2626;
         transform: translateY(-1px);
     }
 
@@ -515,6 +533,7 @@
                             <td>{{ p.notes or '' }}</td>
                             <td>
                                 <button type="button" class="edit-btn edit-perf-btn" data-entry-id="{{ p.id }}">Modifier</button>
+                                <button type="button" class="delete-btn delete-perf-btn" data-entry-id="{{ p.id }}">Supprimer</button>
                             </td>
                         </tr>
                         {% endfor %}
@@ -714,6 +733,46 @@
         // Collapse
         panel.classList.add('collapsed');
         btn.textContent = '+';
+      }
+    }
+
+    // ============ VALIDATION SÉRIE ============
+    // Empêcher la soumission si la série n'est pas sélectionnée
+    const perfFormSubmit = document.querySelector('#perf-add-form button[type="submit"]');
+    if (perfFormSubmit) {
+      perfFormSubmit.addEventListener('click', function(e) {
+        const exerciseSelect = document.getElementById('perf-exercise');
+        const seriesSelect = document.getElementById('perf-series');
+        
+        // Vérifier que l'exercice est sélectionné
+        if (!exerciseSelect.value) {
+          alert('Veuillez sélectionner un exercice');
+          e.preventDefault();
+          return false;
+        }
+        
+        // Vérifier que la série est sélectionnée (si l'exercice a des séries)
+        const selectedExerciseName = exerciseSelect.value;
+        const exerciseData = exercisesData[selectedExerciseName];
+        
+        if (exerciseData && exerciseData.series && exerciseData.series.length > 0) {
+          if (seriesSelect.value === '') {
+            alert('Veuillez sélectionner une série');
+            e.preventDefault();
+            return false;
+          }
+        }
+      });
+    }
+
+    // ============ SUPPRESSION PERFORMANCE ============
+    function deletePerformance(entryId, exerciseName) {
+      if (confirm(`Êtes-vous sûr de vouloir supprimer cette performance (${exerciseName}) ?`)) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = `/athlete/performance/entry/${entryId}/delete`;
+        document.body.appendChild(form);
+        form.submit();
       }
     }
 </script>

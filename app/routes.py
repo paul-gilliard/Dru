@@ -868,6 +868,26 @@ def register_routes(app):
             return redirect(url_for('athlete_performance_session', session_id=e.program_session_id))
         return redirect(url_for('athlete_performance'))
 
+    @app.route('/athlete/performance/entry/<int:entry_id>/delete', methods=['POST'])
+    def athlete_performance_entry_delete(entry_id):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        e = PerformanceEntry.query.get_or_404(entry_id)
+        if e.athlete_id != user.id:
+            flash("Accès refusé")
+            return redirect(url_for('athlete_performance'))
+        
+        session_id = e.program_session_id
+        db.session.delete(e)
+        db.session.commit()
+        flash('Entrée performance supprimée')
+        
+        # redirige vers la séance correspondante si possible
+        if session_id:
+            return redirect(url_for('athlete_performance_session', session_id=session_id))
+        return redirect(url_for('athlete_performance'))
+
     @app.route('/athlete/performance/session/<int:session_id>/summary')
     def athlete_performance_session_summary(session_id):
         if 'user_id' not in session:

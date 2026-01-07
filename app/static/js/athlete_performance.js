@@ -64,6 +64,7 @@ document.addEventListener('DOMContentLoaded', function(){
             <td>${entry.notes || ''}</td>
             <td>
               <button type="button" class="edit-btn edit-perf-btn" data-entry-id="${entry.id}">Modifier</button>
+              <button type="button" class="delete-btn delete-perf-btn" data-entry-id="${entry.id}">Supprimer</button>
             </td>
           `;
           tbody.appendChild(row);
@@ -71,6 +72,11 @@ document.addEventListener('DOMContentLoaded', function(){
           // Réattacher l'event listener au bouton d'édition
           row.querySelector('.edit-perf-btn').addEventListener('click', function(){
             openEdit(this.getAttribute('data-entry-id'));
+          });
+          
+          // Réattacher l'event listener au bouton de suppression
+          row.querySelector('.delete-perf-btn').addEventListener('click', function(){
+            deletePerformance(this.getAttribute('data-entry-id'), entry.exercise);
           });
         });
 
@@ -140,6 +146,16 @@ document.addEventListener('DOMContentLoaded', function(){
     btn.addEventListener('click', function(){
       const id = btn.getAttribute('data-entry-id');
       openEdit(id);
+    });
+  });
+
+  // attach delete buttons
+  document.querySelectorAll('.delete-perf-btn').forEach(btn=>{
+    btn.addEventListener('click', function(){
+      const id = btn.getAttribute('data-entry-id');
+      const row = btn.closest('tr');
+      const exerciseName = row.querySelector('td:nth-child(2)').textContent;
+      deletePerformance(id, exerciseName);
     });
   });
 
