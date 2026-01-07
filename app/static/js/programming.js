@@ -270,9 +270,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function parseSeriesDescription(row, description) {
-  // Example: "S1: 8 reps, Rest: 0.5min, RIR: 2"
-  // Extract: reps, rest, rir
-  const repsMatch = description.match(/(\d+)\s*reps/i);
+  // Example: "S1: 8 reps, Rest: 0.5min, RIR: 2" or "S1: 15-20 reps, Rest: 0.5min, RIR: 2"
+  // Extract: reps (can be range like 15-20), rest, rir
+  const repsMatch = description.match(/(\d+(?:-\d+)?)\s*reps/i);
   const restMatch = description.match(/Rest:\s*([\d.]+)\s*min/i);
   const rirMatch = description.match(/RIR:\s*([\d.]+)/i);
 
