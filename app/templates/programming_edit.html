@@ -57,11 +57,15 @@
     transition: all 0.3s ease;
     border: 1px solid rgba(11, 99, 214, 0.15) !important;
     border-radius: 8px !important;
-    padding: 10px !important;
+    padding: 8px !important;
     background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%) !important;
     display: flex !important;
     gap: 8px !important;
     position: relative;
+    align-items: flex-start;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scroll-behavior: smooth;
   }
   
   .exercise-block:hover {
@@ -81,6 +85,12 @@
     border: 2px solid #0b63d6 !important;
   }
   
+  .exercise-block.collapsed {
+    padding: 6px 8px !important;
+    gap: 6px !important;
+    align-items: center !important;
+  }
+
   .drag-handle {
     cursor: grab;
     color: #cbd5e1;
@@ -98,17 +108,11 @@
     background: rgba(11, 99, 214, 0.1);
   }
 
-  .exercise-block.collapsed {
-    padding: 8px 10px !important;
-    gap: 8px !important;
-    align-items: center !important;
-  }
-
   .exercise-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    flex: 1;
+    gap: 6px;
+    flex-shrink: 0;
     min-width: 0;
   }
 
@@ -120,10 +124,10 @@
     color: white;
     padding: 4px 8px;
     border-radius: 4px;
-    font-size: 0.7rem;
+    font-size: 0.65rem;
     font-weight: 700;
     flex-shrink: 0;
-    min-width: 50px;
+    min-width: 45px;
     text-align: center;
   }
 
@@ -135,107 +139,167 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
-    flex: 1;
-    min-width: 0;
+    flex-shrink: 0;
+    min-width: 120px;
   }
 
   .exercise-name {
     font-weight: 700;
     color: #0b63d6;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
   .exercise-meta {
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     color: #999;
   }
   
   .exercise-details {
     display: flex;
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
+    gap: 6px;
+    align-items: flex-start;
+    flex-shrink: 0;
   }
-  
+
   .exercise-block.collapsed .exercise-details {
     display: none !important;
   }
   
   .exercise-header-expanded {
-    display: grid;
-    grid-template-columns: 1fr 100px 70px;
-    gap: 10px;
-    align-items: start;
-    width: 100%;
+    display: flex;
+    gap: 6px;
+    align-items: flex-start;
+    flex-shrink: 0;
   }
 
   .exercise-block.collapsed .exercise-header-expanded {
     display: none !important;
   }
 
+  .exercise-header-expanded > div {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .exercise-header-expanded label {
+    font-size: 0.7rem !important;
+    font-weight: 600 !important;
+    color: #0b63d6 !important;
+    margin-bottom: 0 !important;
+  }
+
+  .exercise-header-expanded select,
+  .exercise-header-expanded input {
+    font-size: 0.8rem !important;
+    padding: 4px 6px !important;
+    min-width: 100px;
+  }
+
   .series-list {
     margin: 0 !important;
     padding: 0;
     display: flex;
-    flex-direction: column;
     gap: 6px;
+    align-items: flex-start;
+    flex-shrink: 0;
   }
 
   .series-list > div:first-child {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 4px;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .series-list > div:first-child label {
     font-weight: 600 !important;
     color: #374151 !important;
-    font-size: 0.8rem !important;
-  }
-
-  .series-items {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 5px !important;
-  }
-
-  .series-row {
-    padding: 6px !important;
-    gap: 5px !important;
-    grid-template-columns: 35px 0.8fr 0.8fr 0.8fr 80px !important;
-    font-size: 0.85rem !important;
-    border: 1px solid rgba(15,23,42,0.1) !important;
-    border-radius: 5px !important;
-  }
-
-  .series-row input {
-    padding: 4px 6px !important;
-    font-size: 0.8rem !important;
-  }
-
-  .series-row label {
     font-size: 0.7rem !important;
     margin-bottom: 0 !important;
   }
 
-  .add-series {
-    padding: 4px 8px !important;
+  .series-items {
+    display: flex !important;
+    gap: 4px !important;
+    flex-wrap: nowrap;
+  }
+
+  .series-row {
+    padding: 4px !important;
+    gap: 3px !important;
+    grid-template-columns: 25px 0.6fr 0.6fr 0.6fr 60px !important;
     font-size: 0.75rem !important;
+    border: 1px solid rgba(15,23,42,0.1) !important;
+    border-radius: 4px !important;
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .series-row input {
+    padding: 3px 4px !important;
+    font-size: 0.75rem !important;
+    min-width: 50px;
+  }
+
+  .series-row label {
+    font-size: 0.65rem !important;
+    margin-bottom: 0 !important;
+  }
+
+  .add-series {
+    padding: 3px 6px !important;
+    font-size: 0.7rem !important;
+    background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%) !important;
+    color: white !important;
+    border-radius: 4px !important;
+    flex-shrink: 0;
   }
 
   .delete-exercise, .delete-series {
-    padding: 4px 6px !important;
-    font-size: 0.7rem !important;
+    padding: 3px 5px !important;
+    font-size: 0.65rem !important;
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+    color: white !important;
+    border-radius: 3px !important;
+    flex-shrink: 0;
   }
 
   textarea[name*="ex_rem_"] {
-    font-size: 0.8rem !important;
-    min-height: 40px !important;
-    padding: 6px !important;
+    font-size: 0.75rem !important;
+    min-height: 35px !important;
+    padding: 4px !important;
+    min-width: 150px;
+    flex-shrink: 0;
+  }
+
+  .toggle-collapse {
+    background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%);
+    color: white;
+    border: none;
+    padding: 4px 7px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-weight: 700;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+    min-width: 24px;
+  }
+  
+  .toggle-collapse:hover {
+    background: linear-gradient(135deg, #0952b8 0%, #0741a0 100%);
+    box-shadow: 0 2px 6px rgba(11, 99, 214, 0.3);
+  }
+
+  .exercise-muscle {
+    font-size: 0.75rem !important;
+    padding: 3px 6px !important;
+    text-align: center !important;
   }
 
   .exercise-name-display {
@@ -244,7 +308,7 @@
     color: #0b63d6;
     flex: 1;
     padding-left: 4px;
-    font-size: 0.95rem;
+    font-size: 0.85rem;
   }
   }
   
@@ -402,51 +466,50 @@
               
               <button type="button" class="toggle-collapse" title="Réduire/Agrandir">−</button>
               
-              <div class="exercise-details" style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
-                <div class="exercise-header-expanded" style="display: grid; grid-template-columns: 1fr 100px 70px; gap: 10px; align-items: start;">
+              <div class="exercise-details">
+                <div class="exercise-header-expanded">
                   <div>
-                    <label style="font-size:0.8rem; font-weight:600; color:#0b63d6;">Exercice</label>
-                    <select name="ex_name_{{ day }}[]" class="exercise-select" data-value="{{ ex.name or '' }}" style="width:100%; padding:6px 8px; border-radius:5px; border:1px solid rgba(15,23,42,0.15); font-size:0.9rem;" required><option>-- Sélectionner --</option></select>
+                    <label>Exercice</label>
+                    <select name="ex_name_{{ day }}[]" class="exercise-select" data-value="{{ ex.name or '' }}" required><option>-- Sélectionner --</option></select>
                   </div>
                   <div>
-                    <label style="font-size:0.8rem; font-weight:600; color:#0b63d6;">Muscle</label>
-                    <div class="exercise-muscle" style="padding:6px 8px; border-radius:5px; border:1px solid rgba(15,23,42,0.15); font-size:0.85rem; background:#f3f4f6; text-align:center;">{{ ex.muscle or '—' }}</div>
+                    <label>Muscle</label>
+                    <div class="exercise-muscle" style="background:#f3f4f6;">{{ ex.muscle or '—' }}</div>
                   </div>
-                  <button type="button" class="delete-exercise btn-remove" style="margin-top:18px; background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); color:white; padding:6px 10px; border-radius:5px; border:none; cursor:pointer; font-weight:600; font-size:0.75rem;">Suppr.</button>
+                  <button type="button" class="delete-exercise btn-remove">Suppr.</button>
                 </div>
 
                 <!-- Séries pour cet exercice -->
                 <div class="series-list">
-                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                    <label style="font-weight:600; color:#374151; font-size:0.85rem;">Séries</label>
-                    <button type="button" class="add-series" data-exercise-id="{{ ex.id }}" data-day="{{ day }}" style="background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%); color:white; padding:5px 9px; border-radius:5px; border:none; cursor:pointer; font-size:0.75rem; font-weight:600;">+ Ajouter</button>
+                  <div>
+                    <label>Séries</label>
+                    <button type="button" class="add-series" data-exercise-id="{{ ex.id }}" data-day="{{ day }}">+ Ajouter</button>
                   </div>
 
-                  <div class="series-items" style="display:flex; flex-direction:column; gap:6px;">
+                  <div class="series-items">
                     {% set series_list = ex.get_series_list() %}
                     {% if series_list %}
                       {% for s in series_list %}
                       <div class="series-row" data-series-description="{{ s.description }}" data-series-number="{{ s.number }}" data-is-main="{{ s.is_main|lower }}">
-                        <div><label class="series-number" style="font-size:0.75rem; color:#666; font-weight:600;">S{{ s.number }}</label></div>
-                        <div><input type="text" placeholder="Reps" value="" style="width:100%;"></div>
-                        <div><input type="number" placeholder="Rest (min)" value="" step="0.1" style="width:100%;"></div>
-                        <div><input type="number" placeholder="RIR" value="" step="0.5" style="width:100%;"></div>
-                        <div style="display:flex; align-items:center; gap:4px; justify-content:flex-end;">
-                          <input type="checkbox" class="series-main-checkbox" style="width:16px; height:16px; cursor:pointer;" {% if s.is_main %}checked{% endif %}>
-                          <label style="font-size:0.7rem; color:#0b63d6; cursor:pointer; user-select:none; font-weight:600; white-space:nowrap;">P*</label>
-                          <button type="button" class="delete-series" style="margin-left: 2px;">✕</button>
+                        <div><label class="series-number">S{{ s.number }}</label></div>
+                        <div><input type="text" placeholder="Reps" value=""></div>
+                        <div><input type="number" placeholder="Rest (min)" value="" step="0.1"></div>
+                        <div><input type="number" placeholder="RIR" value="" step="0.5"></div>
+                        <div style="display:flex; align-items:center; gap:3px; justify-content:flex-end;">
+                          <input type="checkbox" class="series-main-checkbox" {% if s.is_main %}checked{% endif %}>
+                          <label style="font-size:0.65rem; color:#0b63d6; cursor:pointer; user-select:none; font-weight:600; white-space:nowrap;">P*</label>
+                          <button type="button" class="delete-series">✕</button>
                         </div>
                       </div>
                       {% endfor %}
                     {% endif %}
                   </div>
-                  <div style="margin-top:6px; font-size:0.75rem; color:#999;">* Principal</div>
                 </div>
 
                 <!-- Remarque générale -->
-                <div style="margin-top: 8px;">
-                  <label style="font-size:0.8rem; font-weight:600; color:#374151;">Notes</label>
-                  <textarea name="ex_rem_{{ day }}[]" placeholder="Remarques..." style="width:100%;">{{ ex.remark }}</textarea>
+                <div>
+                  <label>Notes</label>
+                  <textarea name="ex_rem_{{ day }}[]" placeholder="Remarques...">{{ ex.remark }}</textarea>
                 </div>
               </div>
             </div>
