@@ -250,7 +250,7 @@ document.addEventListener('DOMContentLoaded', function(){
         `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
       document.getElementById('summary-sleep').textContent = sleepValue;
       
-      // Fill tonnage rows
+      // Fill tonnage rows with detail buttons
       const tonnageBody = document.getElementById('summary-tonnage-body');
       tonnageBody.innerHTML = '';
       Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
@@ -262,6 +262,9 @@ document.addEventListener('DOMContentLoaded', function(){
         tr.innerHTML = `
           <td style="padding:12px; font-weight:600;">${muscle}</td>
           <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
+          <td style="padding:12px; text-align:center;">
+            <button class="show-muscle-detail secondary" data-muscle="${muscle}" data-summary="7days" style="font-size:0.8rem; padding:4px 8px; cursor:pointer;">Détails</button>
+          </td>
         `;
         tonnageBody.appendChild(tr);
       });
@@ -318,7 +321,7 @@ document.addEventListener('DOMContentLoaded', function(){
         `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
       document.getElementById('summary-14days-sleep').textContent = sleepValue;
       
-      // Fill tonnage rows
+      // Fill tonnage rows with detail buttons
       const tonnageBody = document.getElementById('summary-14days-tonnage-body');
       tonnageBody.innerHTML = '';
       Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
@@ -330,6 +333,9 @@ document.addEventListener('DOMContentLoaded', function(){
         tr.innerHTML = `
           <td style="padding:12px; font-weight:600;">${muscle}</td>
           <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
+          <td style="padding:12px; text-align:center;">
+            <button class="show-muscle-detail secondary" data-muscle="${muscle}" data-summary="14days" style="font-size:0.8rem; padding:4px 8px; cursor:pointer;">Détails</button>
+          </td>
         `;
         tonnageBody.appendChild(tr);
       });
@@ -386,7 +392,7 @@ document.addEventListener('DOMContentLoaded', function(){
         `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
       document.getElementById('summary-28days-sleep').textContent = sleepValue;
       
-      // Fill tonnage rows
+      // Fill tonnage rows with detail buttons
       const tonnageBody = document.getElementById('summary-28days-tonnage-body');
       tonnageBody.innerHTML = '';
       Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
@@ -398,6 +404,9 @@ document.addEventListener('DOMContentLoaded', function(){
         tr.innerHTML = `
           <td style="padding:12px; font-weight:600;">${muscle}</td>
           <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
+          <td style="padding:12px; text-align:center;">
+            <button class="show-muscle-detail secondary" data-muscle="${muscle}" data-summary="28days" style="font-size:0.8rem; padding:4px 8px; cursor:pointer;">Détails</button>
+          </td>
         `;
         tonnageBody.appendChild(tr);
       });
@@ -880,5 +889,59 @@ document.addEventListener('DOMContentLoaded', function(){
       const id = athleteSelect.value;
       if (id) loadJournal(id);
     });
+  });
+
+  // Event delegation for muscle detail buttons
+  document.addEventListener('click', async function(e) {
+    if (e.target.matches('.show-muscle-detail')) {
+      const muscle = e.target.getAttribute('data-muscle');
+      const summary = e.target.getAttribute('data-summary');
+      const athleteId = athleteSelect.value;
+      
+      if (!athleteId || !muscle) return;
+      
+      try {
+        const res = await fetch(`/coach/stats/athlete/${athleteId}/summary-${summary}-muscle-detail/${encodeURIComponent(muscle)}.json`);
+        if (!res.ok) {
+          alert('Erreur lors du chargement des détails');
+          return;
+        }
+        const data = await res.json();
+        
+        // Build detail HTML
+        let html = `<h4>${muscle}</h4>`;
+        html += '<table style="width:100%; border-collapse:collapse; margin-top:12px;">';
+        html += `<tr style="background:#f3f4f6; border-bottom:2px solid #d1d5db;">
+          <th style="padding:8px; text-align:left; font-weight:600;">Exercice</th>
+          <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Semaine courante</th>
+          <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Il y a 2 sem.</th>
+          <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Évolution</th>
+        </tr>`;
+        
+        Object.keys(data.tonnage_diff_by_exercise || {}).sort().forEach(exercise => {
+          const current = data.current_tonnage_by_exercise[exercise] || 0;
+          const previous = data.previous_tonnage_by_exercise[exercise] || 0;
+          const diff = data.tonnage_diff_by_exercise[exercise] || 0;
+          const arrow = diff > 0 ? '📈' : (diff < 0 ? '📉' : '→');
+          const diffStr = diff >= 0 ? `+${diff.toFixed(0)}` : `${diff.toFixed(0)}`;
+          
+          html += `<tr style="border-bottom:1px solid #e5e7eb;">
+            <td style="padding:8px;">${exercise}</td>
+            <td style="padding:8px; text-align:center;">${current.toFixed(0)}</td>
+            <td style="padding:8px; text-align:center;">${previous.toFixed(0)}</td>
+            <td style="padding:8px; text-align:center;">${diffStr} ${arrow}</td>
+          </tr>`;
+        });
+        
+        html += '</table>';
+        
+        document.getElementById('muscle-detail-title').textContent = `Détail par exercice - ${muscle}`;
+        document.getElementById('muscle-detail-content').innerHTML = html;
+        document.getElementById('muscle-detail-modal').style.display = 'flex';
+      } catch (err) {
+        console.error('Error loading muscle detail:', err);
+        alert('Erreur lors du chargement');
+      }
+    }
   });
 });

@@ -1819,6 +1819,146 @@ def register_routes(app):
             traceback.print_exc()
             return jsonify({'error': str(e)}), 500
 
+    @app.route('/coach/stats/athlete/<int:athlete_id>/summary-7days-muscle-detail/<muscle>.json')
+    def coach_stats_athlete_summary_7days_muscle_detail(athlete_id, muscle):
+        """Get exercise breakdown for a specific muscle in 7-day summary"""
+        try:
+            if 'user_id' not in session:
+                return jsonify({'error':'unauth'}), 401
+            user = User.query.get(session['user_id'])
+            if not user or user.role != 'coach':
+                return jsonify({'error':'forbidden'}), 403
+            
+            today = datetime.utcnow().date()
+            current_week_start = today - timedelta(days=today.weekday())
+            week_start_prev = current_week_start - timedelta(days=7)
+            
+            # Get performances for current week
+            current_perfs = PerformanceEntry.query.filter(
+                PerformanceEntry.athlete_id==athlete_id,
+                PerformanceEntry.entry_date >= current_week_start,
+                PerformanceEntry.entry_date <= current_week_start + timedelta(days=6)
+            ).all()
+            
+            # Get performances for week before
+            previous_perfs = PerformanceEntry.query.filter(
+                PerformanceEntry.athlete_id==athlete_id,
+                PerformanceEntry.entry_date >= week_start_prev,
+                PerformanceEntry.entry_date <= week_start_prev + timedelta(days=6)
+            ).all()
+            
+            # Build tonnage by exercise for current week
+            current_tonnage_by_exercise = {}
+            for e in current_perfs:
+                if not e.exercise or not e.reps or not e.load:
+                    continue
+                ex = Exercise.query.filter_by(name=e.exercise).first()
+                if not ex or ex.muscle_group != muscle:
+                    continue
+                if e.exercise not in current_tonnage_by_exercise:
+                    current_tonnage_by_exercise[e.exercise] = 0
+                current_tonnage_by_exercise[e.exercise] += e.reps * e.load
+            
+            # Build tonnage by exercise for previous week
+            previous_tonnage_by_exercise = {}
+            for e in previous_perfs:
+                if not e.exercise or not e.reps or not e.load:
+                    continue
+                ex = Exercise.query.filter_by(name=e.exercise).first()
+                if not ex or ex.muscle_group != muscle:
+                    continue
+                if e.exercise not in previous_tonnage_by_exercise:
+                    previous_tonnage_by_exercise[e.exercise] = 0
+                previous_tonnage_by_exercise[e.exercise] += e.reps * e.load
+            
+            # Calculate differences
+            tonnage_diff_by_exercise = {}
+            all_exercises = set(current_tonnage_by_exercise.keys()) | set(previous_tonnage_by_exercise.keys())
+            for exercise in all_exercises:
+                current = current_tonnage_by_exercise.get(exercise, 0)
+                previous = previous_tonnage_by_exercise.get(exercise, 0)
+                tonnage_diff_by_exercise[exercise] = current - previous
+            
+            return jsonify({
+                'muscle': muscle,
+                'current_tonnage_by_exercise': current_tonnage_by_exercise,
+                'previous_tonnage_by_exercise': previous_tonnage_by_exercise,
+                'tonnage_diff_by_exercise': tonnage_diff_by_exercise
+            })
+        except Exception as e:
+            print(f"Error in summary-7days-muscle-detail route: {str(e)}")
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/coach/stats/athlete/<int:athlete_id>/summary-28days-muscle-detail/<muscle>.json')
+    def coach_stats_athlete_summary_28days_muscle_detail(athlete_id, muscle):
+        """Get exercise breakdown for a specific muscle in 28-day summary"""
+        try:
+            if 'user_id' not in session:
+                return jsonify({'error':'unauth'}), 401
+            user = User.query.get(session['user_id'])
+            if not user or user.role != 'coach':
+                return jsonify({'error':'forbidden'}), 403
+            
+            today = datetime.utcnow().date()
+            current_week_start = today - timedelta(days=today.weekday())
+            four_weeks_ago_start = current_week_start - timedelta(days=28)
+            
+            # Get performances for current week
+            current_perfs = PerformanceEntry.query.filter(
+                PerformanceEntry.athlete_id==athlete_id,
+                PerformanceEntry.entry_date >= current_week_start,
+                PerformanceEntry.entry_date <= current_week_start + timedelta(days=6)
+            ).all()
+            
+            # Get performances for 4 weeks ago
+            previous_perfs = PerformanceEntry.query.filter(
+                PerformanceEntry.athlete_id==athlete_id,
+                PerformanceEntry.entry_date >= four_weeks_ago_start,
+                PerformanceEntry.entry_date <= four_weeks_ago_start + timedelta(days=6)
+            ).all()
+            
+            # Build tonnage by exercise for current week
+            current_tonnage_by_exercise = {}
+            for e in current_perfs:
+                if not e.exercise or not e.reps or not e.load:
+                    continue
+                ex = Exercise.query.filter_by(name=e.exercise).first()
+                if not ex or ex.muscle_group != muscle:
+                    continue
+                if e.exercise not in current_tonnage_by_exercise:
+                    current_tonnage_by_exercise[e.exercise] = 0
+                current_tonnage_by_exercise[e.exercise] += e.reps * e.load
+            
+            # Build tonnage by exercise for 4 weeks ago
+            previous_tonnage_by_exercise = {}
+            for e in previous_perfs:
+                if not e.exercise or not e.reps or not e.load:
+                    continue
+                ex = Exercise.query.filter_by(name=e.exercise).first()
+                if not ex or ex.muscle_group != muscle:
+                    continue
+                if e.exercise not in previous_tonnage_by_exercise:
+                    previous_tonnage_by_exercise[e.exercise] = 0
+                previous_tonnage_by_exercise[e.exercise] += e.reps * e.load
+            
+            # Calculate differences
+            tonnage_diff_by_exercise = {}
+            all_exercises = set(current_tonnage_by_exercise.keys()) | set(previous_tonnage_by_exercise.keys())
+            for exercise in all_exercises:
+                current = current_tonnage_by_exercise.get(exercise, 0)
+                previous = previous_tonnage_by_exercise.get(exercise, 0)
+                tonnage_diff_by_exercise[exercise] = current - previous
+            
+            return jsonify({
+                'muscle': muscle,
+                'current_tonnage_by_exercise': current_tonnage_by_exercise,
+                'previous_tonnage_by_exercise': previous_tonnage_by_exercise,
+                'tonnage_diff_by_exercise': tonnage_diff_by_exercise
+            })
+        except Exception as e:
+            print(f"Error in summary-28days-muscle-detail route: {str(e)}")
+            return jsonify({'error': str(e)}), 500
+
     @app.route('/coach/stats/athlete/<int:athlete_id>/summary-14days.json')
     def coach_stats_athlete_summary_14days(athlete_id):
         """Get 14-day summary comparing current week vs 2 weeks ago"""
@@ -1959,6 +2099,76 @@ def register_routes(app):
             })
         except Exception as e:
             print(f"Error in summary-14days route: {str(e)}")
+            return jsonify({'error': str(e)}), 500
+
+    @app.route('/coach/stats/athlete/<int:athlete_id>/summary-14days-muscle-detail/<muscle>.json')
+    def coach_stats_athlete_summary_14days_muscle_detail(athlete_id, muscle):
+        """Get exercise breakdown for a specific muscle in 14-day summary"""
+        try:
+            if 'user_id' not in session:
+                return jsonify({'error':'unauth'}), 401
+            user = User.query.get(session['user_id'])
+            if not user or user.role != 'coach':
+                return jsonify({'error':'forbidden'}), 403
+            
+            today = datetime.utcnow().date()
+            current_week_start = today - timedelta(days=today.weekday())
+            two_weeks_ago_start = current_week_start - timedelta(days=14)
+            
+            # Get performances for current week
+            current_perfs = PerformanceEntry.query.filter(
+                PerformanceEntry.athlete_id==athlete_id,
+                PerformanceEntry.entry_date >= current_week_start,
+                PerformanceEntry.entry_date <= current_week_start + timedelta(days=6)
+            ).all()
+            
+            # Get performances for 2 weeks ago
+            previous_perfs = PerformanceEntry.query.filter(
+                PerformanceEntry.athlete_id==athlete_id,
+                PerformanceEntry.entry_date >= two_weeks_ago_start,
+                PerformanceEntry.entry_date <= two_weeks_ago_start + timedelta(days=6)
+            ).all()
+            
+            # Build tonnage by exercise for current week
+            current_tonnage_by_exercise = {}
+            for e in current_perfs:
+                if not e.exercise or not e.reps or not e.load:
+                    continue
+                ex = Exercise.query.filter_by(name=e.exercise).first()
+                if not ex or ex.muscle_group != muscle:
+                    continue
+                if e.exercise not in current_tonnage_by_exercise:
+                    current_tonnage_by_exercise[e.exercise] = 0
+                current_tonnage_by_exercise[e.exercise] += e.reps * e.load
+            
+            # Build tonnage by exercise for 2 weeks ago
+            previous_tonnage_by_exercise = {}
+            for e in previous_perfs:
+                if not e.exercise or not e.reps or not e.load:
+                    continue
+                ex = Exercise.query.filter_by(name=e.exercise).first()
+                if not ex or ex.muscle_group != muscle:
+                    continue
+                if e.exercise not in previous_tonnage_by_exercise:
+                    previous_tonnage_by_exercise[e.exercise] = 0
+                previous_tonnage_by_exercise[e.exercise] += e.reps * e.load
+            
+            # Calculate differences
+            tonnage_diff_by_exercise = {}
+            all_exercises = set(current_tonnage_by_exercise.keys()) | set(previous_tonnage_by_exercise.keys())
+            for exercise in all_exercises:
+                current = current_tonnage_by_exercise.get(exercise, 0)
+                previous = previous_tonnage_by_exercise.get(exercise, 0)
+                tonnage_diff_by_exercise[exercise] = current - previous
+            
+            return jsonify({
+                'muscle': muscle,
+                'current_tonnage_by_exercise': current_tonnage_by_exercise,
+                'previous_tonnage_by_exercise': previous_tonnage_by_exercise,
+                'tonnage_diff_by_exercise': tonnage_diff_by_exercise
+            })
+        except Exception as e:
+            print(f"Error in summary-14days-muscle-detail route: {str(e)}")
             return jsonify({'error': str(e)}), 500
 
     @app.route('/coach/stats/athlete/<int:athlete_id>/summary-28days.json')
