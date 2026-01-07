@@ -3,13 +3,12 @@
 {% block content %}
 <style>
   .programming-edit {
-    display: grid !important;
-    grid-template-columns: repeat(3, 1fr) !important;
+    display: flex !important;
+    flex-direction: column !important;
     gap: 16px !important;
   }
 
   .day-row {
-    min-height: 200px;
     display: flex;
     flex-direction: column;
   }
@@ -17,18 +16,6 @@
   .day-row h4 {
     font-size: 1rem !important;
     margin-bottom: 8px !important;
-  }
-
-  @media (max-width: 1200px) {
-    .programming-edit {
-      grid-template-columns: repeat(2, 1fr) !important;
-    }
-  }
-
-  @media (max-width: 768px) {
-    .programming-edit {
-      grid-template-columns: 1fr !important;
-    }
   }
 
   .programming-edit-root {
