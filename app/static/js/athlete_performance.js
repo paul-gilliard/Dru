@@ -2,7 +2,8 @@ document.addEventListener('DOMContentLoaded', function(){
   const dateInput = document.getElementById('perf-entry-date');
   const viewSummaryBtn = document.getElementById('view-summary-btn');
   const table = document.getElementById('perf-entries-table');
-  const rows = table ? Array.from(table.querySelectorAll('tbody tr[data-entry-date]')) : [];
+  const tbody = table ? table.querySelector('tbody') : null;
+  let rows = table ? Array.from(table.querySelectorAll('tbody tr[data-entry-date]')) : [];
   const editModal = document.getElementById('perf-edit-modal');
   const perfForm = document.getElementById('perf-add-form');
   const exerciseSelect = document.getElementById('perf-exercise');
@@ -26,14 +27,76 @@ document.addEventListener('DOMContentLoaded', function(){
     console.log('Visible rows after filter:', visibleCount);
   }
 
+  // Recharge les performances depuis le serveur pour une date donnée
+  async function loadPerformancesByDate(date) {
+    try {
+      const sessionId = window.location.pathname.match(/session\/(\d+)/)?.[1];
+      if (!sessionId) {
+        console.error('Session ID not found');
+        return;
+      }
+
+      const response = await fetch(`/api/athlete/performance/session/${sessionId}/by-date?date=${encodeURIComponent(date)}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch performances');
+      }
+
+      const data = await response.json();
+      console.log('Loaded performances:', data);
+
+      // Vider le tableau existant
+      if (tbody) {
+        tbody.innerHTML = '';
+      }
+
+      // Reconstruire les lignes
+      if (data.entries && data.entries.length > 0) {
+        data.entries.forEach(entry => {
+          const row = document.createElement('tr');
+          row.setAttribute('data-entry-id', entry.id);
+          row.setAttribute('data-entry-date', entry.entry_date);
+          row.innerHTML = `
+            <td>${entry.entry_date}</td>
+            <td>${entry.exercise}</td>
+            <td>${entry.series_number || '—'}</td>
+            <td>${entry.reps || ''}</td>
+            <td>${entry.load || ''}</td>
+            <td>${entry.notes || ''}</td>
+            <td>
+              <button type="button" class="edit-btn edit-perf-btn" data-entry-id="${entry.id}">Modifier</button>
+            </td>
+          `;
+          tbody.appendChild(row);
+          
+          // Réattacher l'event listener au bouton d'édition
+          row.querySelector('.edit-perf-btn').addEventListener('click', function(){
+            openEdit(this.getAttribute('data-entry-id'));
+          });
+        });
+
+        // Réasigner les rows
+        rows = Array.from(tbody.querySelectorAll('tr[data-entry-date]'));
+      } else {
+        // Aucune donnée : afficher un message
+        const row = document.createElement('tr');
+        row.innerHTML = '<td colspan="7" class="no-entries">Aucune performance enregistrée pour cette date.</td>';
+        tbody.appendChild(row);
+        rows = [];
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des performances:', error);
+      alert('Erreur lors du chargement des données');
+    }
+  }
+
   // initial filter after date input has been set (including via localStorage)
   setTimeout(() => {
     if (dateInput) filterByDate(dateInput.value);
   }, 50);
 
-  // change listener
+  // change listener - charger les nouvelles données au changement de date
   if (dateInput) dateInput.addEventListener('change', function(){
-    filterByDate(this.value);
+    loadPerformancesByDate(this.value);
   });
 
   // open summary page button

@@ -947,6 +947,51 @@ def register_routes(app):
             'series': series_list
         }), 200
 
+    @app.route('/api/athlete/performance/session/<int:session_id>/by-date', methods=['GET'])
+    def api_athlete_performance_by_date(session_id):
+        """Get performances for a specific session and date"""
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'athlete':
+            return jsonify({'error': 'access denied'}), 403
+        
+        ps = ProgramSession.query.get_or_404(session_id)
+        if ps.program.athlete_id != user.id:
+            return jsonify({'error': 'access denied'}), 403
+        
+        entry_date_str = request.args.get('date', '').strip()
+        if not entry_date_str:
+            return jsonify({'error': 'date required'}), 400
+        
+        try:
+            entry_date = datetime.strptime(entry_date_str, '%Y-%m-%d').date()
+        except Exception:
+            return jsonify({'error': 'invalid date format'}), 400
+        
+        # Get performances for this date and session
+        perf_entries = PerformanceEntry.query.filter_by(
+            athlete_id=user.id,
+            program_session_id=session_id,
+            entry_date=entry_date
+        ).order_by(PerformanceEntry.created_at.desc()).all()
+        
+        entries_data = [{
+            'id': p.id,
+            'entry_date': p.entry_date.isoformat() if p.entry_date else None,
+            'exercise': p.exercise,
+            'series_number': p.series_number,
+            'reps': p.reps,
+            'load': p.load,
+            'notes': p.notes
+        } for p in perf_entries]
+        
+        return jsonify({
+            'entries': entries_data,
+            'count': len(entries_data)
+        }), 200
+
     @app.route('/api/athlete/<int:athlete_id>/programs', methods=['GET'])
     def api_athlete_programs(athlete_id):
         """Get all programs for a specific athlete"""
