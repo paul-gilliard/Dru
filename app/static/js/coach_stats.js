@@ -152,32 +152,7 @@ document.addEventListener('DOMContentLoaded', function(){
     '28days': {}
   };
 
-  // Preload all muscle details for all periods when athlete is selected
-  async function preloadAllMuscleDetails(athleteId) {
-    try {
-      // Load all details in parallel for faster loading
-      const [data7, data14, data28] = await Promise.all([
-        fetch(`/coach/stats/athlete/${athleteId}/summary-7days.json`).then(r => r.ok ? r.json() : null),
-        fetch(`/coach/stats/athlete/${athleteId}/summary-14days.json`).then(r => r.ok ? r.json() : null),
-        fetch(`/coach/stats/athlete/${athleteId}/summary-28days.json`).then(r => r.ok ? r.json() : null)
-      ]);
-
-      // Extract and cache muscle details from each response
-      if (data7?.tonnage_by_exercise_and_muscle) {
-        muscleDetailCache['7days'] = data7.tonnage_by_exercise_and_muscle;
-      }
-      if (data14?.tonnage_by_exercise_and_muscle) {
-        muscleDetailCache['14days'] = data14.tonnage_by_exercise_and_muscle;
-      }
-      if (data28?.tonnage_by_exercise_and_muscle) {
-        muscleDetailCache['28days'] = data28.tonnage_by_exercise_and_muscle;
-      }
-      
-      console.log('Muscle details preloaded for all periods');
-    } catch (err) {
-      console.error('Error preloading muscle details:', err);
-    }
-  }
+  // Muscle details are now preloaded via loadQuickData() - no separate function needed
   async function loadPerformance(athleteId){
     // Use program-specific endpoint if program is selected
     const url = selectedProgramId 
@@ -1068,7 +1043,7 @@ document.addEventListener('DOMContentLoaded', function(){
     document.getElementById('perf-chart-container').style.display = 'none';
     document.getElementById('other-series-chart-container').style.display = 'none';
     
-    // Load quick-data FIRST (all summaries in one call) - BLOCKING
+    // Load quick-data FIRST (all summaries + exercise details in one call) - BLOCKING
     console.log(`Loading quick-data for athlete ${athleteId}...`);
     await loadQuickData(athleteId);
     
@@ -1076,7 +1051,6 @@ document.addEventListener('DOMContentLoaded', function(){
     console.log('Starting background load of performance and tonnage...');
     loadPerformance(athleteId).then(() => console.log('Performance loaded'));
     loadTonnage(athleteId).then(() => console.log('Tonnage loaded'));
-    preloadAllMuscleDetails(athleteId).then(() => console.log('Muscle details loaded'));
   });
 
   programSelect.addEventListener('change', async function(){
