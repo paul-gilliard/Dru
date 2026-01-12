@@ -274,6 +274,190 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   }
 
+  // New optimized function: loads all data in ONE API call
+  async function loadQuickData(athleteId) {
+    try {
+      const startTime = performance.now();
+      console.log(`Loading quick-data for athlete ${athleteId}...`);
+      
+      const res = await fetch(`/coach/stats/athlete/${athleteId}/quick-data.json`);
+      if (!res.ok) {
+        console.error('Quick-data load failed:', res.status);
+        return;
+      }
+      
+      const data = await res.json();
+      const endTime = performance.now();
+      console.log(`Quick-data loaded in ${(endTime - startTime).toFixed(2)}ms`);
+      
+      // Process journal data
+      if (data.journal) {
+        console.log(`Processing ${data.journal.length} journal entries...`);
+        const labels = data.journal.map(d=>d.date);
+        const weight = data.journal.map(d=> d.weight === null ? null : Number(d.weight));
+        const kcals = data.journal.map(d=> d.kcals === null ? null : Number(d.kcals));
+        const water = data.journal.map(d=> d.water_ml === null ? null : Number(d.water_ml));
+        const sleep = data.journal.map(d=> d.sleep_hours === null ? null : Number(d.sleep_hours));
+
+        journalChart.data.labels = labels;
+        journalChart.data.datasets = [
+          { label: 'Poids (kg)', data: weight, borderColor:'#0b63d6', tension:0.2, yAxisID:'y' }
+        ];
+        if (toggleKcals.checked) {
+          journalChart.data.datasets.push({ label:'Kcals', data: kcals, borderColor:'#ef4444', tension:0.2, yAxisID:'y_kcals' });
+          journalChart.options.scales.y_kcals = { display:true, position:'right' };
+        } else {
+          journalChart.options.scales.y_kcals = { display:false };
+        }
+        if (toggleWater.checked) {
+          journalChart.data.datasets.push({ label:'Eau (ml)', data: water, borderColor:'#06b6d4', tension:0.2, yAxisID:'y' });
+        }
+        if (toggleSleep.checked) {
+          journalChart.data.datasets.push({ label:'Sommeil (h)', data: sleep, borderColor:'#10b981', tension:0.2, yAxisID:'y' });
+        }
+        journalChart.update();
+      }
+      
+      // Cache the summary data
+      if (data.summary_7days) {
+        summaryCache['7days'][athleteId] = data.summary_7days;
+        await displaySummary7days(data.summary_7days);
+      }
+      if (data.summary_14days) {
+        summaryCache['14days'][athleteId] = data.summary_14days;
+        await displaySummary14days(data.summary_14days);
+      }
+      if (data.summary_28days) {
+        summaryCache['28days'][athleteId] = data.summary_28days;
+        await displaySummary28days(data.summary_28days);
+      }
+      
+    } catch (err) {
+      console.error('Error loading quick-data:', err);
+    }
+  }
+
+  // Display functions (extracted from loadSummary functions)
+  async function displaySummary7days(data) {
+    if (!data) return;
+    
+    const getArrow = (diff) => {
+      if (diff === null || diff === undefined) return '—';
+      if (Math.abs(diff) < 0.1) return '→';
+      return diff > 0 ? '📈' : '📉';
+    };
+    
+    const formatDiff = (val, decimals = 1) => {
+      if (val === null || val === undefined) return '—';
+      const num = Number(val).toFixed(decimals);
+      const sign = parseFloat(num) > 0 ? '+' : '';
+      return sign + num;
+    };
+    
+    const weightArrow = getArrow(data.weight_diff);
+    const weightValue = data.weight_diff !== null ? 
+      `${formatDiff(data.weight_diff, 2)} kg ${weightArrow}` : '—';
+    document.getElementById('summary-weight').textContent = weightValue;
+    
+    const kcalsArrow = getArrow(data.kcals_diff);
+    const kcalsValue = data.kcals_diff !== null ? 
+      `${formatDiff(data.kcals_diff, 0)} cal ${kcalsArrow}` : '—';
+    document.getElementById('summary-kcals').textContent = kcalsValue;
+    
+    const waterArrow = getArrow(data.water_diff);
+    const waterValue = data.water_diff !== null ? 
+      `${formatDiff(data.water_diff, 0)} ml ${waterArrow}` : '—';
+    document.getElementById('summary-water').textContent = waterValue;
+    
+    const sleepArrow = getArrow(data.sleep_diff);
+    const sleepValue = data.sleep_diff !== null ? 
+      `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
+    document.getElementById('summary-sleep').textContent = sleepValue;
+    
+    document.getElementById('summary-7days-loader').classList.remove('show');
+    document.getElementById('summary-7days-container').style.display = 'block';
+  }
+
+  async function displaySummary14days(data) {
+    if (!data) return;
+    
+    const getArrow = (diff) => {
+      if (diff === null || diff === undefined) return '—';
+      if (Math.abs(diff) < 0.1) return '→';
+      return diff > 0 ? '📈' : '📉';
+    };
+    
+    const formatDiff = (val, decimals = 1) => {
+      if (val === null || val === undefined) return '—';
+      const num = Number(val).toFixed(decimals);
+      const sign = parseFloat(num) > 0 ? '+' : '';
+      return sign + num;
+    };
+    
+    const weightArrow = getArrow(data.weight_diff);
+    const weightValue = data.weight_diff !== null ? 
+      `${formatDiff(data.weight_diff, 2)} kg ${weightArrow}` : '—';
+    document.getElementById('summary-14days-weight').textContent = weightValue;
+    
+    const kcalsArrow = getArrow(data.kcals_diff);
+    const kcalsValue = data.kcals_diff !== null ? 
+      `${formatDiff(data.kcals_diff, 0)} cal ${kcalsArrow}` : '—';
+    document.getElementById('summary-14days-kcals').textContent = kcalsValue;
+    
+    const waterArrow = getArrow(data.water_diff);
+    const waterValue = data.water_diff !== null ? 
+      `${formatDiff(data.water_diff, 0)} ml ${waterArrow}` : '—';
+    document.getElementById('summary-14days-water').textContent = waterValue;
+    
+    const sleepArrow = getArrow(data.sleep_diff);
+    const sleepValue = data.sleep_diff !== null ? 
+      `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
+    document.getElementById('summary-14days-sleep').textContent = sleepValue;
+    
+    document.getElementById('summary-14days-loader').classList.remove('show');
+    document.getElementById('summary-14days-container').style.display = 'block';
+  }
+
+  async function displaySummary28days(data) {
+    if (!data) return;
+    
+    const getArrow = (diff) => {
+      if (diff === null || diff === undefined) return '—';
+      if (Math.abs(diff) < 0.1) return '→';
+      return diff > 0 ? '📈' : '📉';
+    };
+    
+    const formatDiff = (val, decimals = 1) => {
+      if (val === null || val === undefined) return '—';
+      const num = Number(val).toFixed(decimals);
+      const sign = parseFloat(num) > 0 ? '+' : '';
+      return sign + num;
+    };
+    
+    const weightArrow = getArrow(data.weight_diff);
+    const weightValue = data.weight_diff !== null ? 
+      `${formatDiff(data.weight_diff, 2)} kg ${weightArrow}` : '—';
+    document.getElementById('summary-28days-weight').textContent = weightValue;
+    
+    const kcalsArrow = getArrow(data.kcals_diff);
+    const kcalsValue = data.kcals_diff !== null ? 
+      `${formatDiff(data.kcals_diff, 0)} cal ${kcalsArrow}` : '—';
+    document.getElementById('summary-28days-kcals').textContent = kcalsValue;
+    
+    const waterArrow = getArrow(data.water_diff);
+    const waterValue = data.water_diff !== null ? 
+      `${formatDiff(data.water_diff, 0)} ml ${waterArrow}` : '—';
+    document.getElementById('summary-28days-water').textContent = waterValue;
+    
+    const sleepArrow = getArrow(data.sleep_diff);
+    const sleepValue = data.sleep_diff !== null ? 
+      `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
+    document.getElementById('summary-28days-sleep').textContent = sleepValue;
+    
+    document.getElementById('summary-28days-loader').classList.remove('show');
+    document.getElementById('summary-28days-container').style.display = 'block';
+  }
+
   async function loadSummary(athleteId){
     try {
       console.log(`loadSummary called for athlete ${athleteId}`);
@@ -806,12 +990,15 @@ document.addEventListener('DOMContentLoaded', function(){
     document.getElementById('perf-chart-container').style.display = 'none';
     document.getElementById('other-series-chart-container').style.display = 'none';
     
-    await loadJournal(athleteId);
-    await loadTonnage(athleteId);
-    await loadSummary(athleteId);
-    await loadSummary14days(athleteId);
-    await loadSummary28days(athleteId);
-    await preloadAllMuscleDetails(athleteId);
+    // Load quick-data FIRST (all summaries in one call) - BLOCKING
+    console.log(`Loading quick-data for athlete ${athleteId}...`);
+    await loadQuickData(athleteId);
+    
+    // Load performance and tonnage in background (NON-BLOCKING)
+    console.log('Starting background load of performance and tonnage...');
+    loadPerformance(athleteId).then(() => console.log('Performance loaded'));
+    loadTonnage(athleteId).then(() => console.log('Tonnage loaded'));
+    preloadAllMuscleDetails(athleteId).then(() => console.log('Muscle details loaded'));
   });
 
   programSelect.addEventListener('change', async function(){

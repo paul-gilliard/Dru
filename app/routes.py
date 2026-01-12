@@ -1720,6 +1720,219 @@ def register_routes(app):
             print(f"Error in tonnage route: {str(e)}")
             return jsonify({'error': str(e)}), 500
 
+    @app.route('/coach/stats/athlete/<int:athlete_id>/quick-data.json')
+    def coach_stats_athlete_quick_data(athlete_id):
+        """Optimized endpoint: loads all summary data + journal in ONE call"""
+        try:
+            if 'user_id' not in session:
+                return jsonify({'error':'unauth'}), 401
+            user = User.query.get(session['user_id'])
+            if not user or user.role != 'coach':
+                return jsonify({'error':'forbidden'}), 403
+            
+            today = datetime.utcnow().date()
+            
+            # === BATCH LOAD EXERCISES ONCE ===
+            all_exercises = Exercise.query.all()
+            exercise_by_name = {ex.name: ex for ex in all_exercises}
+            
+            # === LOAD JOURNAL (last 180 days for chart) ===
+            cutoff = today - timedelta(days=180)
+            journal_entries = JournalEntry.query.filter(
+                JournalEntry.athlete_id==athlete_id,
+                JournalEntry.entry_date >= cutoff
+            ).order_by(JournalEntry.entry_date.asc()).all()
+            
+            journal_data = []
+            for e in journal_entries:
+                journal_data.append({
+                    'date': e.entry_date.isoformat(),
+                    'weight': e.weight,
+                    'kcals': e.kcals,
+                    'water_ml': e.water_ml,
+                    'sleep_hours': e.sleep_hours
+                })
+            
+            # === GET MUSCLE GROUPS (for filter dropdowns) ===
+            muscle_groups = sorted(list(set([ex.muscle_group for ex in all_exercises if ex.muscle_group])))
+            
+            # === CALCULATE 7 DAY SUMMARY ===
+            current_week_start = today - timedelta(days=today.weekday())
+            current_week_end = current_week_start + timedelta(days=6)
+            previous_week_start = current_week_start - timedelta(days=7)
+            previous_week_end = previous_week_start + timedelta(days=6)
+            
+            current_journal_7 = JournalEntry.query.filter(
+                JournalEntry.athlete_id==athlete_id,
+                JournalEntry.entry_date >= current_week_start,
+                JournalEntry.entry_date <= current_week_end
+            ).all()
+            
+            previous_journal_7 = JournalEntry.query.filter(
+                JournalEntry.athlete_id==athlete_id,
+                JournalEntry.entry_date >= previous_week_start,
+                JournalEntry.entry_date <= previous_week_end
+            ).all()
+            
+            if not current_journal_7:
+                current_journal_7 = JournalEntry.query.filter(
+                    JournalEntry.athlete_id==athlete_id,
+                    JournalEntry.entry_date <= current_week_end,
+                    JournalEntry.entry_date >= current_week_start - timedelta(days=7)
+                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
+            
+            if not previous_journal_7:
+                previous_journal_7 = JournalEntry.query.filter(
+                    JournalEntry.athlete_id==athlete_id,
+                    JournalEntry.entry_date <= previous_week_end,
+                    JournalEntry.entry_date >= previous_week_start - timedelta(days=14)
+                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
+            
+            # Calculate 7-day averages
+            def calc_averages(entries):
+                weights = [e.weight for e in entries if e.weight]
+                kcals = [e.kcals for e in entries if e.kcals]
+                waters = [e.water_ml for e in entries if e.water_ml]
+                sleeps = [e.sleep_hours for e in entries if e.sleep_hours]
+                
+                return {
+                    'weight': sum(weights) / len(weights) if weights else None,
+                    'kcals': sum(kcals) / len(kcals) if kcals else None,
+                    'water': sum(waters) / len(waters) if waters else None,
+                    'sleep': sum(sleeps) / len(sleeps) if sleeps else None
+                }
+            
+            current_7 = calc_averages(current_journal_7)
+            previous_7 = calc_averages(previous_journal_7)
+            
+            summary_7 = {
+                'weight_current': current_7['weight'],
+                'weight_previous': previous_7['weight'],
+                'weight_diff': (current_7['weight'] - previous_7['weight']) if (current_7['weight'] and previous_7['weight']) else None,
+                'kcals_current': current_7['kcals'],
+                'kcals_previous': previous_7['kcals'],
+                'kcals_diff': (current_7['kcals'] - previous_7['kcals']) if (current_7['kcals'] and previous_7['kcals']) else None,
+                'water_current': current_7['water'],
+                'water_previous': previous_7['water'],
+                'water_diff': (current_7['water'] - previous_7['water']) if (current_7['water'] and previous_7['water']) else None,
+                'sleep_current': current_7['sleep'],
+                'sleep_previous': previous_7['sleep'],
+                'sleep_diff': (current_7['sleep'] - previous_7['sleep']) if (current_7['sleep'] and previous_7['sleep']) else None,
+            }
+            
+            # === CALCULATE 14 DAY SUMMARY ===
+            current_start_14 = today - timedelta(days=13)
+            current_end_14 = today
+            previous_start_14 = today - timedelta(days=27)
+            previous_end_14 = today - timedelta(days=14)
+            
+            current_journal_14 = JournalEntry.query.filter(
+                JournalEntry.athlete_id==athlete_id,
+                JournalEntry.entry_date >= current_start_14,
+                JournalEntry.entry_date <= current_end_14
+            ).all()
+            
+            previous_journal_14 = JournalEntry.query.filter(
+                JournalEntry.athlete_id==athlete_id,
+                JournalEntry.entry_date >= previous_start_14,
+                JournalEntry.entry_date <= previous_end_14
+            ).all()
+            
+            if not current_journal_14:
+                current_journal_14 = JournalEntry.query.filter(
+                    JournalEntry.athlete_id==athlete_id,
+                    JournalEntry.entry_date <= current_end_14,
+                    JournalEntry.entry_date >= current_start_14 - timedelta(days=14)
+                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
+            
+            if not previous_journal_14:
+                previous_journal_14 = JournalEntry.query.filter(
+                    JournalEntry.athlete_id==athlete_id,
+                    JournalEntry.entry_date <= previous_end_14,
+                    JournalEntry.entry_date >= previous_start_14 - timedelta(days=14)
+                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
+            
+            current_14 = calc_averages(current_journal_14)
+            previous_14 = calc_averages(previous_journal_14)
+            
+            summary_14 = {
+                'weight_current': current_14['weight'],
+                'weight_previous': previous_14['weight'],
+                'weight_diff': (current_14['weight'] - previous_14['weight']) if (current_14['weight'] and previous_14['weight']) else None,
+                'kcals_current': current_14['kcals'],
+                'kcals_previous': previous_14['kcals'],
+                'kcals_diff': (current_14['kcals'] - previous_14['kcals']) if (current_14['kcals'] and previous_14['kcals']) else None,
+                'water_current': current_14['water'],
+                'water_previous': previous_14['water'],
+                'water_diff': (current_14['water'] - previous_14['water']) if (current_14['water'] and previous_14['water']) else None,
+                'sleep_current': current_14['sleep'],
+                'sleep_previous': previous_14['sleep'],
+                'sleep_diff': (current_14['sleep'] - previous_14['sleep']) if (current_14['sleep'] and previous_14['sleep']) else None,
+            }
+            
+            # === CALCULATE 28 DAY SUMMARY ===
+            current_start_28 = today - timedelta(days=27)
+            current_end_28 = today
+            previous_start_28 = today - timedelta(days=55)
+            previous_end_28 = today - timedelta(days=28)
+            
+            current_journal_28 = JournalEntry.query.filter(
+                JournalEntry.athlete_id==athlete_id,
+                JournalEntry.entry_date >= current_start_28,
+                JournalEntry.entry_date <= current_end_28
+            ).all()
+            
+            previous_journal_28 = JournalEntry.query.filter(
+                JournalEntry.athlete_id==athlete_id,
+                JournalEntry.entry_date >= previous_start_28,
+                JournalEntry.entry_date <= previous_end_28
+            ).all()
+            
+            if not current_journal_28:
+                current_journal_28 = JournalEntry.query.filter(
+                    JournalEntry.athlete_id==athlete_id,
+                    JournalEntry.entry_date <= current_end_28,
+                    JournalEntry.entry_date >= current_start_28 - timedelta(days=28)
+                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
+            
+            if not previous_journal_28:
+                previous_journal_28 = JournalEntry.query.filter(
+                    JournalEntry.athlete_id==athlete_id,
+                    JournalEntry.entry_date <= previous_end_28,
+                    JournalEntry.entry_date >= previous_start_28 - timedelta(days=28)
+                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
+            
+            current_28 = calc_averages(current_journal_28)
+            previous_28 = calc_averages(previous_journal_28)
+            
+            summary_28 = {
+                'weight_current': current_28['weight'],
+                'weight_previous': previous_28['weight'],
+                'weight_diff': (current_28['weight'] - previous_28['weight']) if (current_28['weight'] and previous_28['weight']) else None,
+                'kcals_current': current_28['kcals'],
+                'kcals_previous': previous_28['kcals'],
+                'kcals_diff': (current_28['kcals'] - previous_28['kcals']) if (current_28['kcals'] and previous_28['kcals']) else None,
+                'water_current': current_28['water'],
+                'water_previous': previous_28['water'],
+                'water_diff': (current_28['water'] - previous_28['water']) if (current_28['water'] and previous_28['water']) else None,
+                'sleep_current': current_28['sleep'],
+                'sleep_previous': previous_28['sleep'],
+                'sleep_diff': (current_28['sleep'] - previous_28['sleep']) if (current_28['sleep'] and previous_28['sleep']) else None,
+            }
+            
+            return jsonify({
+                'journal': journal_data,
+                'muscle_groups': muscle_groups,
+                'summary_7days': summary_7,
+                'summary_14days': summary_14,
+                'summary_28days': summary_28
+            })
+        except Exception as e:
+            print(f"Error in quick-data route: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({'error': str(e)}), 500
+
     @app.route('/coach/stats/athlete/<int:athlete_id>/summary-7days.json')
     def coach_stats_athlete_summary_7days(athlete_id):
         """Get 7-day summary comparing current week vs previous week"""
