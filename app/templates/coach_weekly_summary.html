@@ -470,11 +470,12 @@
 
 <script>
     const athletes = {{ athletes | map(attribute='id') | list | tojson }};
+    const weekOffset = {{ week_offset }};
 
     async function loadAthletesSummary() {
         for (const athleteId of athletes) {
             try {
-                const response = await fetch(`/coach/stats/athlete/${athleteId}/summary-7days.json`);
+                const response = await fetch(`/coach/stats/athlete/${athleteId}/summary-7days.json?week_offset=${weekOffset}`);
                 const data = await response.json();
                 renderSummary(athleteId, data);
             } catch (error) {

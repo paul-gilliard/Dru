@@ -1730,16 +1730,21 @@ def register_routes(app):
             if not user or user.role != 'coach':
                 return jsonify({'error':'forbidden'}), 403
             
+            # Get week offset from query params
+            week_offset = request.args.get('week_offset', 0, type=int)
+            
             today = datetime.utcnow().date()
-            # Get the start of current week (Monday)
-            current_week_start = today - timedelta(days=today.weekday())
+            # Apply week offset
+            target_date = today - timedelta(weeks=week_offset)
+            # Get the start of the target week (Monday)
+            current_week_start = target_date - timedelta(days=target_date.weekday())
             current_week_end = current_week_start + timedelta(days=6)
             # Previous week start/end
             previous_week_start = current_week_start - timedelta(days=7)
             previous_week_end = previous_week_start + timedelta(days=6)
             
             print(f"\n=== SUMMARY 7DAYS DEBUG ===")
-            print(f"Today: {today} (weekday: {today.weekday()})")
+            print(f"Today: {today}, Week offset: {week_offset}")
             print(f"Current week: {current_week_start} to {current_week_end}")
             print(f"Previous week: {previous_week_start} to {previous_week_end}")
             
@@ -1771,7 +1776,7 @@ def register_routes(app):
                 current_journal = JournalEntry.query.filter(
                     JournalEntry.athlete_id==athlete_id,
                     JournalEntry.entry_date <= current_week_end,
-                    JournalEntry.entry_date >= today - timedelta(days=7)
+                    JournalEntry.entry_date >= current_week_start - timedelta(days=7)
                 ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
                 if current_journal:
                     print(f"Found recent entry: {current_journal[0].entry_date}")
