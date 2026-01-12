@@ -374,6 +374,28 @@ document.addEventListener('DOMContentLoaded', function(){
       `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
     document.getElementById('summary-sleep').textContent = sleepValue;
     
+    // Fill tonnage rows with detail buttons
+    const tonnageBody = document.getElementById('summary-tonnage-body');
+    tonnageBody.innerHTML = '';
+    
+    if (data.tonnage_diff_by_muscle) {
+      Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #e5e7eb';
+        const diff = data.tonnage_diff_by_muscle[muscle];
+        const arrow = getArrow(diff);
+        const diffStr = formatDiff(diff, 0);
+        tr.innerHTML = `
+          <td style="padding:12px; font-weight:600;">${muscle}</td>
+          <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
+          <td style="padding:12px; text-align:center;">
+            <button class="show-muscle-detail secondary" data-muscle="${muscle}" data-summary="7days" style="font-size:0.8rem; padding:4px 8px; cursor:pointer;">Détails</button>
+          </td>
+        `;
+        tonnageBody.appendChild(tr);
+      });
+    }
+    
     document.getElementById('summary-7days-loader').classList.remove('show');
     document.getElementById('summary-7days-container').style.display = 'block';
   }
@@ -414,6 +436,28 @@ document.addEventListener('DOMContentLoaded', function(){
       `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
     document.getElementById('summary-14days-sleep').textContent = sleepValue;
     
+    // Fill tonnage rows with detail buttons
+    const tonnageBody = document.getElementById('summary-14days-tonnage-body');
+    tonnageBody.innerHTML = '';
+    
+    if (data.tonnage_diff_by_muscle) {
+      Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #e5e7eb';
+        const diff = data.tonnage_diff_by_muscle[muscle];
+        const arrow = getArrow(diff);
+        const diffStr = formatDiff(diff, 0);
+        tr.innerHTML = `
+          <td style="padding:12px; font-weight:600;">${muscle}</td>
+          <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
+          <td style="padding:12px; text-align:center;">
+            <button class="show-muscle-detail secondary" data-muscle="${muscle}" data-summary="14days" style="font-size:0.8rem; padding:4px 8px; cursor:pointer;">Détails</button>
+          </td>
+        `;
+        tonnageBody.appendChild(tr);
+      });
+    }
+    
     document.getElementById('summary-14days-loader').classList.remove('show');
     document.getElementById('summary-14days-container').style.display = 'block';
   }
@@ -453,6 +497,28 @@ document.addEventListener('DOMContentLoaded', function(){
     const sleepValue = data.sleep_diff !== null ? 
       `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
     document.getElementById('summary-28days-sleep').textContent = sleepValue;
+    
+    // Fill tonnage rows with detail buttons
+    const tonnageBody = document.getElementById('summary-28days-tonnage-body');
+    tonnageBody.innerHTML = '';
+    
+    if (data.tonnage_diff_by_muscle) {
+      Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
+        const tr = document.createElement('tr');
+        tr.style.borderBottom = '1px solid #e5e7eb';
+        const diff = data.tonnage_diff_by_muscle[muscle];
+        const arrow = getArrow(diff);
+        const diffStr = formatDiff(diff, 0);
+        tr.innerHTML = `
+          <td style="padding:12px; font-weight:600;">${muscle}</td>
+          <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
+          <td style="padding:12px; text-align:center;">
+            <button class="show-muscle-detail secondary" data-muscle="${muscle}" data-summary="28days" style="font-size:0.8rem; padding:4px 8px; cursor:pointer;">Détails</button>
+          </td>
+        `;
+        tonnageBody.appendChild(tr);
+      });
+    }
     
     document.getElementById('summary-28days-loader').classList.remove('show');
     document.getElementById('summary-28days-container').style.display = 'block';

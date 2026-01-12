@@ -1869,6 +1869,73 @@ def register_routes(app):
                 'sleep_diff': (current_28['sleep'] - previous_28['sleep']) if (current_28['sleep'] and previous_28['sleep']) else None,
             }
             
+            # === CALCULATE TONNAGE BY MUSCLE FOR ALL 3 PERIODS ===
+            # ONE QUERY: Get all performance entries (no N+1!)
+            all_perfs = PerformanceEntry.query.filter(
+                PerformanceEntry.athlete_id==athlete_id,
+                PerformanceEntry.entry_date >= cutoff_180
+            ).all()
+            
+            # Helper to calculate tonnage diff for a period
+            def calc_tonnage_diff(period_start, period_end, previous_start, previous_end):
+                current_perfs = [e for e in all_perfs if period_start <= e.entry_date <= period_end]
+                previous_perfs = [e for e in all_perfs if previous_start <= e.entry_date <= previous_end]
+                
+                current_tonnage = {}
+                for e in current_perfs:
+                    if not e.exercise or not e.reps or not e.load:
+                        continue
+                    ex = exercise_by_name.get(e.exercise)
+                    if not ex:
+                        continue
+                    muscle = ex.muscle_group
+                    if muscle not in current_tonnage:
+                        current_tonnage[muscle] = 0
+                    current_tonnage[muscle] += e.reps * e.load
+                
+                previous_tonnage = {}
+                for e in previous_perfs:
+                    if not e.exercise or not e.reps or not e.load:
+                        continue
+                    ex = exercise_by_name.get(e.exercise)
+                    if not ex:
+                        continue
+                    muscle = ex.muscle_group
+                    if muscle not in previous_tonnage:
+                        previous_tonnage[muscle] = 0
+                    previous_tonnage[muscle] += e.reps * e.load
+                
+                # Calculate diffs
+                all_muscles = set(current_tonnage.keys()) | set(previous_tonnage.keys())
+                tonnage_diff = {}
+                for muscle in all_muscles:
+                    current = current_tonnage.get(muscle, 0)
+                    previous = previous_tonnage.get(muscle, 0)
+                    tonnage_diff[muscle] = current - previous
+                
+                return tonnage_diff
+            
+            # 7 days
+            tonnage_diff_7days = calc_tonnage_diff(
+                current_week_start, current_week_end,
+                previous_week_start, previous_week_end
+            )
+            summary_7['tonnage_diff_by_muscle'] = tonnage_diff_7days
+            
+            # 14 days
+            tonnage_diff_14days = calc_tonnage_diff(
+                current_start_14, current_end_14,
+                previous_start_14, previous_end_14
+            )
+            summary_14['tonnage_diff_by_muscle'] = tonnage_diff_14days
+            
+            # 28 days
+            tonnage_diff_28days = calc_tonnage_diff(
+                current_start_28, current_end_28,
+                previous_start_28, previous_end_28
+            )
+            summary_28['tonnage_diff_by_muscle'] = tonnage_diff_28days
+            
             return jsonify({
                 'journal': journal_data,
                 'muscle_groups': muscle_groups,
