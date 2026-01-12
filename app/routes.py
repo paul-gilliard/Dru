@@ -995,11 +995,11 @@ def register_routes(app):
         if not exercise_name:
             return jsonify({'error': 'exercise name required'}), 400
         
-        # Get distinct dates for this exercise (globally, not filtered by session), ordered by most recent first, limit to 3
+        # Get distinct dates for this exercise (globally, not filtered by session), ordered by most recent first, limit to 14
         last_3_dates = db.session.query(db.func.distinct(PerformanceEntry.entry_date)).filter(
             PerformanceEntry.athlete_id==user.id,
             PerformanceEntry.exercise==exercise_name
-        ).order_by(PerformanceEntry.entry_date.desc()).limit(3).all()
+        ).order_by(PerformanceEntry.entry_date.desc()).limit(14).all()
         
         if not last_3_dates:
             return jsonify({'found': False}), 200
