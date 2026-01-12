@@ -981,6 +981,69 @@ def register_routes(app):
             'series': series_list
         }), 200
 
+    @app.route('/api/athlete/performance/last-3-days-for-exercise', methods=['GET'])
+    def api_last_3_days_performance_for_exercise():
+        """Get performance data for an exercise from the last 3 days with data"""
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'athlete':
+            return jsonify({'error': 'access denied'}), 403
+        
+        exercise_name = request.args.get('exercise', '').strip()
+        if not exercise_name:
+            return jsonify({'error': 'exercise name required'}), 400
+        
+        # Get distinct dates for this exercise, ordered by most recent first, limit to 3
+        last_3_dates = db.session.query(db.func.distinct(PerformanceEntry.entry_date)).filter_by(
+            athlete_id=user.id,
+            exercise=exercise_name
+        ).order_by(PerformanceEntry.entry_date.desc()).limit(3).all()
+        
+        if not last_3_dates:
+            return jsonify({'found': False}), 200
+        
+        # Extract dates as list
+        dates_list = [date[0] for date in last_3_dates]
+        
+        # Get all entries for those dates and exercise
+        entries = PerformanceEntry.query.filter(
+            PerformanceEntry.athlete_id==user.id,
+            PerformanceEntry.exercise==exercise_name,
+            PerformanceEntry.entry_date.in_(dates_list)
+        ).order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.series_number.asc()).all()
+        
+        if not entries:
+            return jsonify({'found': False}), 200
+        
+        # Group entries by date
+        entries_by_date = {}
+        for entry in entries:
+            date_str = entry.entry_date.isoformat()
+            if date_str not in entries_by_date:
+                entries_by_date[date_str] = []
+            entries_by_date[date_str].append({
+                'series_number': entry.series_number,
+                'reps': entry.reps,
+                'load': entry.load,
+                'notes': entry.notes
+            })
+        
+        # Format as list of {date, series} objects
+        result = []
+        for date_str in dates_list:
+            if date_str in entries_by_date:
+                result.append({
+                    'entry_date': date_str,
+                    'series': entries_by_date[date_str]
+                })
+        
+        return jsonify({
+            'found': True,
+            'days': result
+        }), 200
+
     @app.route('/api/athlete/performance/session/<int:session_id>/by-date', methods=['GET'])
     def api_athlete_performance_by_date(session_id):
         """Get performances for a specific session and date"""
