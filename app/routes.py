@@ -998,38 +998,20 @@ def register_routes(app):
         # DEBUG: Log what we're looking for
         print(f"DEBUG: Looking for exercise '{exercise_name}' for athlete_id={user.id}")
         
-        # Get distinct dates for this exercise (globally, not filtered by session), ordered by most recent first, limit to 14
-        last_3_dates = db.session.query(db.func.distinct(PerformanceEntry.entry_date)).filter(
+        # Get all entries for this exercise, ordered by date descending
+        all_entries = PerformanceEntry.query.filter(
             PerformanceEntry.athlete_id==user.id,
             PerformanceEntry.exercise==exercise_name
-        ).order_by(PerformanceEntry.entry_date.desc()).limit(14).all()
-        
-        print(f"DEBUG: Found {len(last_3_dates)} distinct dates")
-        
-        if not last_3_dates:
-            # DEBUG: Check what exercises exist for this athlete
-            all_exercises = db.session.query(PerformanceEntry.exercise).filter(
-                PerformanceEntry.athlete_id==user.id
-            ).distinct().all()
-            print(f"DEBUG: Available exercises for this athlete: {[e[0] for e in all_exercises]}")
-            return jsonify({'found': False}), 200
-        
-        # Extract dates as list
-        dates_list = [date[0] for date in last_3_dates]
-        
-        # Get all entries for those dates and exercise (no session filter)
-        entries = PerformanceEntry.query.filter(
-            PerformanceEntry.athlete_id==user.id,
-            PerformanceEntry.exercise==exercise_name,
-            PerformanceEntry.entry_date.in_(dates_list)
         ).order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.series_number.asc()).all()
         
-        if not entries:
+        print(f"DEBUG: Found {len(all_entries)} total entries")
+        
+        if not all_entries:
             return jsonify({'found': False}), 200
         
-        # Group entries by date
+        # Group entries by date and get the 14 most recent dates
         entries_by_date = {}
-        for entry in entries:
+        for entry in all_entries:
             date_str = entry.entry_date.isoformat()
             if date_str not in entries_by_date:
                 entries_by_date[date_str] = []
@@ -1040,14 +1022,19 @@ def register_routes(app):
                 'notes': entry.notes
             })
         
+        # Get the 14 most recent dates
+        dates_list = sorted(entries_by_date.keys(), reverse=True)[:14]
+        
+        if not dates_list:
+            return jsonify({'found': False}), 200
+        
         # Format as list of {date, series} objects
         result = []
         for date_str in dates_list:
-            if date_str in entries_by_date:
-                result.append({
-                    'entry_date': date_str,
-                    'series': entries_by_date[date_str]
-                })
+            result.append({
+                'entry_date': date_str,
+                'series': entries_by_date[date_str]
+            })
         
         print(f"DEBUG: Returning {len(result)} days with data")
         print(f"DEBUG: Result: {result}")
