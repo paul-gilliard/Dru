@@ -949,16 +949,18 @@ document.addEventListener('DOMContentLoaded', function(){
       programSelect.innerHTML = '<option value="">— choisir un programme —</option>';
       selectedProgramId = null;
       // Hide loaders when no athlete selected
-      document.getElementById('summary-7days-loader').classList.remove('show');
-      document.getElementById('summary-14days-loader').classList.remove('show');
-      document.getElementById('summary-28days-loader').classList.remove('show');
+      for (let i = 1; i <= 4; i++) {
+        const loader = document.getElementById(`comparison-${i}-loader`);
+        if (loader) loader.classList.remove('show');
+      }
       return;
     }
     
     // Show loaders when athlete is selected
-    document.getElementById('summary-7days-loader').classList.add('show');
-    document.getElementById('summary-14days-loader').classList.add('show');
-    document.getElementById('summary-28days-loader').classList.add('show');
+    for (let i = 1; i <= 4; i++) {
+      const loader = document.getElementById(`comparison-${i}-loader`);
+      if (loader) loader.classList.add('show');
+    }
     
     // Load programs for this athlete
     try {
