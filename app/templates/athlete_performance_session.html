@@ -681,6 +681,7 @@
       fetch(`/api/athlete/performance/last-3-days-for-exercise?exercise=${encodeURIComponent(exerciseName)}`)
         .then(response => response.json())
         .then(data => {
+          console.log('Response from API:', JSON.stringify(data, null, 2));
           if (data.found) {
             // Build HTML for 3 days
             seriesList.innerHTML = '';

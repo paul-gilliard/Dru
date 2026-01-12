@@ -1049,6 +1049,9 @@ def register_routes(app):
                     'series': entries_by_date[date_str]
                 })
         
+        print(f"DEBUG: Returning {len(result)} days with data")
+        print(f"DEBUG: Result: {result}")
+        
         return jsonify({
             'found': True,
             'days': result
