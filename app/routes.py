@@ -1936,6 +1936,76 @@ def register_routes(app):
             )
             summary_28['tonnage_diff_by_muscle'] = tonnage_diff_28days
             
+            # === CALCULATE EXERCISE DETAILS BY MUSCLE FOR ALL 3 PERIODS ===
+            # Helper to calculate exercise details for a period
+            def calc_exercise_details(period_start, period_end, previous_start, previous_end):
+                current_perfs = [e for e in all_perfs if period_start <= e.entry_date <= period_end]
+                previous_perfs = [e for e in all_perfs if previous_start <= e.entry_date <= previous_end]
+                
+                exercise_details = {}
+                
+                # Process current period
+                for e in current_perfs:
+                    if not e.exercise or not e.reps or not e.load:
+                        continue
+                    ex = exercise_by_name.get(e.exercise)
+                    if not ex:
+                        continue
+                    muscle = ex.muscle_group
+                    
+                    if muscle not in exercise_details:
+                        exercise_details[muscle] = {}
+                    if e.exercise not in exercise_details[muscle]:
+                        exercise_details[muscle][e.exercise] = {'current': 0, 'previous': 0}
+                    
+                    exercise_details[muscle][e.exercise]['current'] += e.reps * e.load
+                
+                # Process previous period
+                for e in previous_perfs:
+                    if not e.exercise or not e.reps or not e.load:
+                        continue
+                    ex = exercise_by_name.get(e.exercise)
+                    if not ex:
+                        continue
+                    muscle = ex.muscle_group
+                    
+                    if muscle not in exercise_details:
+                        exercise_details[muscle] = {}
+                    if e.exercise not in exercise_details[muscle]:
+                        exercise_details[muscle][e.exercise] = {'current': 0, 'previous': 0}
+                    
+                    exercise_details[muscle][e.exercise]['previous'] += e.reps * e.load
+                
+                # Calculate diffs
+                for muscle in exercise_details:
+                    for exercise in exercise_details[muscle]:
+                        current = exercise_details[muscle][exercise]['current']
+                        previous = exercise_details[muscle][exercise]['previous']
+                        exercise_details[muscle][exercise]['diff'] = current - previous
+                
+                return exercise_details
+            
+            # 7 days
+            exercise_details_7days = calc_exercise_details(
+                current_week_start, current_week_end,
+                previous_week_start, previous_week_end
+            )
+            summary_7['exercise_details_by_muscle'] = exercise_details_7days
+            
+            # 14 days
+            exercise_details_14days = calc_exercise_details(
+                current_start_14, current_end_14,
+                previous_start_14, previous_end_14
+            )
+            summary_14['exercise_details_by_muscle'] = exercise_details_14days
+            
+            # 28 days
+            exercise_details_28days = calc_exercise_details(
+                current_start_28, current_end_28,
+                previous_start_28, previous_end_28
+            )
+            summary_28['exercise_details_by_muscle'] = exercise_details_28days
+            
             return jsonify({
                 'journal': journal_data,
                 'muscle_groups': muscle_groups,

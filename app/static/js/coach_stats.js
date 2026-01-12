@@ -318,17 +318,29 @@ document.addEventListener('DOMContentLoaded', function(){
         journalChart.update();
       }
       
-      // Cache the summary data
+      // Cache the summary data and exercise details
       if (data.summary_7days) {
         summaryCache['7days'][athleteId] = data.summary_7days;
+        // Cache exercise details by muscle for instant display
+        if (data.summary_7days.exercise_details_by_muscle) {
+          muscleDetailCache['7days'] = data.summary_7days.exercise_details_by_muscle;
+        }
         await displaySummary7days(data.summary_7days);
       }
       if (data.summary_14days) {
         summaryCache['14days'][athleteId] = data.summary_14days;
+        // Cache exercise details by muscle for instant display
+        if (data.summary_14days.exercise_details_by_muscle) {
+          muscleDetailCache['14days'] = data.summary_14days.exercise_details_by_muscle;
+        }
         await displaySummary14days(data.summary_14days);
       }
       if (data.summary_28days) {
         summaryCache['28days'][athleteId] = data.summary_28days;
+        // Cache exercise details by muscle for instant display
+        if (data.summary_28days.exercise_details_by_muscle) {
+          muscleDetailCache['28days'] = data.summary_28days.exercise_details_by_muscle;
+        }
         await displaySummary28days(data.summary_28days);
       }
       
@@ -1240,7 +1252,7 @@ document.addEventListener('DOMContentLoaded', function(){
         return;
       }
 
-      const data = muscleDetailCache[summary][muscle];
+      const exercisesByMuscle = muscleDetailCache[summary][muscle];
       
       // Simulate small delay for UX feedback
       setTimeout(() => {
@@ -1249,15 +1261,17 @@ document.addEventListener('DOMContentLoaded', function(){
         html += '<table style="width:100%; border-collapse:collapse; margin-top:12px;">';
         html += `<tr style="background:#f3f4f6; border-bottom:2px solid #d1d5db;">
           <th style="padding:8px; text-align:left; font-weight:600;">Exercice</th>
-          <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Semaine courante</th>
-          <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Il y a 2 sem.</th>
+          <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Période courante</th>
+          <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Période précédente</th>
           <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Évolution</th>
         </tr>`;
         
-        Object.keys(data.tonnage_diff_by_exercise || {}).sort().forEach(exercise => {
-          const current = data.current_tonnage_by_exercise[exercise] || 0;
-          const previous = data.previous_tonnage_by_exercise[exercise] || 0;
-          const diff = data.tonnage_diff_by_exercise[exercise] || 0;
+        // exercisesByMuscle is { exercise_name: { current, previous, diff } }
+        Object.keys(exercisesByMuscle || {}).sort().forEach(exercise => {
+          const exerciseData = exercisesByMuscle[exercise] || {};
+          const current = exerciseData.current || 0;
+          const previous = exerciseData.previous || 0;
+          const diff = exerciseData.diff || 0;
           const arrow = diff > 0 ? '📈' : (diff < 0 ? '📉' : '→');
           const diffStr = diff >= 0 ? `+${diff.toFixed(0)}` : `${diff.toFixed(0)}`;
           
