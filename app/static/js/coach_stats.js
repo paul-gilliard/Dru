@@ -249,17 +249,21 @@ document.addEventListener('DOMContentLoaded', function(){
   async function loadSummaryData(athleteId, period) {
     // Check cache first
     if (summaryCache[period][athleteId]) {
+      console.log(`Returning cached data for athlete ${athleteId}, period ${period}`);
       return summaryCache[period][athleteId];
     }
     
     // Fetch from API
     try {
-      const res = await fetch(`/coach/stats/athlete/${athleteId}/summary-${period}.json`);
+      const url = `/coach/stats/athlete/${athleteId}/summary-${period}.json`;
+      console.log(`Fetching summary data from: ${url}`);
+      const res = await fetch(url);
       if (!res.ok) {
-        console.log(`Summary ${period} load failed:`, res.status);
+        console.error(`Summary ${period} load failed with status ${res.status}`);
         return null;
       }
       const data = await res.json();
+      console.log(`Summary ${period} data received:`, data);
       
       // Cache it
       summaryCache[period][athleteId] = data;
@@ -272,8 +276,13 @@ document.addEventListener('DOMContentLoaded', function(){
 
   async function loadSummary(athleteId){
     try {
+      console.log(`loadSummary called for athlete ${athleteId}`);
       const data = await loadSummaryData(athleteId, '7days');
-      if (!data) return;
+      if (!data) {
+        console.error('No data received for 7days summary');
+        document.getElementById('summary-7days-loader').classList.remove('show');
+        return;
+      }
       
       // Get arrow function based on change
       const getArrow = (diff) => {
@@ -340,8 +349,13 @@ document.addEventListener('DOMContentLoaded', function(){
 
   async function loadSummary14days(athleteId){
     try {
+      console.log(`loadSummary14days called for athlete ${athleteId}`);
       const data = await loadSummaryData(athleteId, '14days');
-      if (!data) return;
+      if (!data) {
+        console.error('No data received for 14days summary');
+        document.getElementById('summary-14days-loader').classList.remove('show');
+        return;
+      }
       
       // Get arrow function based on change
       const getArrow = (diff) => {
@@ -408,8 +422,13 @@ document.addEventListener('DOMContentLoaded', function(){
 
   async function loadSummary28days(athleteId){
     try {
+      console.log(`loadSummary28days called for athlete ${athleteId}`);
       const data = await loadSummaryData(athleteId, '28days');
-      if (!data) return;
+      if (!data) {
+        console.error('No data received for 28days summary');
+        document.getElementById('summary-28days-loader').classList.remove('show');
+        return;
+      }
       
       // Get arrow function based on change
       const getArrow = (diff) => {
