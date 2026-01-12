@@ -995,13 +995,23 @@ def register_routes(app):
         if not exercise_name:
             return jsonify({'error': 'exercise name required'}), 400
         
+        # DEBUG: Log what we're looking for
+        print(f"DEBUG: Looking for exercise '{exercise_name}' for athlete_id={user.id}")
+        
         # Get distinct dates for this exercise (globally, not filtered by session), ordered by most recent first, limit to 14
         last_3_dates = db.session.query(db.func.distinct(PerformanceEntry.entry_date)).filter(
             PerformanceEntry.athlete_id==user.id,
             PerformanceEntry.exercise==exercise_name
         ).order_by(PerformanceEntry.entry_date.desc()).limit(14).all()
         
+        print(f"DEBUG: Found {len(last_3_dates)} distinct dates")
+        
         if not last_3_dates:
+            # DEBUG: Check what exercises exist for this athlete
+            all_exercises = db.session.query(PerformanceEntry.exercise).filter(
+                PerformanceEntry.athlete_id==user.id
+            ).distinct().all()
+            print(f"DEBUG: Available exercises for this athlete: {[e[0] for e in all_exercises]}")
             return jsonify({'found': False}), 200
         
         # Extract dates as list
