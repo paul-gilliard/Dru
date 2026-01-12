@@ -2079,7 +2079,7 @@ def register_routes(app):
 
     @app.route('/coach/stats/athlete/<int:athlete_id>/summary-14days.json')
     def coach_stats_athlete_summary_14days(athlete_id):
-        """Get 14-day summary comparing current week vs 2 weeks ago"""
+        """Get 14-day summary comparing last 14 days vs previous 14 days"""
         try:
             if 'user_id' not in session:
                 return jsonify({'error':'unauth'}), 401
@@ -2088,40 +2088,41 @@ def register_routes(app):
                 return jsonify({'error':'forbidden'}), 403
             
             today = datetime.utcnow().date()
-            # Get the start of current week (Monday)
-            current_week_start = today - timedelta(days=today.weekday())
-            # 2 weeks ago
-            two_weeks_ago_start = current_week_start - timedelta(days=14)
-            two_weeks_ago_end = two_weeks_ago_start + timedelta(days=6)
+            # Last 14 days (current period)
+            current_start = today - timedelta(days=13)
+            current_end = today
+            # Previous 14 days
+            previous_start = today - timedelta(days=27)
+            previous_end = today - timedelta(days=14)
             
-            # Get journal entries for current week
+            # Get journal entries for last 14 days
             current_journal = JournalEntry.query.filter(
                 JournalEntry.athlete_id==athlete_id,
-                JournalEntry.entry_date >= current_week_start,
-                JournalEntry.entry_date <= current_week_start + timedelta(days=6)
+                JournalEntry.entry_date >= current_start,
+                JournalEntry.entry_date <= current_end
             ).all()
             
-            # Get journal entries for 2 weeks ago
+            # Get journal entries for previous 14 days
             previous_journal = JournalEntry.query.filter(
                 JournalEntry.athlete_id==athlete_id,
-                JournalEntry.entry_date >= two_weeks_ago_start,
-                JournalEntry.entry_date <= two_weeks_ago_end
+                JournalEntry.entry_date >= previous_start,
+                JournalEntry.entry_date <= previous_end
             ).all()
             
-            # If no current week data, look back
+            # If no current period data, look back up to 28 days
             if not current_journal:
                 current_journal = JournalEntry.query.filter(
                     JournalEntry.athlete_id==athlete_id,
-                    JournalEntry.entry_date <= current_week_start + timedelta(days=6),
-                    JournalEntry.entry_date >= current_week_start - timedelta(days=7)
+                    JournalEntry.entry_date <= current_end,
+                    JournalEntry.entry_date >= current_start - timedelta(days=14)
                 ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
             
-            # If no previous week data, look back further
+            # If no previous period data, look back even further
             if not previous_journal:
                 previous_journal = JournalEntry.query.filter(
                     JournalEntry.athlete_id==athlete_id,
-                    JournalEntry.entry_date <= two_weeks_ago_end,
-                    JournalEntry.entry_date >= two_weeks_ago_start - timedelta(days=14)
+                    JournalEntry.entry_date <= previous_end,
+                    JournalEntry.entry_date >= previous_start - timedelta(days=14)
                 ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
             
             # Calculate averages for current week
@@ -2152,17 +2153,17 @@ def register_routes(app):
             water_diff = (current_water_avg - previous_water_avg) if (current_water_avg and previous_water_avg) else None
             sleep_diff = (current_sleep_avg - previous_sleep_avg) if (current_sleep_avg and previous_sleep_avg) else None
             
-            # Calculate tonnage for current week and 2 weeks ago
+            # Calculate tonnage for current 14 days and previous 14 days
             current_perfs = PerformanceEntry.query.filter(
                 PerformanceEntry.athlete_id==athlete_id,
-                PerformanceEntry.entry_date >= current_week_start,
-                PerformanceEntry.entry_date <= current_week_start + timedelta(days=6)
+                PerformanceEntry.entry_date >= current_start,
+                PerformanceEntry.entry_date <= current_end
             ).all()
             
             previous_perfs = PerformanceEntry.query.filter(
                 PerformanceEntry.athlete_id==athlete_id,
-                PerformanceEntry.entry_date >= two_weeks_ago_start,
-                PerformanceEntry.entry_date <= two_weeks_ago_start + timedelta(days=6)
+                PerformanceEntry.entry_date >= previous_start,
+                PerformanceEntry.entry_date <= previous_end
             ).all()
             
             # Pre-load all exercises into a dictionary to avoid N+1 queries
@@ -2336,7 +2337,7 @@ def register_routes(app):
 
     @app.route('/coach/stats/athlete/<int:athlete_id>/summary-28days.json')
     def coach_stats_athlete_summary_28days(athlete_id):
-        """Get 28-day summary comparing current week vs 4 weeks ago"""
+        """Get 28-day summary comparing last 28 days vs previous 28 days"""
         try:
             if 'user_id' not in session:
                 return jsonify({'error':'unauth'}), 401
@@ -2345,40 +2346,41 @@ def register_routes(app):
                 return jsonify({'error':'forbidden'}), 403
             
             today = datetime.utcnow().date()
-            # Get the start of current week (Monday)
-            current_week_start = today - timedelta(days=today.weekday())
-            # 4 weeks ago
-            four_weeks_ago_start = current_week_start - timedelta(days=28)
-            four_weeks_ago_end = four_weeks_ago_start + timedelta(days=6)
+            # Last 28 days (current period)
+            current_start = today - timedelta(days=27)
+            current_end = today
+            # Previous 28 days
+            previous_start = today - timedelta(days=55)
+            previous_end = today - timedelta(days=28)
             
-            # Get journal entries for current week
+            # Get journal entries for last 28 days
             current_journal = JournalEntry.query.filter(
                 JournalEntry.athlete_id==athlete_id,
-                JournalEntry.entry_date >= current_week_start,
-                JournalEntry.entry_date <= current_week_start + timedelta(days=6)
+                JournalEntry.entry_date >= current_start,
+                JournalEntry.entry_date <= current_end
             ).all()
             
-            # Get journal entries for 4 weeks ago
+            # Get journal entries for previous 28 days
             previous_journal = JournalEntry.query.filter(
                 JournalEntry.athlete_id==athlete_id,
-                JournalEntry.entry_date >= four_weeks_ago_start,
-                JournalEntry.entry_date <= four_weeks_ago_end
+                JournalEntry.entry_date >= previous_start,
+                JournalEntry.entry_date <= previous_end
             ).all()
             
-            # If no current week data, look back
+            # If no current period data, look back up to 56 days
             if not current_journal:
                 current_journal = JournalEntry.query.filter(
                     JournalEntry.athlete_id==athlete_id,
-                    JournalEntry.entry_date <= current_week_start + timedelta(days=6),
-                    JournalEntry.entry_date >= current_week_start - timedelta(days=7)
+                    JournalEntry.entry_date <= current_end,
+                    JournalEntry.entry_date >= current_start - timedelta(days=28)
                 ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
             
-            # If no previous week data, look back further
+            # If no previous period data, look back even further
             if not previous_journal:
                 previous_journal = JournalEntry.query.filter(
                     JournalEntry.athlete_id==athlete_id,
-                    JournalEntry.entry_date <= four_weeks_ago_end,
-                    JournalEntry.entry_date >= four_weeks_ago_start - timedelta(days=21)
+                    JournalEntry.entry_date <= previous_end,
+                    JournalEntry.entry_date >= previous_start - timedelta(days=28)
                 ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
             
             # Calculate averages for current week
@@ -2409,17 +2411,17 @@ def register_routes(app):
             water_diff = (current_water_avg - previous_water_avg) if (current_water_avg and previous_water_avg) else None
             sleep_diff = (current_sleep_avg - previous_sleep_avg) if (current_sleep_avg and previous_sleep_avg) else None
             
-            # Calculate tonnage for current week and 4 weeks ago
+            # Calculate tonnage for current 28 days and previous 28 days
             current_perfs = PerformanceEntry.query.filter(
                 PerformanceEntry.athlete_id==athlete_id,
-                PerformanceEntry.entry_date >= current_week_start,
-                PerformanceEntry.entry_date <= current_week_start + timedelta(days=6)
+                PerformanceEntry.entry_date >= current_start,
+                PerformanceEntry.entry_date <= current_end
             ).all()
             
             previous_perfs = PerformanceEntry.query.filter(
                 PerformanceEntry.athlete_id==athlete_id,
-                PerformanceEntry.entry_date >= four_weeks_ago_start,
-                PerformanceEntry.entry_date <= four_weeks_ago_start + timedelta(days=6)
+                PerformanceEntry.entry_date >= previous_start,
+                PerformanceEntry.entry_date <= previous_end
             ).all()
             
             # Pre-load all exercises into a dictionary to avoid N+1 queries
