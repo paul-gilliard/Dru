@@ -144,6 +144,13 @@ document.addEventListener('DOMContentLoaded', function(){
     '14days': {},
     '28days': {}
   }; // Cache for muscle details - preloaded on athlete selection
+  
+  // Global cache for summary data by athlete
+  let summaryCache = {
+    '7days': {}, // athleteId -> data
+    '14days': {},
+    '28days': {}
+  };
 
   // Preload all muscle details for all periods when athlete is selected
   async function preloadAllMuscleDetails(athleteId) {
@@ -238,14 +245,35 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   }
 
-  async function loadSummary(athleteId){
+  // Generic function to load and cache summary data
+  async function loadSummaryData(athleteId, period) {
+    // Check cache first
+    if (summaryCache[period][athleteId]) {
+      return summaryCache[period][athleteId];
+    }
+    
+    // Fetch from API
     try {
-      const res = await fetch(`/coach/stats/athlete/${athleteId}/summary-7days.json`);
+      const res = await fetch(`/coach/stats/athlete/${athleteId}/summary-${period}.json`);
       if (!res.ok) {
-        console.log('Summary load failed:', res.status);
-        return;
+        console.log(`Summary ${period} load failed:`, res.status);
+        return null;
       }
       const data = await res.json();
+      
+      // Cache it
+      summaryCache[period][athleteId] = data;
+      return data;
+    } catch (err) {
+      console.error(`Error loading summary ${period}:`, err);
+      return null;
+    }
+  }
+
+  async function loadSummary(athleteId){
+    try {
+      const data = await loadSummaryData(athleteId, '7days');
+      if (!data) return;
       
       // Get arrow function based on change
       const getArrow = (diff) => {
@@ -312,12 +340,8 @@ document.addEventListener('DOMContentLoaded', function(){
 
   async function loadSummary14days(athleteId){
     try {
-      const res = await fetch(`/coach/stats/athlete/${athleteId}/summary-14days.json`);
-      if (!res.ok) {
-        console.log('Summary 14days load failed:', res.status);
-        return;
-      }
-      const data = await res.json();
+      const data = await loadSummaryData(athleteId, '14days');
+      if (!data) return;
       
       // Get arrow function based on change
       const getArrow = (diff) => {
@@ -384,12 +408,8 @@ document.addEventListener('DOMContentLoaded', function(){
 
   async function loadSummary28days(athleteId){
     try {
-      const res = await fetch(`/coach/stats/athlete/${athleteId}/summary-28days.json`);
-      if (!res.ok) {
-        console.log('Summary 28days load failed:', res.status);
-        return;
-      }
-      const data = await res.json();
+      const data = await loadSummaryData(athleteId, '28days');
+      if (!data) return;
       
       // Get arrow function based on change
       const getArrow = (diff) => {
