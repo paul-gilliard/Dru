@@ -1173,9 +1173,14 @@ def register_routes(app):
             return redirect(url_for('home'))
         athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
         
+        # Get week offset from query params (0 = current week, -1 = previous week, etc.)
+        week_offset = request.args.get('week_offset', 0, type=int)
+        
         # Calculate week dates
         today = datetime.utcnow().date()
-        current_week_start = today - timedelta(days=today.weekday())
+        # Apply the week offset
+        target_date = today - timedelta(weeks=week_offset)
+        current_week_start = target_date - timedelta(days=target_date.weekday())
         current_week_end = current_week_start + timedelta(days=6)
         
         # Get objectives for each athlete
@@ -1185,7 +1190,7 @@ def register_routes(app):
         
         return render_template('coach_weekly_summary.html', coach=user, athletes=athletes, 
                              current_week_start=current_week_start, current_week_end=current_week_end,
-                             athlete_objectives=athlete_objectives)
+                             athlete_objectives=athlete_objectives, week_offset=week_offset)
 
     @app.route('/coach/bilan-hebdo/mark/<int:athlete_id>', methods=['POST'])
     def mark_weekly_bilan(athlete_id):

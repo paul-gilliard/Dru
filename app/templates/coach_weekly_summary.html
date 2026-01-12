@@ -379,6 +379,24 @@
         <p>Synthèse semaine actuelle vs précédente pour chaque athlète</p>
     </div>
 
+    <!-- Week selector -->
+    <div style="display: flex; justify-content: center; align-items: center; gap: 20px; margin-bottom: 40px; background: rgba(255,255,255,0.1); padding: 20px; border-radius: 12px; color: white;">
+        <a href="?week_offset={{ week_offset + 1 }}" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; text-decoration: none; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">← Semaine précédente</a>
+        
+        <div style="text-align: center; min-width: 250px;">
+            <div style="font-size: 0.9em; opacity: 0.9;">Semaine du {{ current_week_start.strftime('%d %b') }} au {{ current_week_end.strftime('%d %b %Y') }}</div>
+            {% if week_offset == 0 %}
+            <div style="font-size: 0.85em; opacity: 0.8; margin-top: 4px;">(Semaine actuelle)</div>
+            {% else %}
+            <div style="font-size: 0.85em; opacity: 0.8; margin-top: 4px;">{{ week_offset }} semaine(s) en arrière</div>
+            {% endif %}
+        </div>
+        
+        {% if week_offset > 0 %}
+        <a href="?week_offset={{ week_offset - 1 }}" style="background: rgba(255,255,255,0.2); border: none; color: white; padding: 10px 16px; border-radius: 8px; cursor: pointer; font-weight: 600; text-decoration: none; transition: all 0.2s ease;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.2)'">Semaine suivante →</a>
+        {% endif %}
+    </div>
+
     <!-- Athletes cards grid -->
     <div class="athletes-grid" id="active-athletes">
         {% for athlete in athletes %}
