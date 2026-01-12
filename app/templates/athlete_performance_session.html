@@ -666,10 +666,10 @@
       }
 
       // Charger la dernière performance pour cet exercice
-      loadLastPerformance(selectedExercise, {{ program_session.id }});
+      loadLastPerformance(selectedExercise);
     }
 
-    function loadLastPerformance(exerciseName, sessionId) {
+    function loadLastPerformance(exerciseName) {
       const lastPerfInfo = document.getElementById('last-perf-info');
       const seriesList = document.getElementById('series-list');
       
@@ -678,7 +678,7 @@
         return;
       }
 
-      fetch(`/api/athlete/performance/session/${sessionId}/last-3-days-for-exercise?exercise=${encodeURIComponent(exerciseName)}`)
+      fetch(`/api/athlete/performance/last-3-days-for-exercise?exercise=${encodeURIComponent(exerciseName)}`)
         .then(response => response.json())
         .then(data => {
           if (data.found) {
