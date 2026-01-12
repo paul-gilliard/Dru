@@ -1722,7 +1722,7 @@ def register_routes(app):
 
     @app.route('/coach/stats/athlete/<int:athlete_id>/quick-data.json')
     def coach_stats_athlete_quick_data(athlete_id):
-        """Optimized endpoint: loads all summary data + journal in ONE call"""
+        """Optimized endpoint: loads all summary data in ONE call with minimal queries"""
         try:
             if 'user_id' not in session:
                 return jsonify({'error':'unauth'}), 401
@@ -1732,19 +1732,20 @@ def register_routes(app):
             
             today = datetime.utcnow().date()
             
-            # === BATCH LOAD EXERCISES ONCE ===
+            # === ONE QUERY: BATCH LOAD ALL EXERCISES ===
             all_exercises = Exercise.query.all()
             exercise_by_name = {ex.name: ex for ex in all_exercises}
             
-            # === LOAD JOURNAL (last 180 days for chart) ===
-            cutoff = today - timedelta(days=180)
-            journal_entries = JournalEntry.query.filter(
+            # === ONE QUERY: GET ALL JOURNAL ENTRIES (last 180 days) ===
+            cutoff_180 = today - timedelta(days=180)
+            all_journal = JournalEntry.query.filter(
                 JournalEntry.athlete_id==athlete_id,
-                JournalEntry.entry_date >= cutoff
+                JournalEntry.entry_date >= cutoff_180
             ).order_by(JournalEntry.entry_date.asc()).all()
             
+            # === PROCESS JOURNAL DATA ===
             journal_data = []
-            for e in journal_entries:
+            for e in all_journal:
                 journal_data.append({
                     'date': e.entry_date.isoformat(),
                     'weight': e.weight,
@@ -1753,42 +1754,10 @@ def register_routes(app):
                     'sleep_hours': e.sleep_hours
                 })
             
-            # === GET MUSCLE GROUPS (for filter dropdowns) ===
+            # === GET MUSCLE GROUPS ===
             muscle_groups = sorted(list(set([ex.muscle_group for ex in all_exercises if ex.muscle_group])))
             
-            # === CALCULATE 7 DAY SUMMARY ===
-            current_week_start = today - timedelta(days=today.weekday())
-            current_week_end = current_week_start + timedelta(days=6)
-            previous_week_start = current_week_start - timedelta(days=7)
-            previous_week_end = previous_week_start + timedelta(days=6)
-            
-            current_journal_7 = JournalEntry.query.filter(
-                JournalEntry.athlete_id==athlete_id,
-                JournalEntry.entry_date >= current_week_start,
-                JournalEntry.entry_date <= current_week_end
-            ).all()
-            
-            previous_journal_7 = JournalEntry.query.filter(
-                JournalEntry.athlete_id==athlete_id,
-                JournalEntry.entry_date >= previous_week_start,
-                JournalEntry.entry_date <= previous_week_end
-            ).all()
-            
-            if not current_journal_7:
-                current_journal_7 = JournalEntry.query.filter(
-                    JournalEntry.athlete_id==athlete_id,
-                    JournalEntry.entry_date <= current_week_end,
-                    JournalEntry.entry_date >= current_week_start - timedelta(days=7)
-                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
-            
-            if not previous_journal_7:
-                previous_journal_7 = JournalEntry.query.filter(
-                    JournalEntry.athlete_id==athlete_id,
-                    JournalEntry.entry_date <= previous_week_end,
-                    JournalEntry.entry_date >= previous_week_start - timedelta(days=14)
-                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
-            
-            # Calculate 7-day averages
+            # === HELPER: Calculate averages from entries ===
             def calc_averages(entries):
                 weights = [e.weight for e in entries if e.weight]
                 kcals = [e.kcals for e in entries if e.kcals]
@@ -1801,6 +1770,22 @@ def register_routes(app):
                     'water': sum(waters) / len(waters) if waters else None,
                     'sleep': sum(sleeps) / len(sleeps) if sleeps else None
                 }
+            
+            # === CALCULATE SUMMARIES BY FILTERING CACHED JOURNAL (no extra queries!) ===
+            # 7 DAYS
+            current_week_start = today - timedelta(days=today.weekday())
+            current_week_end = current_week_start + timedelta(days=6)
+            previous_week_start = current_week_start - timedelta(days=7)
+            previous_week_end = previous_week_start + timedelta(days=6)
+            
+            current_journal_7 = [e for e in all_journal if current_week_start <= e.entry_date <= current_week_end]
+            previous_journal_7 = [e for e in all_journal if previous_week_start <= e.entry_date <= previous_week_end]
+            
+            # If no data, use the most recent entry within reach
+            if not current_journal_7:
+                current_journal_7 = [e for e in all_journal if e.entry_date <= current_week_end][-1:] if any(e.entry_date <= current_week_end for e in all_journal) else []
+            if not previous_journal_7:
+                previous_journal_7 = [e for e in all_journal if e.entry_date <= previous_week_end][-1:] if any(e.entry_date <= previous_week_end for e in all_journal) else []
             
             current_7 = calc_averages(current_journal_7)
             previous_7 = calc_averages(previous_journal_7)
@@ -1820,37 +1805,19 @@ def register_routes(app):
                 'sleep_diff': (current_7['sleep'] - previous_7['sleep']) if (current_7['sleep'] and previous_7['sleep']) else None,
             }
             
-            # === CALCULATE 14 DAY SUMMARY ===
+            # 14 DAYS
             current_start_14 = today - timedelta(days=13)
             current_end_14 = today
             previous_start_14 = today - timedelta(days=27)
             previous_end_14 = today - timedelta(days=14)
             
-            current_journal_14 = JournalEntry.query.filter(
-                JournalEntry.athlete_id==athlete_id,
-                JournalEntry.entry_date >= current_start_14,
-                JournalEntry.entry_date <= current_end_14
-            ).all()
-            
-            previous_journal_14 = JournalEntry.query.filter(
-                JournalEntry.athlete_id==athlete_id,
-                JournalEntry.entry_date >= previous_start_14,
-                JournalEntry.entry_date <= previous_end_14
-            ).all()
+            current_journal_14 = [e for e in all_journal if current_start_14 <= e.entry_date <= current_end_14]
+            previous_journal_14 = [e for e in all_journal if previous_start_14 <= e.entry_date <= previous_end_14]
             
             if not current_journal_14:
-                current_journal_14 = JournalEntry.query.filter(
-                    JournalEntry.athlete_id==athlete_id,
-                    JournalEntry.entry_date <= current_end_14,
-                    JournalEntry.entry_date >= current_start_14 - timedelta(days=14)
-                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
-            
+                current_journal_14 = [e for e in all_journal if e.entry_date <= current_end_14][-1:] if any(e.entry_date <= current_end_14 for e in all_journal) else []
             if not previous_journal_14:
-                previous_journal_14 = JournalEntry.query.filter(
-                    JournalEntry.athlete_id==athlete_id,
-                    JournalEntry.entry_date <= previous_end_14,
-                    JournalEntry.entry_date >= previous_start_14 - timedelta(days=14)
-                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
+                previous_journal_14 = [e for e in all_journal if e.entry_date <= previous_end_14][-1:] if any(e.entry_date <= previous_end_14 for e in all_journal) else []
             
             current_14 = calc_averages(current_journal_14)
             previous_14 = calc_averages(previous_journal_14)
@@ -1870,37 +1837,19 @@ def register_routes(app):
                 'sleep_diff': (current_14['sleep'] - previous_14['sleep']) if (current_14['sleep'] and previous_14['sleep']) else None,
             }
             
-            # === CALCULATE 28 DAY SUMMARY ===
+            # 28 DAYS
             current_start_28 = today - timedelta(days=27)
             current_end_28 = today
             previous_start_28 = today - timedelta(days=55)
             previous_end_28 = today - timedelta(days=28)
             
-            current_journal_28 = JournalEntry.query.filter(
-                JournalEntry.athlete_id==athlete_id,
-                JournalEntry.entry_date >= current_start_28,
-                JournalEntry.entry_date <= current_end_28
-            ).all()
-            
-            previous_journal_28 = JournalEntry.query.filter(
-                JournalEntry.athlete_id==athlete_id,
-                JournalEntry.entry_date >= previous_start_28,
-                JournalEntry.entry_date <= previous_end_28
-            ).all()
+            current_journal_28 = [e for e in all_journal if current_start_28 <= e.entry_date <= current_end_28]
+            previous_journal_28 = [e for e in all_journal if previous_start_28 <= e.entry_date <= previous_end_28]
             
             if not current_journal_28:
-                current_journal_28 = JournalEntry.query.filter(
-                    JournalEntry.athlete_id==athlete_id,
-                    JournalEntry.entry_date <= current_end_28,
-                    JournalEntry.entry_date >= current_start_28 - timedelta(days=28)
-                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
-            
+                current_journal_28 = [e for e in all_journal if e.entry_date <= current_end_28][-1:] if any(e.entry_date <= current_end_28 for e in all_journal) else []
             if not previous_journal_28:
-                previous_journal_28 = JournalEntry.query.filter(
-                    JournalEntry.athlete_id==athlete_id,
-                    JournalEntry.entry_date <= previous_end_28,
-                    JournalEntry.entry_date >= previous_start_28 - timedelta(days=28)
-                ).order_by(JournalEntry.entry_date.desc()).limit(1).all()
+                previous_journal_28 = [e for e in all_journal if e.entry_date <= previous_end_28][-1:] if any(e.entry_date <= previous_end_28 for e in all_journal) else []
             
             current_28 = calc_averages(current_journal_28)
             previous_28 = calc_averages(previous_journal_28)
