@@ -1771,88 +1771,67 @@ def register_routes(app):
                     'sleep': sum(sleeps) / len(sleeps) if sleeps else None
                 }
             
-            # === CALCULATE SUMMARIES BY FILTERING CACHED JOURNAL (no extra queries!) ===
-            # 7 DAYS
-            current_week_start = today - timedelta(days=today.weekday())
-            current_week_end = current_week_start + timedelta(days=6)
-            previous_week_start = current_week_start - timedelta(days=7)
-            previous_week_end = previous_week_start + timedelta(days=6)
+            # === GET WEEK BOUNDARIES ===
+            # S = current week, S-1 = week 1, S-2 = week 2, S-3 = week 3
+            s_start = today - timedelta(days=today.weekday())
+            s_end = s_start + timedelta(days=6)
+            s1_start = s_start - timedelta(days=7)
+            s1_end = s1_start + timedelta(days=6)
+            s2_start = s_start - timedelta(days=14)
+            s2_end = s2_start + timedelta(days=6)
+            s3_start = s_start - timedelta(days=21)
+            s3_end = s3_start + timedelta(days=6)
             
-            current_journal_7 = [e for e in all_journal if current_week_start <= e.entry_date <= current_week_end]
-            previous_journal_7 = [e for e in all_journal if previous_week_start <= e.entry_date <= previous_week_end]
+            # === HELPER: Get journal entries for a week ===
+            def get_week_data(start_date, end_date):
+                week_data = [e for e in all_journal if start_date <= e.entry_date <= end_date]
+                if not week_data:
+                    week_data = [e for e in all_journal if e.entry_date <= end_date][-1:] if any(e.entry_date <= end_date for e in all_journal) else []
+                return week_data
             
-            # If no data, use the most recent entry within reach
-            if not current_journal_7:
-                current_journal_7 = [e for e in all_journal if e.entry_date <= current_week_end][-1:] if any(e.entry_date <= current_week_end for e in all_journal) else []
-            if not previous_journal_7:
-                previous_journal_7 = [e for e in all_journal if e.entry_date <= previous_week_end][-1:] if any(e.entry_date <= previous_week_end for e in all_journal) else []
+            # === GET ALL WEEK DATA ===
+            s_data = get_week_data(s_start, s_end)
+            s1_data = get_week_data(s1_start, s1_end)
+            s2_data = get_week_data(s2_start, s2_end)
+            s3_data = get_week_data(s3_start, s3_end)
             
-            current_7 = calc_averages(current_journal_7)
-            previous_7 = calc_averages(previous_journal_7)
+            # === HELPER: Create comparison dict ===
+            def make_comparison(current_data, previous_data, label1, label2):
+                current = calc_averages(current_data)
+                previous = calc_averages(previous_data)
+                return {
+                    'label1': label1,
+                    'label2': label2,
+                    'weight_current': current['weight'],
+                    'weight_previous': previous['weight'],
+                    'weight_diff': (current['weight'] - previous['weight']) if (current['weight'] and previous['weight']) else None,
+                    'kcals_current': current['kcals'],
+                    'kcals_previous': previous['kcals'],
+                    'kcals_diff': (current['kcals'] - previous['kcals']) if (current['kcals'] and previous['kcals']) else None,
+                    'water_current': current['water'],
+                    'water_previous': previous['water'],
+                    'water_diff': (current['water'] - previous['water']) if (current['water'] and previous['water']) else None,
+                    'sleep_current': current['sleep'],
+                    'sleep_previous': previous['sleep'],
+                    'sleep_diff': (current['sleep'] - previous['sleep']) if (current['sleep'] and previous['sleep']) else None,
+                }
             
-            summary_7 = {
-                'weight_current': current_7['weight'],
-                'weight_previous': previous_7['weight'],
-                'weight_diff': (current_7['weight'] - previous_7['weight']) if (current_7['weight'] and previous_7['weight']) else None,
-                'kcals_current': current_7['kcals'],
-                'kcals_previous': previous_7['kcals'],
-                'kcals_diff': (current_7['kcals'] - previous_7['kcals']) if (current_7['kcals'] and previous_7['kcals']) else None,
-                'water_current': current_7['water'],
-                'water_previous': previous_7['water'],
-                'water_diff': (current_7['water'] - previous_7['water']) if (current_7['water'] and previous_7['water']) else None,
-                'sleep_current': current_7['sleep'],
-                'sleep_previous': previous_7['sleep'],
-                'sleep_diff': (current_7['sleep'] - previous_7['sleep']) if (current_7['sleep'] and previous_7['sleep']) else None,
-            }
+            # === CREATE 4 COMPARISONS ===
+            # Comparison 1: S vs S-1
+            summary_7 = make_comparison(s_data, s1_data, 'Semaine courante', 'Semaine -1')
             
-            # 14 DAYS
-            current_start_14 = today - timedelta(days=13)
-            current_end_14 = today
-            previous_start_14 = today - timedelta(days=27)
-            previous_end_14 = today - timedelta(days=14)
+            # Comparison 2: S vs S-2
+            summary_14 = make_comparison(s_data, s2_data, 'Semaine courante', 'Semaine -2')
             
-            current_journal_14 = [e for e in all_journal if current_start_14 <= e.entry_date <= current_end_14]
-            previous_journal_14 = [e for e in all_journal if previous_start_14 <= e.entry_date <= previous_end_14]
+            # Comparison 3: S-1 vs S-2
+            summary_21 = make_comparison(s1_data, s2_data, 'Semaine -1', 'Semaine -2')
             
-            if not current_journal_14:
-                current_journal_14 = [e for e in all_journal if e.entry_date <= current_end_14][-1:] if any(e.entry_date <= current_end_14 for e in all_journal) else []
-            if not previous_journal_14:
-                previous_journal_14 = [e for e in all_journal if e.entry_date <= previous_end_14][-1:] if any(e.entry_date <= previous_end_14 for e in all_journal) else []
+            # Comparison 4: S-1 vs S-3
+            summary_28 = make_comparison(s1_data, s3_data, 'Semaine -1', 'Semaine -3')
             
-            current_14 = calc_averages(current_journal_14)
-            previous_14 = calc_averages(previous_journal_14)
-            
-            summary_14 = {
-                'weight_current': current_14['weight'],
-                'weight_previous': previous_14['weight'],
-                'weight_diff': (current_14['weight'] - previous_14['weight']) if (current_14['weight'] and previous_14['weight']) else None,
-                'kcals_current': current_14['kcals'],
-                'kcals_previous': previous_14['kcals'],
-                'kcals_diff': (current_14['kcals'] - previous_14['kcals']) if (current_14['kcals'] and previous_14['kcals']) else None,
-                'water_current': current_14['water'],
-                'water_previous': previous_14['water'],
-                'water_diff': (current_14['water'] - previous_14['water']) if (current_14['water'] and previous_14['water']) else None,
-                'sleep_current': current_14['sleep'],
-                'sleep_previous': previous_14['sleep'],
-                'sleep_diff': (current_14['sleep'] - previous_14['sleep']) if (current_14['sleep'] and previous_14['sleep']) else None,
-            }
-            
-            # 28 DAYS
-            current_start_28 = today - timedelta(days=27)
-            current_end_28 = today
-            previous_start_28 = today - timedelta(days=55)
-            previous_end_28 = today - timedelta(days=28)
-            
-            current_journal_28 = [e for e in all_journal if current_start_28 <= e.entry_date <= current_end_28]
-            previous_journal_28 = [e for e in all_journal if previous_start_28 <= e.entry_date <= previous_end_28]
-            
-            if not current_journal_28:
-                current_journal_28 = [e for e in all_journal if e.entry_date <= current_end_28][-1:] if any(e.entry_date <= current_end_28 for e in all_journal) else []
-            if not previous_journal_28:
-                previous_journal_28 = [e for e in all_journal if e.entry_date <= previous_end_28][-1:] if any(e.entry_date <= previous_end_28 for e in all_journal) else []
-            
-            current_28 = calc_averages(current_journal_28)
-            previous_28 = calc_averages(previous_journal_28)
+            # Backward compat: set current_28 for tonnage calculations below
+            current_28 = calc_averages(s_data)
+            previous_28 = calc_averages(s2_data)
             
             summary_28 = {
                 'weight_current': current_28['weight'],
@@ -1869,7 +1848,7 @@ def register_routes(app):
                 'sleep_diff': (current_28['sleep'] - previous_28['sleep']) if (current_28['sleep'] and previous_28['sleep']) else None,
             }
             
-            # === CALCULATE TONNAGE BY MUSCLE FOR ALL 3 PERIODS ===
+            # === CALCULATE TONNAGE BY MUSCLE FOR ALL 4 COMPARISONS ===
             # ONE QUERY: Get all performance entries (no N+1!)
             all_perfs = PerformanceEntry.query.filter(
                 PerformanceEntry.athlete_id==athlete_id,
@@ -1915,28 +1894,13 @@ def register_routes(app):
                 
                 return tonnage_diff
             
-            # 7 days
-            tonnage_diff_7days = calc_tonnage_diff(
-                current_week_start, current_week_end,
-                previous_week_start, previous_week_end
-            )
-            summary_7['tonnage_diff_by_muscle'] = tonnage_diff_7days
+            # Apply tonnage to all 4 summaries
+            summary_7['tonnage_diff_by_muscle'] = calc_tonnage_diff(s_start, s_end, s1_start, s1_end)
+            summary_14['tonnage_diff_by_muscle'] = calc_tonnage_diff(s_start, s_end, s2_start, s2_end)
+            summary_21['tonnage_diff_by_muscle'] = calc_tonnage_diff(s1_start, s1_end, s2_start, s2_end)
+            summary_28['tonnage_diff_by_muscle'] = calc_tonnage_diff(s1_start, s1_end, s3_start, s3_end)
             
-            # 14 days
-            tonnage_diff_14days = calc_tonnage_diff(
-                current_start_14, current_end_14,
-                previous_start_14, previous_end_14
-            )
-            summary_14['tonnage_diff_by_muscle'] = tonnage_diff_14days
-            
-            # 28 days
-            tonnage_diff_28days = calc_tonnage_diff(
-                current_start_28, current_end_28,
-                previous_start_28, previous_end_28
-            )
-            summary_28['tonnage_diff_by_muscle'] = tonnage_diff_28days
-            
-            # === CALCULATE EXERCISE DETAILS BY MUSCLE FOR ALL 3 PERIODS ===
+            # === CALCULATE EXERCISE DETAILS BY MUSCLE FOR ALL 4 COMPARISONS ===
             # Helper to calculate exercise details for a period
             def calc_exercise_details(period_start, period_end, previous_start, previous_end):
                 current_perfs = [e for e in all_perfs if period_start <= e.entry_date <= period_end]
@@ -1985,32 +1949,18 @@ def register_routes(app):
                 
                 return exercise_details
             
-            # 7 days
-            exercise_details_7days = calc_exercise_details(
-                current_week_start, current_week_end,
-                previous_week_start, previous_week_end
-            )
-            summary_7['exercise_details_by_muscle'] = exercise_details_7days
-            
-            # 14 days
-            exercise_details_14days = calc_exercise_details(
-                current_start_14, current_end_14,
-                previous_start_14, previous_end_14
-            )
-            summary_14['exercise_details_by_muscle'] = exercise_details_14days
-            
-            # 28 days
-            exercise_details_28days = calc_exercise_details(
-                current_start_28, current_end_28,
-                previous_start_28, previous_end_28
-            )
-            summary_28['exercise_details_by_muscle'] = exercise_details_28days
+            # Apply exercise details to all 4 summaries
+            summary_7['exercise_details_by_muscle'] = calc_exercise_details(s_start, s_end, s1_start, s1_end)
+            summary_14['exercise_details_by_muscle'] = calc_exercise_details(s_start, s_end, s2_start, s2_end)
+            summary_21['exercise_details_by_muscle'] = calc_exercise_details(s1_start, s1_end, s2_start, s2_end)
+            summary_28['exercise_details_by_muscle'] = calc_exercise_details(s1_start, s1_end, s3_start, s3_end)
             
             return jsonify({
                 'journal': journal_data,
                 'muscle_groups': muscle_groups,
                 'summary_7days': summary_7,
                 'summary_14days': summary_14,
+                'summary_21days': summary_21,
                 'summary_28days': summary_28
             })
         except Exception as e:

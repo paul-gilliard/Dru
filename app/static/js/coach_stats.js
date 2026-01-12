@@ -142,6 +142,7 @@ document.addEventListener('DOMContentLoaded', function(){
   let muscleDetailCache = {
     '7days': {},
     '14days': {},
+    '21days': {},
     '28days': {}
   }; // Cache for muscle details - preloaded on athlete selection
   
@@ -296,27 +297,31 @@ document.addEventListener('DOMContentLoaded', function(){
       // Cache the summary data and exercise details
       if (data.summary_7days) {
         summaryCache['7days'][athleteId] = data.summary_7days;
-        // Cache exercise details by muscle for instant display
         if (data.summary_7days.exercise_details_by_muscle) {
           muscleDetailCache['7days'] = data.summary_7days.exercise_details_by_muscle;
         }
-        await displaySummary7days(data.summary_7days);
+        await displayComparison(1, data.summary_7days);
       }
       if (data.summary_14days) {
         summaryCache['14days'][athleteId] = data.summary_14days;
-        // Cache exercise details by muscle for instant display
         if (data.summary_14days.exercise_details_by_muscle) {
           muscleDetailCache['14days'] = data.summary_14days.exercise_details_by_muscle;
         }
-        await displaySummary14days(data.summary_14days);
+        await displayComparison(2, data.summary_14days);
+      }
+      if (data.summary_21days) {
+        summaryCache['21days'] = data.summary_21days;
+        if (data.summary_21days.exercise_details_by_muscle) {
+          muscleDetailCache['21days'] = data.summary_21days.exercise_details_by_muscle;
+        }
+        await displayComparison(3, data.summary_21days);
       }
       if (data.summary_28days) {
         summaryCache['28days'][athleteId] = data.summary_28days;
-        // Cache exercise details by muscle for instant display
         if (data.summary_28days.exercise_details_by_muscle) {
           muscleDetailCache['28days'] = data.summary_28days.exercise_details_by_muscle;
         }
-        await displaySummary28days(data.summary_28days);
+        await displayComparison(4, data.summary_28days);
       }
       
     } catch (err) {
@@ -324,14 +329,19 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   }
 
-  // Display functions (extracted from loadSummary functions)
-  async function displaySummary7days(data) {
+  // Generic display function for all 4 comparisons
+  async function displayComparison(tableNum, data) {
     if (!data) return;
     
     const getArrow = (diff) => {
       if (diff === null || diff === undefined) return '—';
       if (Math.abs(diff) < 0.1) return '→';
       return diff > 0 ? '📈' : '📉';
+    };
+    
+    const formatValue = (val, decimals = 1) => {
+      if (val === null || val === undefined) return '—';
+      return Number(val).toFixed(decimals);
     };
     
     const formatDiff = (val, decimals = 1) => {
@@ -341,30 +351,85 @@ document.addEventListener('DOMContentLoaded', function(){
       return sign + num;
     };
     
-    const weightArrow = getArrow(data.weight_diff);
-    const weightValue = data.weight_diff !== null ? 
-      `${formatDiff(data.weight_diff, 2)} kg ${weightArrow}` : '—';
-    document.getElementById('summary-weight').textContent = weightValue;
+    const loader = document.getElementById(`comparison-${tableNum}-loader`);
+    const container = document.getElementById(`comparison-${tableNum}-container`);
+    const tbody = document.getElementById(`comparison-${tableNum}-body`);
     
+    if (!tbody) return;
+    tbody.innerHTML = '';
+    
+    // Build header with labels
+    const headerHtml = `
+      <tr style="background:#f3f4f6; border-bottom:2px solid #d1d5db; font-size:0.85rem;">
+        <th style="padding:8px; text-align:left; font-weight:600;">Métrique</th>
+        <th style="padding:8px; text-align:center; font-weight:600; width:100px;">${data.label1}</th>
+        <th style="padding:8px; text-align:center; font-weight:600; width:100px;">${data.label2}</th>
+        <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Diff</th>
+      </tr>
+    `;
+    tbody.innerHTML += headerHtml;
+    
+    // Poids
+    let poidsTr = document.createElement('tr');
+    poidsTr.style.borderBottom = '1px solid #e5e7eb';
+    const poidsArrow = getArrow(data.weight_diff);
+    const poidsCurrent = formatValue(data.weight_current, 2);
+    const poidsPrevious = formatValue(data.weight_previous, 2);
+    const poidsDiff = formatDiff(data.weight_diff, 2);
+    poidsTr.innerHTML = `
+      <td style="padding:8px; font-weight:600;">Poids (kg)</td>
+      <td style="padding:8px; text-align:center;">${poidsCurrent}</td>
+      <td style="padding:8px; text-align:center;">${poidsPrevious}</td>
+      <td style="padding:8px; text-align:center;">${poidsDiff} ${poidsArrow}</td>
+    `;
+    tbody.appendChild(poidsTr);
+    
+    // Kcals
+    let kcalsTr = document.createElement('tr');
+    kcalsTr.style.borderBottom = '1px solid #e5e7eb';
     const kcalsArrow = getArrow(data.kcals_diff);
-    const kcalsValue = data.kcals_diff !== null ? 
-      `${formatDiff(data.kcals_diff, 0)} cal ${kcalsArrow}` : '—';
-    document.getElementById('summary-kcals').textContent = kcalsValue;
+    const kcalsCurrent = formatValue(data.kcals_current, 0);
+    const kcalsPrevious = formatValue(data.kcals_previous, 0);
+    const kcalsDiff = formatDiff(data.kcals_diff, 0);
+    kcalsTr.innerHTML = `
+      <td style="padding:8px; font-weight:600;">Kcals</td>
+      <td style="padding:8px; text-align:center;">${kcalsCurrent}</td>
+      <td style="padding:8px; text-align:center;">${kcalsPrevious}</td>
+      <td style="padding:8px; text-align:center;">${kcalsDiff} ${kcalsArrow}</td>
+    `;
+    tbody.appendChild(kcalsTr);
     
-    const waterArrow = getArrow(data.water_diff);
-    const waterValue = data.water_diff !== null ? 
-      `${formatDiff(data.water_diff, 0)} ml ${waterArrow}` : '—';
-    document.getElementById('summary-water').textContent = waterValue;
+    // Eau
+    let eauTr = document.createElement('tr');
+    eauTr.style.borderBottom = '1px solid #e5e7eb';
+    const eauArrow = getArrow(data.water_diff);
+    const eauCurrent = formatValue(data.water_current, 0);
+    const eauPrevious = formatValue(data.water_previous, 0);
+    const eauDiff = formatDiff(data.water_diff, 0);
+    eauTr.innerHTML = `
+      <td style="padding:8px; font-weight:600;">Eau (ml)</td>
+      <td style="padding:8px; text-align:center;">${eauCurrent}</td>
+      <td style="padding:8px; text-align:center;">${eauPrevious}</td>
+      <td style="padding:8px; text-align:center;">${eauDiff} ${eauArrow}</td>
+    `;
+    tbody.appendChild(eauTr);
     
-    const sleepArrow = getArrow(data.sleep_diff);
-    const sleepValue = data.sleep_diff !== null ? 
-      `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
-    document.getElementById('summary-sleep').textContent = sleepValue;
+    // Sommeil
+    let sommeilTr = document.createElement('tr');
+    sommeilTr.style.borderBottom = '1px solid #e5e7eb';
+    const sommeilArrow = getArrow(data.sleep_diff);
+    const sommeilCurrent = formatValue(data.sleep_current, 1);
+    const sommeilPrevious = formatValue(data.sleep_previous, 1);
+    const sommeilDiff = formatDiff(data.sleep_diff, 1);
+    sommeilTr.innerHTML = `
+      <td style="padding:8px; font-weight:600;">Sommeil (h)</td>
+      <td style="padding:8px; text-align:center;">${sommeilCurrent}</td>
+      <td style="padding:8px; text-align:center;">${sommeilPrevious}</td>
+      <td style="padding:8px; text-align:center;">${sommeilDiff} ${sommeilArrow}</td>
+    `;
+    tbody.appendChild(sommeilTr);
     
-    // Fill tonnage rows with detail buttons
-    const tonnageBody = document.getElementById('summary-tonnage-body');
-    tonnageBody.innerHTML = '';
-    
+    // Tonnage par muscle with detail buttons
     if (data.tonnage_diff_by_muscle) {
       Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
         const tr = document.createElement('tr');
@@ -372,143 +437,25 @@ document.addEventListener('DOMContentLoaded', function(){
         const diff = data.tonnage_diff_by_muscle[muscle];
         const arrow = getArrow(diff);
         const diffStr = formatDiff(diff, 0);
+        
+        // Map tableNum to period name for muscle detail cache
+        let period = '7days';
+        if (tableNum === 2) period = '14days';
+        if (tableNum === 3) period = '21days';
+        if (tableNum === 4) period = '28days';
+        
         tr.innerHTML = `
-          <td style="padding:12px; font-weight:600;">${muscle}</td>
-          <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
-          <td style="padding:12px; text-align:center;">
-            <button class="show-muscle-detail secondary" data-muscle="${muscle}" data-summary="7days" style="font-size:0.8rem; padding:4px 8px; cursor:pointer;">Détails</button>
-          </td>
+          <td style="padding:8px; font-weight:600;">${muscle}</td>
+          <td style="padding:8px; text-align:center; text-decoration:underline; cursor:pointer;" class="show-muscle-detail" data-muscle="${muscle}" data-summary="${period}">Détails</td>
+          <td style="padding:8px; text-align:center;"></td>
+          <td style="padding:8px; text-align:center;">${diffStr} ${arrow}</td>
         `;
-        tonnageBody.appendChild(tr);
+        tbody.appendChild(tr);
       });
     }
     
-    document.getElementById('summary-7days-loader').classList.remove('show');
-    document.getElementById('summary-7days-container').style.display = 'block';
-  }
-
-  async function displaySummary14days(data) {
-    if (!data) return;
-    
-    const getArrow = (diff) => {
-      if (diff === null || diff === undefined) return '—';
-      if (Math.abs(diff) < 0.1) return '→';
-      return diff > 0 ? '📈' : '📉';
-    };
-    
-    const formatDiff = (val, decimals = 1) => {
-      if (val === null || val === undefined) return '—';
-      const num = Number(val).toFixed(decimals);
-      const sign = parseFloat(num) > 0 ? '+' : '';
-      return sign + num;
-    };
-    
-    const weightArrow = getArrow(data.weight_diff);
-    const weightValue = data.weight_diff !== null ? 
-      `${formatDiff(data.weight_diff, 2)} kg ${weightArrow}` : '—';
-    document.getElementById('summary-14days-weight').textContent = weightValue;
-    
-    const kcalsArrow = getArrow(data.kcals_diff);
-    const kcalsValue = data.kcals_diff !== null ? 
-      `${formatDiff(data.kcals_diff, 0)} cal ${kcalsArrow}` : '—';
-    document.getElementById('summary-14days-kcals').textContent = kcalsValue;
-    
-    const waterArrow = getArrow(data.water_diff);
-    const waterValue = data.water_diff !== null ? 
-      `${formatDiff(data.water_diff, 0)} ml ${waterArrow}` : '—';
-    document.getElementById('summary-14days-water').textContent = waterValue;
-    
-    const sleepArrow = getArrow(data.sleep_diff);
-    const sleepValue = data.sleep_diff !== null ? 
-      `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
-    document.getElementById('summary-14days-sleep').textContent = sleepValue;
-    
-    // Fill tonnage rows with detail buttons
-    const tonnageBody = document.getElementById('summary-14days-tonnage-body');
-    tonnageBody.innerHTML = '';
-    
-    if (data.tonnage_diff_by_muscle) {
-      Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
-        const tr = document.createElement('tr');
-        tr.style.borderBottom = '1px solid #e5e7eb';
-        const diff = data.tonnage_diff_by_muscle[muscle];
-        const arrow = getArrow(diff);
-        const diffStr = formatDiff(diff, 0);
-        tr.innerHTML = `
-          <td style="padding:12px; font-weight:600;">${muscle}</td>
-          <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
-          <td style="padding:12px; text-align:center;">
-            <button class="show-muscle-detail secondary" data-muscle="${muscle}" data-summary="14days" style="font-size:0.8rem; padding:4px 8px; cursor:pointer;">Détails</button>
-          </td>
-        `;
-        tonnageBody.appendChild(tr);
-      });
-    }
-    
-    document.getElementById('summary-14days-loader').classList.remove('show');
-    document.getElementById('summary-14days-container').style.display = 'block';
-  }
-
-  async function displaySummary28days(data) {
-    if (!data) return;
-    
-    const getArrow = (diff) => {
-      if (diff === null || diff === undefined) return '—';
-      if (Math.abs(diff) < 0.1) return '→';
-      return diff > 0 ? '📈' : '📉';
-    };
-    
-    const formatDiff = (val, decimals = 1) => {
-      if (val === null || val === undefined) return '—';
-      const num = Number(val).toFixed(decimals);
-      const sign = parseFloat(num) > 0 ? '+' : '';
-      return sign + num;
-    };
-    
-    const weightArrow = getArrow(data.weight_diff);
-    const weightValue = data.weight_diff !== null ? 
-      `${formatDiff(data.weight_diff, 2)} kg ${weightArrow}` : '—';
-    document.getElementById('summary-28days-weight').textContent = weightValue;
-    
-    const kcalsArrow = getArrow(data.kcals_diff);
-    const kcalsValue = data.kcals_diff !== null ? 
-      `${formatDiff(data.kcals_diff, 0)} cal ${kcalsArrow}` : '—';
-    document.getElementById('summary-28days-kcals').textContent = kcalsValue;
-    
-    const waterArrow = getArrow(data.water_diff);
-    const waterValue = data.water_diff !== null ? 
-      `${formatDiff(data.water_diff, 0)} ml ${waterArrow}` : '—';
-    document.getElementById('summary-28days-water').textContent = waterValue;
-    
-    const sleepArrow = getArrow(data.sleep_diff);
-    const sleepValue = data.sleep_diff !== null ? 
-      `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
-    document.getElementById('summary-28days-sleep').textContent = sleepValue;
-    
-    // Fill tonnage rows with detail buttons
-    const tonnageBody = document.getElementById('summary-28days-tonnage-body');
-    tonnageBody.innerHTML = '';
-    
-    if (data.tonnage_diff_by_muscle) {
-      Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
-        const tr = document.createElement('tr');
-        tr.style.borderBottom = '1px solid #e5e7eb';
-        const diff = data.tonnage_diff_by_muscle[muscle];
-        const arrow = getArrow(diff);
-        const diffStr = formatDiff(diff, 0);
-        tr.innerHTML = `
-          <td style="padding:12px; font-weight:600;">${muscle}</td>
-          <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
-          <td style="padding:12px; text-align:center;">
-            <button class="show-muscle-detail secondary" data-muscle="${muscle}" data-summary="28days" style="font-size:0.8rem; padding:4px 8px; cursor:pointer;">Détails</button>
-          </td>
-        `;
-        tonnageBody.appendChild(tr);
-      });
-    }
-    
-    document.getElementById('summary-28days-loader').classList.remove('show');
-    document.getElementById('summary-28days-container').style.display = 'block';
+    loader.classList.remove('show');
+    container.style.display = 'block';
   }
 
   async function loadSummary(athleteId){
