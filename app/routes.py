@@ -981,9 +981,9 @@ def register_routes(app):
             'series': series_list
         }), 200
 
-    @app.route('/api/athlete/performance/last-3-days-for-exercise', methods=['GET'])
-    def api_last_3_days_performance_for_exercise():
-        """Get performance data for an exercise from the last 3 days with data"""
+    @app.route('/api/athlete/performance/session/<int:session_id>/last-3-days-for-exercise', methods=['GET'])
+    def api_last_3_days_performance_for_exercise_in_session(session_id):
+        """Get performance data for an exercise from the last 3 days with data in a specific session"""
         if 'user_id' not in session:
             return jsonify({'error': 'not authenticated'}), 401
         
@@ -995,10 +995,16 @@ def register_routes(app):
         if not exercise_name:
             return jsonify({'error': 'exercise name required'}), 400
         
-        # Get distinct dates for this exercise, ordered by most recent first, limit to 3
-        last_3_dates = db.session.query(db.func.distinct(PerformanceEntry.entry_date)).filter_by(
-            athlete_id=user.id,
-            exercise=exercise_name
+        # Verify the session belongs to this athlete
+        perf_session = ProgramSession.query.get(session_id)
+        if not perf_session:
+            return jsonify({'error': 'session not found'}), 404
+        
+        # Get distinct dates for this exercise IN THIS SESSION, ordered by most recent first, limit to 3
+        last_3_dates = db.session.query(db.func.distinct(PerformanceEntry.entry_date)).filter(
+            PerformanceEntry.athlete_id==user.id,
+            PerformanceEntry.exercise==exercise_name,
+            PerformanceEntry.program_session_id==session_id
         ).order_by(PerformanceEntry.entry_date.desc()).limit(3).all()
         
         if not last_3_dates:
@@ -1007,10 +1013,11 @@ def register_routes(app):
         # Extract dates as list
         dates_list = [date[0] for date in last_3_dates]
         
-        # Get all entries for those dates and exercise
+        # Get all entries for those dates, exercise, and session
         entries = PerformanceEntry.query.filter(
             PerformanceEntry.athlete_id==user.id,
             PerformanceEntry.exercise==exercise_name,
+            PerformanceEntry.program_session_id==session_id,
             PerformanceEntry.entry_date.in_(dates_list)
         ).order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.series_number.asc()).all()
         
