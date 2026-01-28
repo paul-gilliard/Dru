@@ -154,16 +154,61 @@
 
 <!-- Full width: Poids & journaux -->
 <div class="card" style="margin-bottom:12px;">
-  <h3>Poids & journaux</h3>
-  <canvas id="chart-journal" height="160"></canvas>
-  
-  <!-- Journal Table -->
-  <div style="margin-top:20px; display:none;" id="journal-table-container">
-    <table style="width:100%; border-collapse:collapse;">
-      <thead id="journal-table-head">
-      </thead>
-      <tbody id="journal-table-body"></tbody>
-    </table>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <h3 style="margin:0;">Poids & Santé</h3>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button id="journal-prev-period" class="secondary" style="padding:6px 12px;">← Précédent</button>
+      <select id="journal-view-mode" style="padding:6px 8px;">
+        <option value="week">Semaine</option>
+        <option value="month">Mois</option>
+      </select>
+      <button id="journal-next-period" class="secondary" style="padding:6px 12px;">Suivant →</button>
+    </div>
+  </div>
+
+  <!-- Stats cards row -->
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:12px;">
+    <div style="background:#f8fafc; border-radius:6px; padding:12px; border-left:4px solid #0b63d6;">
+      <div style="font-size:0.8rem; color:#64748b; margin-bottom:4px;">Poids moyen</div>
+      <div style="font-size:1.5rem; font-weight:700; color:#0b63d6;" id="journal-avg-weight">—</div>
+    </div>
+    <div style="background:#f8fafc; border-radius:6px; padding:12px; border-left:4px solid #10b981;">
+      <div style="font-size:0.8rem; color:#64748b; margin-bottom:4px;">Kcals moyen</div>
+      <div style="font-size:1.5rem; font-weight:700; color:#10b981;" id="journal-avg-kcals">—</div>
+    </div>
+    <div style="background:#f8fafc; border-radius:6px; padding:12px; border-left:4px solid #f59e0b;">
+      <div style="font-size:0.8rem; color:#64748b; margin-bottom:4px;">Eau moyenne</div>
+      <div style="font-size:1.5rem; font-weight:700; color:#f59e0b;" id="journal-avg-water">—</div>
+    </div>
+    <div style="background:#f8fafc; border-radius:6px; padding:12px; border-left:4px solid #8b5cf6;">
+      <div style="font-size:0.8rem; color:#64748b; margin-bottom:4px;">Sommeil moyen</div>
+      <div style="font-size:1.5rem; font-weight:700; color:#8b5cf6;" id="journal-avg-sleep">—</div>
+    </div>
+  </div>
+
+  <!-- Chart -->
+  <div style="position:relative; height:250px; margin-bottom:12px;">
+    <canvas id="chart-journal"></canvas>
+  </div>
+
+  <!-- Data table -->
+  <div style="margin-top:20px;">
+    <h4 style="margin:0 0 12px 0; color:#334155;">Données détaillées</h4>
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
+        <thead>
+          <tr style="background:#f1f5f9; border-bottom:2px solid #cbd5e1;">
+            <th style="padding:10px; text-align:left; font-weight:600;">Date</th>
+            <th style="padding:10px; text-align:center; font-weight:600;">Poids (kg)</th>
+            <th style="padding:10px; text-align:center; font-weight:600;">Kcals</th>
+            <th style="padding:10px; text-align:center; font-weight:600;">Eau (ml)</th>
+            <th style="padding:10px; text-align:center; font-weight:600;">Sommeil (h)</th>
+          </tr>
+        </thead>
+        <tbody id="journal-table-body">
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 
