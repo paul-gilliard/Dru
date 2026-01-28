@@ -1253,48 +1253,95 @@ document.addEventListener('DOMContentLoaded', function(){
         
         let html = `<h4 style="margin-top:0;">${exercise}</h4>`;
         
-        // Sort dates in descending order
+        // Get today's date and calculate week boundaries
+        const today = new Date();
+        const currentWeekStart = new Date(today);
+        currentWeekStart.setDate(today.getDate() - today.getDay());
+        const currentWeekEnd = new Date(currentWeekStart);
+        currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+        
+        const prevWeekStart = new Date(currentWeekStart);
+        prevWeekStart.setDate(currentWeekStart.getDate() - 7);
+        const prevWeekEnd = new Date(prevWeekStart);
+        prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
+        
+        // Function to check if date is in week range
+        const isInWeek = (dateStr, weekStart, weekEnd) => {
+          const d = new Date(dateStr);
+          return d >= weekStart && d <= weekEnd;
+        };
+        
+        // Sort dates
         const sortedDates = Object.keys(data).sort().reverse();
         
-        html += '<div style="display:flex; flex-direction:column; gap:12px;">';
+        // Separate dates by week
+        const currentWeekDates = sortedDates.filter(d => isInWeek(d, currentWeekStart, currentWeekEnd));
+        const prevWeekDates = sortedDates.filter(d => isInWeek(d, prevWeekStart, prevWeekEnd));
+        const otherDates = sortedDates.filter(d => !isInWeek(d, currentWeekStart, currentWeekEnd) && !isInWeek(d, prevWeekStart, prevWeekEnd));
         
-        sortedDates.forEach(date => {
-          const series = data[date];
-          html += `<div style="border:1px solid #e5e7eb; border-radius:6px; padding:12px; background:#f9fafb;">`;
-          html += `<h5 style="margin:0 0 8px 0; color:#0b63d6;">${date}</h5>`;
-          html += '<table style="width:100%; border-collapse:collapse; font-size:0.9rem;">';
-          html += `<tr style="background:#f3f4f6; border-bottom:1px solid #d1d5db;">
-            <th style="padding:6px; text-align:center; font-weight:600;">Série</th>
-            <th style="padding:6px; text-align:center; font-weight:600;">Reps</th>
-            <th style="padding:6px; text-align:center; font-weight:600;">Poids (kg)</th>
-            <th style="padding:6px; text-align:center; font-weight:600;">RPE</th>
-            <th style="padding:6px; text-align:left; font-weight:600;">Notes</th>
-          </tr>`;
+        // Helper to build table for a set of dates
+        const buildWeekTable = (dates, weekLabel) => {
+          if (dates.length === 0) {
+            return `<div style="color:#94a3b8; text-align:center; padding:12px;">Aucune donnée</div>`;
+          }
           
-          // Sort series by series_number
-          series.sort((a, b) => (a.series_number || 0) - (b.series_number || 0));
+          let table = `<div style="margin-bottom:12px;">`;
+          table += `<h5 style="margin:0 0 8px 0; color:#0b63d6; font-size:0.9rem;">${weekLabel}</h5>`;
           
-          series.forEach(s => {
-            const seriesNum = s.series_number || '—';
-            const reps = s.reps !== null && s.reps !== undefined ? s.reps.toFixed(1) : '—';
-            const load = s.load !== null && s.load !== undefined ? s.load.toFixed(1) : '—';
-            const rpe = s.rpe !== null && s.rpe !== undefined ? s.rpe : '—';
-            const notes = s.notes || '';
-            
-            html += `<tr style="border-bottom:1px solid #e5e7eb;">
-              <td style="padding:6px; text-align:center;">${seriesNum}</td>
-              <td style="padding:6px; text-align:center;">${reps}</td>
-              <td style="padding:6px; text-align:center;">${load}</td>
-              <td style="padding:6px; text-align:center;">${rpe}</td>
-              <td style="padding:6px; text-align:left; color:#666; font-size:0.85rem;">${notes}</td>
+          dates.forEach(date => {
+            const series = data[date];
+            table += `<div style="margin-bottom:8px; border:1px solid #d1d5db; border-radius:4px; padding:8px; background:#fff;">`;
+            table += `<div style="font-weight:600; font-size:0.85rem; color:#333; margin-bottom:6px;">${date}</div>`;
+            table += '<table style="width:100%; border-collapse:collapse; font-size:0.8rem;">';
+            table += `<tr style="background:#f9fafb; border-bottom:1px solid #e5e7eb;">
+              <th style="padding:4px; text-align:center; font-weight:600;">S</th>
+              <th style="padding:4px; text-align:center; font-weight:600;">Reps</th>
+              <th style="padding:4px; text-align:center; font-weight:600;">Poids</th>
+              <th style="padding:4px; text-align:center; font-weight:600;">RPE</th>
             </tr>`;
+            
+            // Sort series by series_number
+            series.sort((a, b) => (a.series_number || 0) - (b.series_number || 0));
+            
+            series.forEach(s => {
+              const seriesNum = s.series_number || '—';
+              const reps = s.reps !== null && s.reps !== undefined ? s.reps.toFixed(1) : '—';
+              const load = s.load !== null && s.load !== undefined ? s.load.toFixed(1) : '—';
+              const rpe = s.rpe !== null && s.rpe !== undefined ? s.rpe : '—';
+              
+              table += `<tr style="border-bottom:1px solid #e5e7eb;">
+                <td style="padding:4px; text-align:center;">${seriesNum}</td>
+                <td style="padding:4px; text-align:center;">${reps}</td>
+                <td style="padding:4px; text-align:center;">${load}</td>
+                <td style="padding:4px; text-align:center;">${rpe}</td>
+              </tr>`;
+            });
+            
+            table += '</table>';
+            table += '</div>';
           });
           
-          html += '</table>';
-          html += '</div>';
-        });
+          table += '</div>';
+          return table;
+        };
         
+        // Build 2-column layout for current and previous week
+        html += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">';
+        html += `<div style="border:1px solid #e5e7eb; border-radius:6px; padding:12px; background:#f9fafb;">`;
+        html += buildWeekTable(currentWeekDates, 'Semaine courante');
         html += '</div>';
+        html += `<div style="border:1px solid #e5e7eb; border-radius:6px; padding:12px; background:#f9fafb;">`;
+        html += buildWeekTable(prevWeekDates, 'Semaine précédente');
+        html += '</div>';
+        html += '</div>';
+        
+        // Add other dates below if any
+        if (otherDates.length > 0) {
+          html += '<div style="margin-top:12px; border-top:2px solid #e5e7eb; padding-top:12px;">';
+          html += '<h5 style="margin:0 0 8px 0; color:#64748b; font-size:0.9rem;">Autres dates</h5>';
+          html += buildWeekTable(otherDates, '');
+          html += '</div>';
+        }
         
         document.getElementById('series-detail-content').innerHTML = html;
       }, 100);
