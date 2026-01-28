@@ -379,74 +379,8 @@
         <p>Synthèse semaine actuelle vs précédente pour chaque athlète</p>
     </div>
 
-    <!-- Weekly Comparisons Section -->
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px; background: rgba(255,255,255,0.95); padding: 30px; border-radius: 14px; box-shadow: 0 8px 30px rgba(0,0,0,0.15);">
-        <!-- Comparison 1: S vs S-1 -->
-        <div style="background: white; border-radius: 10px; padding: 20px; border-left: 4px solid #667eea;">
-            <h3 style="margin: 0 0 15px 0; color: #667eea; font-size: 1.1em;">S vs S-1</h3>
-            <div id="comparison-1-loader" style="text-align: center; padding: 20px; display: flex; align-items: center; justify-content: center; gap: 10px;">
-                <div style="width: 20px; height: 20px; border: 3px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <span style="color: #64748b;">Chargement...</span>
-            </div>
-            <div id="comparison-1-container" style="display: none;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
-                    <tbody id="comparison-1-body"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Comparison 2: S vs S-2 -->
-        <div style="background: white; border-radius: 10px; padding: 20px; border-left: 4px solid #764ba2;">
-            <h3 style="margin: 0 0 15px 0; color: #764ba2; font-size: 1.1em;">S vs S-2</h3>
-            <div id="comparison-2-loader" style="text-align: center; padding: 20px; display: flex; align-items: center; justify-content: center; gap: 10px;">
-                <div style="width: 20px; height: 20px; border: 3px solid #e5e7eb; border-top-color: #764ba2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <span style="color: #64748b;">Chargement...</span>
-            </div>
-            <div id="comparison-2-container" style="display: none;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
-                    <tbody id="comparison-2-body"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Comparison 3: S-1 vs S-2 -->
-        <div style="background: white; border-radius: 10px; padding: 20px; border-left: 4px solid #667eea;">
-            <h3 style="margin: 0 0 15px 0; color: #667eea; font-size: 1.1em;">S-1 vs S-2</h3>
-            <div id="comparison-3-loader" style="text-align: center; padding: 20px; display: flex; align-items: center; justify-content: center; gap: 10px;">
-                <div style="width: 20px; height: 20px; border: 3px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <span style="color: #64748b;">Chargement...</span>
-            </div>
-            <div id="comparison-3-container" style="display: none;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
-                    <tbody id="comparison-3-body"></tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Comparison 4: S-1 vs S-3 -->
-        <div style="background: white; border-radius: 10px; padding: 20px; border-left: 4px solid #764ba2;">
-            <h3 style="margin: 0 0 15px 0; color: #764ba2; font-size: 1.1em;">S-1 vs S-3</h3>
-            <div id="comparison-4-loader" style="text-align: center; padding: 20px; display: flex; align-items: center; justify-content: center; gap: 10px;">
-                <div style="width: 20px; height: 20px; border: 3px solid #e5e7eb; border-top-color: #764ba2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                <span style="color: #64748b;">Chargement...</span>
-            </div>
-            <div id="comparison-4-container" style="display: none;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 0.9rem;">
-                    <tbody id="comparison-4-body"></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- Style for spin animation -->
-    <style>
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-    </style>
-
     <!-- Athletes cards grid -->
+    <div class="athletes-grid" id="active-athletes">
     <div class="athletes-grid" id="active-athletes">
         {% for athlete in athletes %}
         <div class="athlete-card" id="athlete-card-{{ athlete.id }}" data-athlete-id="{{ athlete.id }}">
@@ -602,33 +536,78 @@
 
         html += '</tbody></table>';
 
-        // Tonnage by muscle group
-        if (Object.keys(data.tonnage_diff_by_muscle || {}).length > 0) {
-            html += '<div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">';
-            html += '<h4 style="color: #333; font-size: 0.95em; margin: 0 0 12px 0;">Tonnage par groupe</h4>';
-            for (const [muscle, diff] of Object.entries(data.tonnage_diff_by_muscle)) {
-                const trend = getTrendArrow(diff);
-                const diffClass = getDiffClass(diff, 'tonnage');
-                const current = (data.tonnage_by_muscle?.[muscle] || 0).toFixed(0);
-                html += `
-                    <div class="muscle-group-item">
-                        <span class="muscle-name">${muscle}</span>
-                        <span class="muscle-diff ${diffClass}">
-                            ${trend} ${Math.abs(diff.toFixed(0))} kg·rep
-                        </span>
+        // Add 4 comparison tables section
+        html += `
+            <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
+                <h4 style="color: #333; font-size: 0.95em; margin: 0 0 12px 0;">Comparaisons hebdomadaires</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <!-- Comparison 1: S vs S-1 -->
+                    <div style="background: #f9fafb; border-radius: 6px; padding: 12px; border-left: 3px solid #667eea;">
+                        <h5 style="margin: 0 0 8px 0; color: #667eea; font-size: 0.85em; font-weight: 600;">S vs S-1</h5>
+                        <div id="comparison-${athleteId}-1-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                            <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
+                        </div>
+                        <div id="comparison-${athleteId}-1-container" style="display: none;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                                <tbody id="comparison-${athleteId}-1-body"></tbody>
+                            </table>
+                        </div>
                     </div>
-                `;
-            }
-            html += '</div>';
-        } else if (data.tonnage_diff_by_muscle) {
-            html += '<div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb; text-align: center; color: #999; font-size: 0.9em;">Pas de données de performance</div>';
-        }
+
+                    <!-- Comparison 2: S vs S-2 -->
+                    <div style="background: #f9fafb; border-radius: 6px; padding: 12px; border-left: 3px solid #764ba2;">
+                        <h5 style="margin: 0 0 8px 0; color: #764ba2; font-size: 0.85em; font-weight: 600;">S vs S-2</h5>
+                        <div id="comparison-${athleteId}-2-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #764ba2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                            <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
+                        </div>
+                        <div id="comparison-${athleteId}-2-container" style="display: none;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                                <tbody id="comparison-${athleteId}-2-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Comparison 3: S-1 vs S-2 -->
+                    <div style="background: #f9fafb; border-radius: 6px; padding: 12px; border-left: 3px solid #667eea;">
+                        <h5 style="margin: 0 0 8px 0; color: #667eea; font-size: 0.85em; font-weight: 600;">S-1 vs S-2</h5>
+                        <div id="comparison-${athleteId}-3-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                            <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
+                        </div>
+                        <div id="comparison-${athleteId}-3-container" style="display: none;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                                <tbody id="comparison-${athleteId}-3-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Comparison 4: S-1 vs S-3 -->
+                    <div style="background: #f9fafb; border-radius: 6px; padding: 12px; border-left: 3px solid #764ba2;">
+                        <h5 style="margin: 0 0 8px 0; color: #764ba2; font-size: 0.85em; font-weight: 600;">S-1 vs S-3</h5>
+                        <div id="comparison-${athleteId}-4-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #764ba2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                            <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
+                        </div>
+                        <div id="comparison-${athleteId}-4-container" style="display: none;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                                <tbody id="comparison-${athleteId}-4-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
 
         container.innerHTML = html || '<div class="no-data">Pas de données disponibles</div>';
         
         // Hide loader and show content
         document.getElementById(`loader-${athleteId}`).classList.add('hidden');
         container.style.display = 'block';
+        
+        // Load comparisons for this athlete
+        loadComparisonForAthlete(athleteId);
     }
 
     function getTrendArrow(diff) {
@@ -741,8 +720,25 @@
         return Math.max(0, diffDays);
     }
 
-    // Comparison display function (same as coach_stats.js)
-    async function displayComparison(tableNum, data) {
+    // Load and display comparisons for an athlete
+    async function loadComparisonForAthlete(athleteId) {
+        try {
+            const res = await fetch(`/coach/stats/athlete/${athleteId}/quick-data.json`);
+            if (!res.ok) return;
+            
+            const data = await res.json();
+            
+            if (data.summary_7days) displayComparisonInCard(athleteId, 1, data.summary_7days);
+            if (data.summary_14days) displayComparisonInCard(athleteId, 2, data.summary_14days);
+            if (data.summary_21days) displayComparisonInCard(athleteId, 3, data.summary_21days);
+            if (data.summary_28days) displayComparisonInCard(athleteId, 4, data.summary_28days);
+        } catch (err) {
+            console.error('Error loading comparisons for athlete', athleteId, err);
+        }
+    }
+
+    // Display comparison in athlete card
+    async function displayComparisonInCard(athleteId, tableNum, data) {
         if (!data) return;
         
         const getArrow = (diff) => {
@@ -763,20 +759,20 @@
             return sign + num;
         };
         
-        const loader = document.getElementById(`comparison-${tableNum}-loader`);
-        const container = document.getElementById(`comparison-${tableNum}-container`);
-        const tbody = document.getElementById(`comparison-${tableNum}-body`);
+        const loader = document.getElementById(`comparison-${athleteId}-${tableNum}-loader`);
+        const container = document.getElementById(`comparison-${athleteId}-${tableNum}-container`);
+        const tbody = document.getElementById(`comparison-${athleteId}-${tableNum}-body`);
         
         if (!tbody) return;
         tbody.innerHTML = '';
         
         // Build header
         const headerHtml = `
-            <tr style="background:#f3f4f6; border-bottom:2px solid #d1d5db; font-size:0.85rem;">
-                <th style="padding:8px; text-align:left; font-weight:600;">Métrique</th>
-                <th style="padding:8px; text-align:center; font-weight:600; width:100px;">${data.label1}</th>
-                <th style="padding:8px; text-align:center; font-weight:600; width:100px;">${data.label2}</th>
-                <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Diff</th>
+            <tr style="background:#f3f4f6; border-bottom:1px solid #d1d5db; font-size:0.7rem;">
+                <th style="padding:4px; text-align:left; font-weight:600;">Métrique</th>
+                <th style="padding:4px; text-align:center; font-weight:600; width:60px;">Courant</th>
+                <th style="padding:4px; text-align:center; font-weight:600; width:60px;">Préc.</th>
+                <th style="padding:4px; text-align:center; font-weight:600; width:50px;">Diff</th>
             </tr>
         `;
         tbody.innerHTML += headerHtml;
@@ -786,10 +782,10 @@
         poidsTr.style.borderBottom = '1px solid #e5e7eb';
         const poidsArrow = getArrow(data.weight_diff);
         poidsTr.innerHTML = `
-            <td style="padding:8px; font-weight:600;">Poids (kg)</td>
-            <td style="padding:8px; text-align:center;">${formatValue(data.weight_current, 2)}</td>
-            <td style="padding:8px; text-align:center;">${formatValue(data.weight_previous, 2)}</td>
-            <td style="padding:8px; text-align:center;">${formatDiff(data.weight_diff, 2)} ${poidsArrow}</td>
+            <td style="padding:4px; font-weight:500; font-size:0.7rem;">Poids</td>
+            <td style="padding:4px; text-align:center; font-size:0.7rem;">${formatValue(data.weight_current, 1)}</td>
+            <td style="padding:4px; text-align:center; font-size:0.7rem;">${formatValue(data.weight_previous, 1)}</td>
+            <td style="padding:4px; text-align:center; font-size:0.65rem;">${formatDiff(data.weight_diff, 1)} ${poidsArrow}</td>
         `;
         tbody.appendChild(poidsTr);
         
@@ -798,10 +794,10 @@
         kcalsTr.style.borderBottom = '1px solid #e5e7eb';
         const kcalsArrow = getArrow(data.kcals_diff);
         kcalsTr.innerHTML = `
-            <td style="padding:8px; font-weight:600;">Kcals</td>
-            <td style="padding:8px; text-align:center;">${formatValue(data.kcals_current, 0)}</td>
-            <td style="padding:8px; text-align:center;">${formatValue(data.kcals_previous, 0)}</td>
-            <td style="padding:8px; text-align:center;">${formatDiff(data.kcals_diff, 0)} ${kcalsArrow}</td>
+            <td style="padding:4px; font-weight:500; font-size:0.7rem;">Kcals</td>
+            <td style="padding:4px; text-align:center; font-size:0.7rem;">${formatValue(data.kcals_current, 0)}</td>
+            <td style="padding:4px; text-align:center; font-size:0.7rem;">${formatValue(data.kcals_previous, 0)}</td>
+            <td style="padding:4px; text-align:center; font-size:0.65rem;">${formatDiff(data.kcals_diff, 0)} ${kcalsArrow}</td>
         `;
         tbody.appendChild(kcalsTr);
         
@@ -810,22 +806,21 @@
         eauTr.style.borderBottom = '1px solid #e5e7eb';
         const eauArrow = getArrow(data.water_diff);
         eauTr.innerHTML = `
-            <td style="padding:8px; font-weight:600;">Eau (ml)</td>
-            <td style="padding:8px; text-align:center;">${formatValue(data.water_current, 0)}</td>
-            <td style="padding:8px; text-align:center;">${formatValue(data.water_previous, 0)}</td>
-            <td style="padding:8px; text-align:center;">${formatDiff(data.water_diff, 0)} ${eauArrow}</td>
+            <td style="padding:4px; font-weight:500; font-size:0.7rem;">Eau</td>
+            <td style="padding:4px; text-align:center; font-size:0.7rem;">${formatValue(data.water_current, 0)}</td>
+            <td style="padding:4px; text-align:center; font-size:0.7rem;">${formatValue(data.water_previous, 0)}</td>
+            <td style="padding:4px; text-align:center; font-size:0.65rem;">${formatDiff(data.water_diff, 0)} ${eauArrow}</td>
         `;
         tbody.appendChild(eauTr);
         
         // Sommeil
         let sommeilTr = document.createElement('tr');
-        sommeilTr.style.borderBottom = '1px solid #e5e7eb';
         const sommeilArrow = getArrow(data.sleep_diff);
         sommeilTr.innerHTML = `
-            <td style="padding:8px; font-weight:600;">Sommeil (h)</td>
-            <td style="padding:8px; text-align:center;">${formatValue(data.sleep_current, 1)}</td>
-            <td style="padding:8px; text-align:center;">${formatValue(data.sleep_previous, 1)}</td>
-            <td style="padding:8px; text-align:center;">${formatDiff(data.sleep_diff, 1)} ${sommeilArrow}</td>
+            <td style="padding:4px; font-weight:500; font-size:0.7rem;">Sommeil</td>
+            <td style="padding:4px; text-align:center; font-size:0.7rem;">${formatValue(data.sleep_current, 1)}</td>
+            <td style="padding:4px; text-align:center; font-size:0.7rem;">${formatValue(data.sleep_previous, 1)}</td>
+            <td style="padding:4px; text-align:center; font-size:0.65rem;">${formatDiff(data.sleep_diff, 1)} ${sommeilArrow}</td>
         `;
         tbody.appendChild(sommeilTr);
         
@@ -833,34 +828,8 @@
         container.style.display = 'block';
     }
 
-    // Load comparisons from an athlete (we'll get the first athlete)
-    async function loadComparisons() {
-        try {
-            if (athletes.length === 0) return;
-            const firstAthleteId = athletes[0];
-            
-            const res = await fetch(`/coach/stats/athlete/${firstAthleteId}/quick-data.json`);
-            if (!res.ok) {
-                console.error('Quick-data load failed:', res.status);
-                return;
-            }
-            
-            const data = await res.json();
-            
-            if (data.summary_7days) await displayComparison(1, data.summary_7days);
-            if (data.summary_14days) await displayComparison(2, data.summary_14days);
-            if (data.summary_21days) await displayComparison(3, data.summary_21days);
-            if (data.summary_28days) await displayComparison(4, data.summary_28days);
-        } catch (err) {
-            console.error('Error loading comparisons:', err);
-        }
-    }
-
     // Load data when page loads
     async function initPage() {
-        // Load comparisons first
-        await loadComparisons();
-        
         // Load markings
         try {
             const response = await fetch('/coach/bilan-hebdo/check-markings');
