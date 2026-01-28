@@ -1,6 +1,5 @@
 document.addEventListener('DOMContentLoaded', function(){
   const athleteSelect = document.getElementById('stats-athlete-select');
-  const programSelect = document.getElementById('stats-program-select');
   const chartJournalCtx = document.getElementById('chart-journal').getContext('2d');
   const muscleSelect = document.getElementById('stats-muscle-select');
   const clearMuscle = document.getElementById('clear-muscle');
@@ -27,8 +26,6 @@ document.addEventListener('DOMContentLoaded', function(){
   let otherSeriesChart = null;
   let tonnageChart = null;
   let tonnageCache = null;
-  let programExercises = {}; // Track exercises from selected program
-  let selectedProgramId = null; // Track selected program
   let dateRange = { start: null, end: null }; // Date filter state
 
   // Filter data by date range
@@ -158,11 +155,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
   // Muscle details are now preloaded via loadQuickData() - no separate function needed
   async function loadPerformance(athleteId){
-    // Use program-specific endpoint if program is selected
-    const url = selectedProgramId 
-      ? `/coach/stats/athlete/${athleteId}/program/${selectedProgramId}/performance.json`
-      : `/coach/stats/athlete/${athleteId}/performance.json`;
-    const res = await fetch(url);
+    const res = await fetch(`/coach/stats/athlete/${athleteId}/performance.json`);
     if (!res.ok) return;
     let data = await res.json();
     
@@ -191,11 +184,7 @@ document.addEventListener('DOMContentLoaded', function(){
 
   async function loadTonnage(athleteId){
     try {
-      // Use program-specific endpoint if program is selected
-      const url = selectedProgramId 
-        ? `/coach/stats/athlete/${athleteId}/program/${selectedProgramId}/tonnage-by-muscle.json`
-        : `/coach/stats/athlete/${athleteId}/tonnage-by-muscle.json`;
-      const res = await fetch(url);
+      const res = await fetch(`/coach/stats/athlete/${athleteId}/tonnage-by-muscle.json`);
       if (!res.ok) {
         console.log('Tonnage load failed:', res.status);
         return;
@@ -1011,86 +1000,13 @@ document.addEventListener('DOMContentLoaded', function(){
     loadTonnage(athleteId).then(() => console.log('Tonnage loaded'));
   });
 
-  programSelect.addEventListener('change', async function(){
-    const programId = this.value;
-    const athleteId = athleteSelect.value;
-    
-    if (!programId) {
-      selectedProgramId = null;
-      programExercises = {};
-      document.getElementById('main-series-container').style.display = 'none';
-      document.getElementById('other-series-container').style.display = 'none';
-      document.getElementById('perf-chart-container').style.display = 'none';
-      document.getElementById('other-series-chart-container').style.display = 'none';
-      exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
-      muscleSelect.innerHTML = '<option value="">— choisir un groupe musculaire —</option>';
-      document.getElementById('tonnage-chart-container').style.display = 'none';
-      return;
-    }
-    
-    selectedProgramId = programId;
-    
-    // Load exercises for this program FIRST
-    try {
-      const res = await fetch(`/api/program/${programId}/exercises`);
-      if (!res.ok) {
-        console.error('Failed to load program exercises:', res.status);
-        return;
-      }
-      const data = await res.json();
-      
-      // Store program exercises globally
-      programExercises = {};
-      data.exercises.forEach(ex => {
-        programExercises[ex.name] = ex.muscle;
-      });
-      
-      // THEN load performance data (which will now use the program-specific endpoint)
-      await loadPerformance(athleteId);
-      
-      // Load tonnage too
-      await loadTonnage(athleteId);
-      
-      // The backend already filters the data, so we just need to populate the select dropdowns
-      // Update exercise select with exercises from this program (already in perfCache)
-      if (perfCache) {
-        exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
-        Object.keys(perfCache).sort().forEach(ex => {
-          const opt = document.createElement('option');
-          opt.value = ex;
-          opt.textContent = ex;
-          exSelect.appendChild(opt);
-        });
-      }
-      
-      // Update muscle select with only muscles from program exercises
-      muscleSelect.innerHTML = '<option value="">— choisir un groupe musculaire —</option>';
-      const programMuscles = new Set();
-      Object.values(programExercises).forEach(muscle => {
-        if (muscle) programMuscles.add(muscle);
-      });
-      Array.from(programMuscles).sort().forEach(muscle => {
-        const opt = document.createElement('option');
-        opt.value = muscle;
-        opt.textContent = muscle;
-        muscleSelect.appendChild(opt);
-      });
-    } catch (err) {
-      console.error('Error loading program exercises:', err);
-    }
-  });
-
-  // Function to update exercise select based on selected muscle group and program
+  // Function to update exercise select based on selected muscle group
   function updateExercisesForMuscle(muscleGroup) {
     exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
     if (!muscleGroup) {
-      // Show exercises for selected program or all if no program selected
+      // Show all exercises
       if (perfCache) {
         Object.keys(perfCache).sort().forEach(ex => {
-          // If a program is selected, only show exercises from that program
-          if (selectedProgramId && programExercises[ex] === undefined) {
-            return;
-          }
           const opt = document.createElement('option');
           opt.value = ex;
           opt.textContent = ex;
@@ -1099,16 +1015,12 @@ document.addEventListener('DOMContentLoaded', function(){
       }
       return;
     }
-    // Show only exercises for selected muscle group (and from selected program if any)
+    // Show only exercises for selected muscle group
     if (perfCache) {
       Object.keys(perfCache).sort().forEach(ex => {
         const exData = perfCache[ex];
         // Check if exercise belongs to the selected muscle group
         if (exData.muscle_group === muscleGroup) {
-          // If a program is selected, only show exercises from that program
-          if (selectedProgramId && programExercises[ex] === undefined) {
-            return;
-          }
           const opt = document.createElement('option');
           opt.value = ex;
           opt.textContent = ex;
