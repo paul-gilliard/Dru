@@ -50,16 +50,6 @@
         <option value="{{ a.id }}">{{ a.username }}</option>
         {% endfor %}
       </select>
-
-      <label style="display:flex; align-items:center; gap:8px; margin-left:12px;">
-        <input id="toggle-kcals" type="checkbox" checked> Kcals
-      </label>
-      <label style="display:flex; align-items:center; gap:8px;">
-        <input id="toggle-water" type="checkbox" checked> Eau
-      </label>
-      <label style="display:flex; align-items:center; gap:8px;">
-        <input id="toggle-sleep" type="checkbox"> Sommeil
-      </label>
     </div>
     
     <!-- Date filters -->
@@ -156,7 +146,17 @@
 <div class="card" style="margin-bottom:12px;">
   <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
     <h3 style="margin:0;">Poids & Santé</h3>
-    <div style="display:flex; gap:8px; align-items:center;">
+    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+      <label style="display:flex; align-items:center; gap:6px; font-size:0.9rem;">
+        <input id="toggle-kcals" type="checkbox" checked> Kcals
+      </label>
+      <label style="display:flex; align-items:center; gap:6px; font-size:0.9rem;">
+        <input id="toggle-water" type="checkbox" checked> Eau
+      </label>
+      <label style="display:flex; align-items:center; gap:6px; font-size:0.9rem;">
+        <input id="toggle-sleep" type="checkbox"> Sommeil
+      </label>
+      <div style="border-left:1px solid #e5e7eb; margin:0 8px;"></div>
       <button id="journal-prev-period" class="secondary" style="padding:6px 12px;">← Précédent</button>
       <select id="journal-view-mode" style="padding:6px 8px;">
         <option value="week">Semaine</option>
