@@ -235,6 +235,7 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   let perfCache = null;
+  let remarksData = []; // All remarks/notes from performance entries
   let muscleDetailCache = {
     '7days': {},
     '14days': {},
@@ -270,6 +271,38 @@ document.addEventListener('DOMContentLoaded', function(){
       }
       
       perfCache = data;
+      
+      // Extract remarks from performance data
+      remarksData = [];
+      Object.keys(data).forEach(exercise => {
+        const exData = data[exercise];
+        if (exData.main_series) {
+          exData.main_series.forEach(entry => {
+            if (entry.notes && entry.notes.trim()) {
+              remarksData.push({
+                date: entry.date,
+                exercise: exercise,
+                notes: entry.notes
+              });
+            }
+          });
+        }
+        if (exData.other_series) {
+          exData.other_series.forEach(entry => {
+            if (entry.notes && entry.notes.trim()) {
+              remarksData.push({
+                date: entry.date,
+                exercise: exercise,
+                notes: entry.notes
+              });
+            }
+          });
+        }
+      });
+      
+      console.log('Remarks loaded:', remarksData.length);
+      displayRemarks();
+      
       // Populate exercise select with all exercises
       exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
       if (data) {
@@ -291,6 +324,42 @@ document.addEventListener('DOMContentLoaded', function(){
     } finally {
       if (performanceLoader) performanceLoader.classList.remove('show');
     }
+  }
+
+  function displayRemarks() {
+    const loader = document.getElementById('remarks-loader');
+    const container = document.getElementById('remarks-container');
+    const body = document.getElementById('remarks-body');
+    const empty = document.getElementById('remarks-empty');
+    
+    if (!loader) return;
+    loader.classList.remove('show');
+    
+    if (!remarksData || remarksData.length === 0) {
+      container.style.display = 'block';
+      body.innerHTML = '';
+      empty.style.display = 'block';
+      return;
+    }
+    
+    container.style.display = 'block';
+    empty.style.display = 'none';
+    body.innerHTML = '';
+    
+    // Sort by date descending
+    remarksData.sort((a, b) => new Date(b.date) - new Date(a.date));
+    
+    remarksData.forEach((remark, idx) => {
+      const tr = document.createElement('tr');
+      tr.style.borderBottom = '1px solid #e5e7eb';
+      tr.style.background = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
+      tr.innerHTML = `
+        <td style="padding:10px; font-family:monospace; color:#64748b;">${remark.date}</td>
+        <td style="padding:10px; font-weight:500;">${remark.exercise}</td>
+        <td style="padding:10px; color:#475569;">${remark.notes}</td>
+      `;
+      body.appendChild(tr);
+    });
   }
 
 
@@ -954,18 +1023,14 @@ document.addEventListener('DOMContentLoaded', function(){
     const athleteId = this.value;
     if (!athleteId) {
       // Hide loaders when no athlete selected
-      for (let i = 1; i <= 4; i++) {
-        const loader = document.getElementById(`comparison-${i}-loader`);
-        if (loader) loader.classList.remove('show');
-      }
+      const remarksLoader = document.getElementById('remarks-loader');
+      if (remarksLoader) remarksLoader.classList.remove('show');
       return;
     }
     
     // Show loaders when athlete is selected
-    for (let i = 1; i <= 4; i++) {
-      const loader = document.getElementById(`comparison-${i}-loader`);
-      if (loader) loader.classList.add('show');
-    }
+    const remarksLoader = document.getElementById('remarks-loader');
+    if (remarksLoader) remarksLoader.classList.add('show');
     
     // Clear performance data
     document.getElementById('main-series-container').style.display = 'none';

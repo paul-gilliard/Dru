@@ -95,50 +95,31 @@
       <div class="spinner"></div>
       <span>Chargement...</span>
     </div>
-    <div id="comparison-1-container" style="display:none;">
-      <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-        <tbody id="comparison-1-body"></tbody>
-      </table>
-    </div>
-  </div>
-  <div class="card">
-    <h3>S vs S-2</h3>
-    <div id="comparison-2-loader" class="loading-container">
-      <div class="spinner"></div>
-      <span>Chargement...</span>
-    </div>
-    <div id="comparison-2-container" style="display:none;">
-      <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-        <tbody id="comparison-2-body"></tbody>
-      </table>
-    </div>
   </div>
 </div>
 
-<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
-  <div class="card">
-    <h3>S-1 vs S-2</h3>
-    <div id="comparison-3-loader" class="loading-container">
-      <div class="spinner"></div>
-      <span>Chargement...</span>
-    </div>
-    <div id="comparison-3-container" style="display:none;">
-      <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-        <tbody id="comparison-3-body"></tbody>
-      </table>
-    </div>
+<!-- Full width: Remarques -->
+<div class="card" style="margin-bottom:12px;">
+  <h3>Remarques</h3>
+  <div id="remarks-loader" class="loading-container">
+    <div class="spinner"></div>
+    <span>Chargement...</span>
   </div>
-  <div class="card">
-    <h3>S-1 vs S-3</h3>
-    <div id="comparison-4-loader" class="loading-container">
-      <div class="spinner"></div>
-      <span>Chargement...</span>
-    </div>
-    <div id="comparison-4-container" style="display:none;">
+  <div id="remarks-container" style="display:none;">
+    <div style="overflow-x:auto;">
       <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-        <tbody id="comparison-4-body"></tbody>
+        <thead>
+          <tr style="background:#f1f5f9; border-bottom:2px solid #cbd5e1;">
+            <th style="padding:10px; text-align:left; font-weight:600; width:120px;">Date</th>
+            <th style="padding:10px; text-align:left; font-weight:600; width:150px;">Exercice</th>
+            <th style="padding:10px; text-align:left; font-weight:600;">Remarque</th>
+          </tr>
+        </thead>
+        <tbody id="remarks-body">
+        </tbody>
       </table>
     </div>
+    <div id="remarks-empty" style="padding:20px; text-align:center; color:#94a3b8;">Aucune remarque pour cette période</div>
   </div>
 </div>
 
