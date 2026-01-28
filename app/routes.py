@@ -3685,3 +3685,42 @@ def _to_float_none(val):
         return float(val)
     except Exception:
         return None
+
+    @app.route('/coach/stats/athlete/<int:athlete_id>/exercise/<exercise_name>/series.json')
+    def coach_stats_athlete_exercise_series(athlete_id, exercise_name):
+        """Get all series for a specific exercise with date info"""
+        try:
+            if 'user_id' not in session:
+                return jsonify({'error':'unauth'}), 401
+            user = User.query.get(session['user_id'])
+            if not user or user.role != 'coach':
+                return jsonify({'error':'forbidden'}), 403
+            
+            # Get all performance entries for this exercise
+            perf_entries = PerformanceEntry.query.filter(
+                PerformanceEntry.athlete_id==athlete_id,
+                PerformanceEntry.exercise==exercise_name
+            ).order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.series_number).all()
+            
+            # Group by date
+            series_by_date = {}
+            for entry in perf_entries:
+                date_key = entry.entry_date.isoformat()
+                if date_key not in series_by_date:
+                    series_by_date[date_key] = []
+                
+                series_by_date[date_key].append({
+                    'series_number': entry.series_number,
+                    'reps': entry.reps,
+                    'load': entry.load,
+                    'rpe': entry.rpe,
+                    'notes': entry.notes
+                })
+            
+            return jsonify({
+                'exercise': exercise_name,
+                'series_by_date': series_by_date
+            })
+        except Exception as e:
+            print(f"Error in exercise-series route: {str(e)}")
+            return jsonify({'error': str(e)}), 500
