@@ -272,11 +272,13 @@ document.addEventListener('DOMContentLoaded', function(){
       
       perfCache = data;
       
-      // Extract remarks from performance data
+      // Extract remarks from performance data - check all entries for notes
       remarksData = [];
       Object.keys(data).forEach(exercise => {
         const exData = data[exercise];
-        if (exData.main_series) {
+        console.log('Checking exercise:', exercise, exData);
+        
+        if (exData.main_series && Array.isArray(exData.main_series)) {
           exData.main_series.forEach(entry => {
             if (entry.notes && entry.notes.trim()) {
               remarksData.push({
@@ -287,7 +289,7 @@ document.addEventListener('DOMContentLoaded', function(){
             }
           });
         }
-        if (exData.other_series) {
+        if (exData.other_series && Array.isArray(exData.other_series)) {
           exData.other_series.forEach(entry => {
             if (entry.notes && entry.notes.trim()) {
               remarksData.push({
@@ -299,6 +301,8 @@ document.addEventListener('DOMContentLoaded', function(){
           });
         }
       });
+      
+      console.log('Total remarks found:', remarksData.length, remarksData);
       
       console.log('Remarks loaded:', remarksData.length);
       displayRemarks();
