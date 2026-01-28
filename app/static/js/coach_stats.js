@@ -169,9 +169,16 @@ document.addEventListener('DOMContentLoaded', function(){
     }
     
     perfCache = data;
-    // populate exercise select with filter based on selected muscle group
-    const selectedMuscle = muscleSelect.value;
-    updateExercisesForMuscle(selectedMuscle);
+    // Populate exercise select with all exercises
+    exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
+    if (data) {
+      Object.keys(data).sort().forEach(ex => {
+        const opt = document.createElement('option');
+        opt.value = ex;
+        opt.textContent = ex;
+        exSelect.appendChild(opt);
+      });
+    }
     
     // clear tables
     document.getElementById('main-series-table').querySelector('tbody').innerHTML = '';
@@ -943,9 +950,6 @@ document.addEventListener('DOMContentLoaded', function(){
   athleteSelect.addEventListener('change', async function(){
     const athleteId = this.value;
     if (!athleteId) {
-      programSelect.style.display = 'none';
-      programSelect.innerHTML = '<option value="">— choisir un programme —</option>';
-      selectedProgramId = null;
       // Hide loaders when no athlete selected
       for (let i = 1; i <= 4; i++) {
         const loader = document.getElementById(`comparison-${i}-loader`);
@@ -960,31 +964,7 @@ document.addEventListener('DOMContentLoaded', function(){
       if (loader) loader.classList.add('show');
     }
     
-    // Load programs for this athlete
-    try {
-      const res = await fetch(`/api/athlete/${athleteId}/programs`);
-      if (!res.ok) return;
-      const data = await res.json();
-      
-      programSelect.innerHTML = '<option value="">— choisir un programme —</option>';
-      data.programs.forEach(prog => {
-        const opt = document.createElement('option');
-        opt.value = prog.id;
-        opt.textContent = prog.name;
-        programSelect.appendChild(opt);
-      });
-      
-      // Show program select if there are programs
-      if (data.programs.length > 0) {
-        programSelect.style.display = 'inline-block';
-      } else {
-        programSelect.style.display = 'none';
-      }
-    } catch (err) {
-      console.error('Error loading programs:', err);
-    }
-    
-    // Clear performance data since program needs to be selected
+    // Clear performance data
     document.getElementById('main-series-container').style.display = 'none';
     document.getElementById('other-series-container').style.display = 'none';
     document.getElementById('perf-chart-container').style.display = 'none';
@@ -1004,7 +984,7 @@ document.addEventListener('DOMContentLoaded', function(){
   function updateExercisesForMuscle(muscleGroup) {
     exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
     if (!muscleGroup) {
-      // Show all exercises
+      // Show all exercises from perfCache
       if (perfCache) {
         Object.keys(perfCache).sort().forEach(ex => {
           const opt = document.createElement('option');
@@ -1020,7 +1000,7 @@ document.addEventListener('DOMContentLoaded', function(){
       Object.keys(perfCache).sort().forEach(ex => {
         const exData = perfCache[ex];
         // Check if exercise belongs to the selected muscle group
-        if (exData.muscle_group === muscleGroup) {
+        if (exData && exData.muscle_group === muscleGroup) {
           const opt = document.createElement('option');
           opt.value = ex;
           opt.textContent = ex;
