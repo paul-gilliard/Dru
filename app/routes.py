@@ -1834,6 +1834,8 @@ def register_routes(app):
             previous_28 = calc_averages(s2_data)
             
             summary_28 = {
+                'label1': 'Semaine -1',
+                'label2': 'Semaine -3',
                 'weight_current': current_28['weight'],
                 'weight_previous': previous_28['weight'],
                 'weight_diff': (current_28['weight'] - previous_28['weight']) if (current_28['weight'] and previous_28['weight']) else None,
