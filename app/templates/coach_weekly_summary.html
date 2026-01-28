@@ -370,6 +370,10 @@
             min-width: auto;
         }
     }
+
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
 </style>
 
 <div class="bilan-container">
@@ -449,6 +453,22 @@
         <div class="marked-athletes-grid" id="marked-athletes">
         </div>
     </div>
+</div>
+
+<!-- Modal for muscle detail -->
+<div id="muscle-detail-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:8px; padding:24px; max-width:600px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 20px 25px rgba(0,0,0,0.15);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 id="muscle-detail-title" style="margin:0;">Détail par exercice</h3>
+      <button onclick="document.getElementById('muscle-detail-modal').style.display='none';" style="background:none; border:none; font-size:24px; cursor:pointer; color:#999;">×</button>
+    </div>
+    <div id="muscle-detail-content" style="color:#333; display:flex; justify-content:center; align-items:center; min-height:100px;">
+      <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+        <div style="width:30px; height:30px; border:3px solid #e5e7eb; border-top-color:#667eea; border-radius:50%; animation: spin 1s linear infinite;"></div>
+        <span style="color:#94a3b8; font-size:0.9rem;">Chargement des détails...</span>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -540,18 +560,18 @@
         html += `
             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
                 <h4 style="color: #333; font-size: 0.95em; margin: 0 0 12px 0;">Comparaisons hebdomadaires</h4>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px;">
                     <!-- Comparison 1: S vs S-1 -->
-                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #667eea; overflow: hidden;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; cursor: pointer;" class="comparison-header" data-table="${athleteId}-1">
+                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #667eea; overflow: hidden; min-width: 280px; flex-shrink: 0;" class="comparison-card" data-table="${athleteId}-1">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f3f4f6;">
                             <h5 style="margin: 0; color: #667eea; font-size: 0.85em; font-weight: 600;">S vs S-1</h5>
-                            <span style="font-size: 1.2em; color: #667eea; transition: transform 0.2s;" class="collapse-toggle">▼</span>
+                            <button style="background: none; border: none; color: #667eea; cursor: pointer; font-size: 1.2em; padding: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;" class="close-comparison">✕</button>
                         </div>
                         <div id="comparison-${athleteId}-1-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
                             <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                             <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
                         </div>
-                        <div id="comparison-${athleteId}-1-container" style="display: none; padding: 0 12px 12px 12px; max-height: 400px; overflow-y: auto;">
+                        <div id="comparison-${athleteId}-1-container" style="display: none; padding: 0 12px 12px 12px; max-height: 600px; overflow-y: auto;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
                                 <tbody id="comparison-${athleteId}-1-body"></tbody>
                             </table>
@@ -559,16 +579,16 @@
                     </div>
 
                     <!-- Comparison 2: S vs S-2 -->
-                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #764ba2; overflow: hidden;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; cursor: pointer;" class="comparison-header" data-table="${athleteId}-2">
+                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #764ba2; overflow: hidden; min-width: 280px; flex-shrink: 0;" class="comparison-card" data-table="${athleteId}-2">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f3f4f6;">
                             <h5 style="margin: 0; color: #764ba2; font-size: 0.85em; font-weight: 600;">S vs S-2</h5>
-                            <span style="font-size: 1.2em; color: #764ba2; transition: transform 0.2s;" class="collapse-toggle">▼</span>
+                            <button style="background: none; border: none; color: #764ba2; cursor: pointer; font-size: 1.2em; padding: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;" class="close-comparison">✕</button>
                         </div>
                         <div id="comparison-${athleteId}-2-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
                             <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #764ba2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                             <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
                         </div>
-                        <div id="comparison-${athleteId}-2-container" style="display: none; padding: 0 12px 12px 12px; max-height: 400px; overflow-y: auto;">
+                        <div id="comparison-${athleteId}-2-container" style="display: none; padding: 0 12px 12px 12px; max-height: 600px; overflow-y: auto;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
                                 <tbody id="comparison-${athleteId}-2-body"></tbody>
                             </table>
@@ -576,16 +596,16 @@
                     </div>
 
                     <!-- Comparison 3: S-1 vs S-2 -->
-                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #667eea; overflow: hidden;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; cursor: pointer;" class="comparison-header" data-table="${athleteId}-3">
+                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #667eea; overflow: hidden; min-width: 280px; flex-shrink: 0;" class="comparison-card" data-table="${athleteId}-3">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f3f4f6;">
                             <h5 style="margin: 0; color: #667eea; font-size: 0.85em; font-weight: 600;">S-1 vs S-2</h5>
-                            <span style="font-size: 1.2em; color: #667eea; transition: transform 0.2s;" class="collapse-toggle">▼</span>
+                            <button style="background: none; border: none; color: #667eea; cursor: pointer; font-size: 1.2em; padding: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;" class="close-comparison">✕</button>
                         </div>
                         <div id="comparison-${athleteId}-3-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
                             <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                             <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
                         </div>
-                        <div id="comparison-${athleteId}-3-container" style="display: none; padding: 0 12px 12px 12px; max-height: 400px; overflow-y: auto;">
+                        <div id="comparison-${athleteId}-3-container" style="display: none; padding: 0 12px 12px 12px; max-height: 600px; overflow-y: auto;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
                                 <tbody id="comparison-${athleteId}-3-body"></tbody>
                             </table>
@@ -593,16 +613,16 @@
                     </div>
 
                     <!-- Comparison 4: S-1 vs S-3 -->
-                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #764ba2; overflow: hidden;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; cursor: pointer;" class="comparison-header" data-table="${athleteId}-4">
+                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #764ba2; overflow: hidden; min-width: 280px; flex-shrink: 0;" class="comparison-card" data-table="${athleteId}-4">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f3f4f6;">
                             <h5 style="margin: 0; color: #764ba2; font-size: 0.85em; font-weight: 600;">S-1 vs S-3</h5>
-                            <span style="font-size: 1.2em; color: #764ba2; transition: transform 0.2s;" class="collapse-toggle">▼</span>
+                            <button style="background: none; border: none; color: #764ba2; cursor: pointer; font-size: 1.2em; padding: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;" class="close-comparison">✕</button>
                         </div>
                         <div id="comparison-${athleteId}-4-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
                             <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #764ba2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                             <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
                         </div>
-                        <div id="comparison-${athleteId}-4-container" style="display: none; padding: 0 12px 12px 12px; max-height: 400px; overflow-y: auto;">
+                        <div id="comparison-${athleteId}-4-container" style="display: none; padding: 0 12px 12px 12px; max-height: 600px; overflow-y: auto;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
                                 <tbody id="comparison-${athleteId}-4-body"></tbody>
                             </table>
@@ -618,21 +638,13 @@
         document.getElementById(`loader-${athleteId}`).classList.add('hidden');
         container.style.display = 'block';
         
-        // Add collapse/expand handlers
-        const headers = container.querySelectorAll('.comparison-header');
-        headers.forEach(header => {
-            header.addEventListener('click', function() {
-                const tableId = this.dataset.table;
-                const containerEl = document.getElementById(`comparison-${tableId}-container`);
-                const toggle = this.querySelector('.collapse-toggle');
-                
-                if (containerEl.style.display === 'none') {
-                    containerEl.style.display = 'block';
-                    toggle.style.transform = 'rotate(0deg)';
-                } else {
-                    containerEl.style.display = 'none';
-                    toggle.style.transform = 'rotate(-90deg)';
-                }
+        // Add close button handlers
+        const closeButtons = container.querySelectorAll('.close-comparison');
+        closeButtons.forEach(btn => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const card = this.closest('.comparison-card');
+                card.style.display = 'none';
             });
         });
         
@@ -858,10 +870,10 @@
         if (data.tonnage_diff_by_muscle && Object.keys(data.tonnage_diff_by_muscle).length > 0) {
             // Add a separator row
             let sepTr = document.createElement('tr');
-            sepTr.innerHTML = `<td colspan="4" style="padding:6px 4px;"></td>`;
+            sepTr.innerHTML = `<td colspan="5" style="padding:6px 4px;"></td>`;
             tbody.appendChild(sepTr);
             
-            // Add tonnage rows
+            // Add tonnage rows with detail buttons
             Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
                 const diff = data.tonnage_diff_by_muscle[muscle];
                 const arrow = getArrow(diff);
@@ -873,6 +885,7 @@
                     <td style="padding:4px; text-align:center; font-size:0.7rem;">—</td>
                     <td style="padding:4px; text-align:center; font-size:0.7rem;">—</td>
                     <td style="padding:4px; text-align:center; font-size:0.65rem;">${formatDiff(diff, 0)} ${arrow}</td>
+                    <td style="padding:4px; text-align:center;"><button class="show-muscle-detail" data-muscle="${muscle}" data-athlete="${athleteId}" data-table="${tableNum}" style="background: none; border: none; color: #667eea; cursor: pointer; font-size: 0.7rem; text-decoration: underline; padding: 0;">Détail</button></td>
                 `;
                 tbody.appendChild(tonTr);
             });
@@ -915,6 +928,82 @@
             window.updateBilanBadge(uncheckedCount);
         }
     }
+
+    // Cache for muscle details
+    let exerciseDetailsCache = {};
+
+    // Event delegation for muscle detail buttons
+    document.addEventListener('click', function(e) {
+        if (e.target.matches('.show-muscle-detail')) {
+            const muscle = e.target.getAttribute('data-muscle');
+            const athleteId = e.target.getAttribute('data-athlete');
+            const tableNum = e.target.getAttribute('data-table');
+            
+            // Show modal with spinner
+            document.getElementById('muscle-detail-modal').style.display = 'flex';
+            document.getElementById('muscle-detail-title').textContent = `Détail par exercice - ${muscle}`;
+            document.getElementById('muscle-detail-content').innerHTML = `
+                <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+                    <div style="width:30px; height:30px; border:3px solid #e5e7eb; border-top-color:#667eea; border-radius:50%; animation: spin 1s linear infinite;"></div>
+                    <span style="color:#94a3b8; font-size:0.9rem;">Chargement des détails...</span>
+                </div>
+            `;
+            
+            // Fetch exercise details from quick-data endpoint
+            fetch(`/coach/stats/athlete/${athleteId}/quick-data.json`)
+                .then(res => res.json())
+                .then(data => {
+                    let summaryKey;
+                    switch(tableNum) {
+                        case '1': summaryKey = 'summary_7days'; break;
+                        case '2': summaryKey = 'summary_14days'; break;
+                        case '3': summaryKey = 'summary_21days'; break;
+                        case '4': summaryKey = 'summary_28days'; break;
+                    }
+                    
+                    const summary = data[summaryKey];
+                    if (!summary || !summary.exercise_details_by_muscle || !summary.exercise_details_by_muscle[muscle]) {
+                        document.getElementById('muscle-detail-content').innerHTML = '<p style="color:#ef4444;">Données non disponibles</p>';
+                        return;
+                    }
+
+                    const exercisesByMuscle = summary.exercise_details_by_muscle[muscle];
+                    
+                    // Build detail HTML
+                    let html = `<h4 style="margin-top:0;">${muscle}</h4>`;
+                    html += '<table style="width:100%; border-collapse:collapse; margin-top:12px; font-size:0.9rem;">';
+                    html += `<tr style="background:#f3f4f6; border-bottom:2px solid #d1d5db;">
+                        <th style="padding:8px; text-align:left; font-weight:600;">Exercice</th>
+                        <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Courant</th>
+                        <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Précédent</th>
+                        <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Diff</th>
+                    </tr>`;
+                    
+                    Object.keys(exercisesByMuscle || {}).sort().forEach(exercise => {
+                        const exerciseData = exercisesByMuscle[exercise] || {};
+                        const current = exerciseData.current || 0;
+                        const previous = exerciseData.previous || 0;
+                        const diff = exerciseData.diff || 0;
+                        const arrow = diff > 0 ? '📈' : (diff < 0 ? '📉' : '→');
+                        const diffStr = diff >= 0 ? `+${diff.toFixed(0)}` : `${diff.toFixed(0)}`;
+                        
+                        html += `<tr style="border-bottom:1px solid #e5e7eb;">
+                            <td style="padding:8px;">${exercise}</td>
+                            <td style="padding:8px; text-align:center;">${current.toFixed(0)}</td>
+                            <td style="padding:8px; text-align:center;">${previous.toFixed(0)}</td>
+                            <td style="padding:8px; text-align:center;">${diffStr} ${arrow}</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</table>';
+                    document.getElementById('muscle-detail-content').innerHTML = html;
+                })
+                .catch(err => {
+                    console.error('Error loading exercise details:', err);
+                    document.getElementById('muscle-detail-content').innerHTML = '<p style="color:#ef4444;">Erreur de chargement</p>';
+                });
+        }
+    });
 
     document.addEventListener('DOMContentLoaded', initPage);
 </script>
