@@ -17,17 +17,25 @@ document.addEventListener('DOMContentLoaded', function(){
 
   let journalChart = new Chart(chartJournalCtx, {
     type: 'line',
-    data: { labels: [], datasets: [
-      { label: 'Poids (kg)', data: [], borderColor:'#0b63d6', yAxisID:'y'},
-      // optional datasets pushed later
-    ] },
-    options: { interaction:{mode:'index',intersect:false}, scales:{ y:{type:'linear',position:'left'}, y_kcals:{display:false,position:'right'} } }
+    data: { 
+      labels: [], 
+      datasets: [{ label: 'Poids (kg)', data: [], borderColor:'#0b63d6', yAxisID:'y', fill:false, borderWidth:2 }] 
+    },
+    options: { 
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction:{mode:'index',intersect:false}, 
+      scales:{ 
+        y:{type:'linear',position:'left'}, 
+        y_kcals:{display:false,position:'right'} 
+      } 
+    }
   });
 
   let performanceChart = null;
   let otherSeriesChart = null;
   let dateRange = { start: null, end: null }; // Date filter state
-  let journalData = []; // All journal data
+  let journalData = []; // All journal data loaded
   let journalViewMode_value = 'week'; // 'week' or 'month'
   let journalCurrentDate = new Date(); // Current date for navigation
 
@@ -44,20 +52,32 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
-  // Calculate date range for journal view based on mode and current date
+  // Filter data by date range
+  function filterByDateRange(data) {
+    if (!dateRange.start && !dateRange.end) return data;
+    return data.filter(entry => {
+      const entryDate = new Date(entry.date);
+      const start = dateRange.start ? new Date(dateRange.start) : null;
+      const end = dateRange.end ? new Date(dateRange.end) : null;
+      if (start && entryDate < start) return false;
+      if (end && entryDate > end) return false;
+      return true;
+    });
+  }
+
+  // Get date range for journal view
   function getJournalDateRange() {
     const current = journalCurrentDate;
     let start, end;
     
     if (journalViewMode_value === 'week') {
-      // Get Monday of current week
       const d = new Date(current);
       const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is Sunday
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
       start = new Date(d.setDate(diff));
       end = new Date(start);
       end.setDate(end.getDate() + 6);
-    } else { // month
+    } else {
       start = new Date(current.getFullYear(), current.getMonth(), 1);
       end = new Date(current.getFullYear(), current.getMonth() + 1, 0);
     }
@@ -68,88 +88,76 @@ document.addEventListener('DOMContentLoaded', function(){
     };
   }
 
-  // Filter journal data for current view
-  function getJournalForCurrentView() {
-    const range = getJournalDateRange();
-    return journalData.filter(entry => {
-      return entry.date >= range.start && entry.date <= range.end;
-    });
-  }
-
-  // Calculate statistics from data
-  function calculateStats(data) {
-    const stats = {
-      weight: { avg: 0, min: null, max: null, count: 0 },
-      kcals: { avg: 0, count: 0 },
-      water: { avg: 0, count: 0 },
-      sleep: { avg: 0, count: 0 }
-    };
-
-    data.forEach(entry => {
-      if (entry.weight !== null) {
-        stats.weight.count++;
-        stats.weight.avg += Number(entry.weight);
-        if (stats.weight.min === null) stats.weight.min = Number(entry.weight);
-        else stats.weight.min = Math.min(stats.weight.min, Number(entry.weight));
-        if (stats.weight.max === null) stats.weight.max = Number(entry.weight);
-        else stats.weight.max = Math.max(stats.weight.max, Number(entry.weight));
-      }
-      if (entry.kcals !== null) {
-        stats.kcals.count++;
-        stats.kcals.avg += Number(entry.kcals);
-      }
-      if (entry.water_ml !== null) {
-        stats.water.count++;
-        stats.water.avg += Number(entry.water_ml);
-      }
-      if (entry.sleep_hours !== null) {
-        stats.sleep.count++;
-        stats.sleep.avg += Number(entry.sleep_hours);
-      }
-    });
-
-    if (stats.weight.count > 0) stats.weight.avg /= stats.weight.count;
-    if (stats.kcals.count > 0) stats.kcals.avg /= stats.kcals.count;
-    if (stats.water.count > 0) stats.water.avg /= stats.water.count;
-    if (stats.sleep.count > 0) stats.sleep.avg /= stats.sleep.count;
-
-    return stats;
-  }
-
   // Update journal display
   function updateJournalDisplay() {
-    const viewData = getJournalForCurrentView();
-    const stats = calculateStats(viewData);
+    if (!journalData || journalData.length === 0) {
+      console.log('No journal data');
+      return;
+    }
+
+    const range = getJournalDateRange();
+    const viewData = journalData.filter(e => e.date >= range.start && e.date <= range.end);
+
+    console.log('Displaying', viewData.length, 'entries from', range.start, 'to', range.end);
+
+    // Calculate stats
+    let weightSum = 0, weightCount = 0;
+    let kcalsSum = 0, kcalsCount = 0;
+    let waterSum = 0, waterCount = 0;
+    let sleepSum = 0, sleepCount = 0;
+
+    viewData.forEach(entry => {
+      if (entry.weight !== null && entry.weight !== undefined) {
+        weightSum += Number(entry.weight);
+        weightCount++;
+      }
+      if (entry.kcals !== null && entry.kcals !== undefined) {
+        kcalsSum += Number(entry.kcals);
+        kcalsCount++;
+      }
+      if (entry.water_ml !== null && entry.water_ml !== undefined) {
+        waterSum += Number(entry.water_ml);
+        waterCount++;
+      }
+      if (entry.sleep_hours !== null && entry.sleep_hours !== undefined) {
+        sleepSum += Number(entry.sleep_hours);
+        sleepCount++;
+      }
+    });
 
     // Update stat cards
-    document.getElementById('journal-avg-weight').textContent = stats.weight.count > 0 ? stats.weight.avg.toFixed(1) + ' kg' : '—';
-    document.getElementById('journal-avg-kcals').textContent = stats.kcals.count > 0 ? Math.round(stats.kcals.avg) : '—';
-    document.getElementById('journal-avg-water').textContent = stats.water.count > 0 ? Math.round(stats.water.avg) : '—';
-    document.getElementById('journal-avg-sleep').textContent = stats.sleep.count > 0 ? stats.sleep.avg.toFixed(1) + ' h' : '—';
+    document.getElementById('journal-avg-weight').textContent = weightCount > 0 ? (weightSum/weightCount).toFixed(1) + ' kg' : '—';
+    document.getElementById('journal-avg-kcals').textContent = kcalsCount > 0 ? Math.round(kcalsSum/kcalsCount) : '—';
+    document.getElementById('journal-avg-water').textContent = waterCount > 0 ? Math.round(waterSum/waterCount) + ' ml' : '—';
+    document.getElementById('journal-avg-sleep').textContent = sleepCount > 0 ? (sleepSum/sleepCount).toFixed(1) + ' h' : '—';
 
     // Update chart
     const labels = viewData.map(d => d.date);
-    const weight = viewData.map(d => d.weight === null ? null : Number(d.weight));
-    const kcals = viewData.map(d => d.kcals === null ? null : Number(d.kcals));
-    const water = viewData.map(d => d.water_ml === null ? null : Number(d.water_ml));
-    const sleep = viewData.map(d => d.sleep_hours === null ? null : Number(d.sleep_hours));
+    const weights = viewData.map(d => d.weight !== null && d.weight !== undefined ? Number(d.weight) : null);
+    const kcalsData = viewData.map(d => d.kcals !== null && d.kcals !== undefined ? Number(d.kcals) : null);
+    const waterData = viewData.map(d => d.water_ml !== null && d.water_ml !== undefined ? Number(d.water_ml) : null);
+    const sleepData = viewData.map(d => d.sleep_hours !== null && d.sleep_hours !== undefined ? Number(d.sleep_hours) : null);
 
     journalChart.data.labels = labels;
     journalChart.data.datasets = [
-      { label: 'Poids (kg)', data: weight, borderColor:'#0b63d6', tension:0.2, yAxisID:'y', fill:false, borderWidth:2 }
+      { label: 'Poids (kg)', data: weights, borderColor:'#0b63d6', yAxisID:'y', fill:false, borderWidth:2, tension:0.3 }
     ];
+
     if (toggleKcals.checked) {
-      journalChart.data.datasets.push({ label:'Kcals', data: kcals, borderColor:'#ef4444', tension:0.2, yAxisID:'y_kcals', fill:false, borderWidth:2 });
+      journalChart.data.datasets.push({ label:'Kcals', data: kcalsData, borderColor:'#ef4444', yAxisID:'y_kcals', fill:false, borderWidth:2, tension:0.3 });
       journalChart.options.scales.y_kcals = { display:true, position:'right' };
     } else {
       journalChart.options.scales.y_kcals = { display:false };
     }
+
     if (toggleWater.checked) {
-      journalChart.data.datasets.push({ label:'Eau (ml)', data: water, borderColor:'#06b6d4', tension:0.2, yAxisID:'y', fill:false, borderWidth:2 });
+      journalChart.data.datasets.push({ label:'Eau (ml)', data: waterData, borderColor:'#06b6d4', yAxisID:'y', fill:false, borderWidth:2, tension:0.3 });
     }
+
     if (toggleSleep.checked) {
-      journalChart.data.datasets.push({ label:'Sommeil (h)', data: sleep, borderColor:'#8b5cf6', tension:0.2, yAxisID:'y', fill:false, borderWidth:2 });
+      journalChart.data.datasets.push({ label:'Sommeil (h)', data: sleepData, borderColor:'#8b5cf6', yAxisID:'y', fill:false, borderWidth:2, tension:0.3 });
     }
+
     journalChart.update();
 
     // Update table
@@ -159,13 +167,14 @@ document.addEventListener('DOMContentLoaded', function(){
       const tr = document.createElement('tr');
       tr.style.borderBottom = '1px solid #e5e7eb';
       tr.style.background = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
-      let row = `<td style="padding:10px;">${entry.date}</td><td style="padding:10px; text-align:center;">${weight[idx] !== null ? weight[idx].toFixed(1) : '—'}</td><td style="padding:10px; text-align:center;">${kcals[idx] !== null ? Math.round(kcals[idx]) : '—'}</td><td style="padding:10px; text-align:center;">${water[idx] !== null ? Math.round(water[idx]) : '—'}</td><td style="padding:10px; text-align:center;">${sleep[idx] !== null ? sleep[idx].toFixed(1) : '—'}</td>`;
-      tr.innerHTML = row;
+      const w = entry.weight !== null && entry.weight !== undefined ? Number(entry.weight).toFixed(1) : '—';
+      const k = entry.kcals !== null && entry.kcals !== undefined ? Math.round(Number(entry.kcals)) : '—';
+      const wa = entry.water_ml !== null && entry.water_ml !== undefined ? Math.round(Number(entry.water_ml)) : '—';
+      const s = entry.sleep_hours !== null && entry.sleep_hours !== undefined ? Number(entry.sleep_hours).toFixed(1) : '—';
+      tr.innerHTML = `<td style="padding:10px;">${entry.date}</td><td style="padding:10px; text-align:center;">${w}</td><td style="padding:10px; text-align:center;">${k}</td><td style="padding:10px; text-align:center;">${wa}</td><td style="padding:10px; text-align:center;">${s}</td>`;
       tableBody.appendChild(tr);
     });
   }
-
-  // Set date preset
   datePreset.addEventListener('change', function() {
     if (!this.value) {
       dateStart.value = '';
