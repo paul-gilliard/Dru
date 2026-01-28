@@ -1955,13 +1955,32 @@ def register_routes(app):
             summary_21['exercise_details_by_muscle'] = calc_exercise_details(s1_start, s1_end, s2_start, s2_end)
             summary_28['exercise_details_by_muscle'] = calc_exercise_details(s1_start, s1_end, s3_start, s3_end)
             
+            # === PRELOAD ALL EXERCISE SERIES DATA ===
+            series_by_exercise = {}
+            for e in all_perfs:
+                if not e.exercise:
+                    continue
+                if e.exercise not in series_by_exercise:
+                    series_by_exercise[e.exercise] = {}
+                date_key = e.entry_date.isoformat()
+                if date_key not in series_by_exercise[e.exercise]:
+                    series_by_exercise[e.exercise][date_key] = []
+                series_by_exercise[e.exercise][date_key].append({
+                    'series_number': e.series_number,
+                    'reps': e.reps,
+                    'load': e.load,
+                    'rpe': e.rpe,
+                    'notes': e.notes
+                })
+            
             return jsonify({
                 'journal': journal_data,
                 'muscle_groups': muscle_groups,
                 'summary_7days': summary_7,
                 'summary_14days': summary_14,
                 'summary_21days': summary_21,
-                'summary_28days': summary_28
+                'summary_28days': summary_28,
+                'series_by_exercise': series_by_exercise
             })
         except Exception as e:
             print(f"Error in quick-data route: {str(e)}")
@@ -3686,7 +3705,7 @@ def _to_float_none(val):
     except Exception:
         return None
 
-    @app.route('/coach/stats/athlete/<int:athlete_id>/exercise/<exercise_name>/series.json')
+    @app.route('/coach/stats/athlete/<int:athlete_id>/exercise-series/<path:exercise_name>')
     def coach_stats_athlete_exercise_series(athlete_id, exercise_name):
         """Get all series for a specific exercise with date info"""
         try:

@@ -146,6 +146,8 @@ document.addEventListener('DOMContentLoaded', function(){
     '28days': {}
   }; // Cache for muscle details - preloaded on athlete selection
   
+  let seriesCache = {}; // Cache for exercise series data - preloaded
+  
   // Global cache for summary data by athlete
   let summaryCache = {
     '7days': {}, // athleteId -> data
@@ -322,6 +324,12 @@ document.addEventListener('DOMContentLoaded', function(){
           muscleDetailCache['28days'] = data.summary_28days.exercise_details_by_muscle;
         }
         await displayComparison(4, data.summary_28days);
+      }
+      
+      // Cache series data (preloaded)
+      if (data.series_by_exercise) {
+        seriesCache = data.series_by_exercise;
+        console.log(`Preloaded ${Object.keys(seriesCache).length} exercises with series data`);
       }
       
     } catch (err) {
@@ -1221,9 +1229,6 @@ document.addEventListener('DOMContentLoaded', function(){
   document.addEventListener('click', function(e) {
     if (e.target.matches('.show-exercise-series')) {
       const exercise = e.target.getAttribute('data-exercise');
-      const athleteId = athleteSelect.value;
-      
-      if (!athleteId) return;
       
       // Show modal with spinner
       document.getElementById('series-detail-modal').style.display = 'flex';
@@ -1235,69 +1240,64 @@ document.addEventListener('DOMContentLoaded', function(){
         </div>
       `;
       
-      // Fetch series data
-      fetch(`/coach/stats/athlete/${athleteId}/exercise/${encodeURIComponent(exercise)}/series.json`)
-        .then(res => res.json())
-        .then(data => {
-          setTimeout(() => {
-            let html = `<h4 style="margin-top:0;">${exercise}</h4>`;
+      // Use preloaded series data
+      setTimeout(() => {
+        const data = seriesCache[exercise];
+        
+        if (!data || Object.keys(data).length === 0) {
+          let html = `<h4 style="margin-top:0;">${exercise}</h4>`;
+          html += '<p style="color:#94a3b8;">Aucune série enregistrée</p>';
+          document.getElementById('series-detail-content').innerHTML = html;
+          return;
+        }
+        
+        let html = `<h4 style="margin-top:0;">${exercise}</h4>`;
+        
+        // Sort dates in descending order
+        const sortedDates = Object.keys(data).sort().reverse();
+        
+        html += '<div style="display:flex; flex-direction:column; gap:12px;">';
+        
+        sortedDates.forEach(date => {
+          const series = data[date];
+          html += `<div style="border:1px solid #e5e7eb; border-radius:6px; padding:12px; background:#f9fafb;">`;
+          html += `<h5 style="margin:0 0 8px 0; color:#0b63d6;">${date}</h5>`;
+          html += '<table style="width:100%; border-collapse:collapse; font-size:0.9rem;">';
+          html += `<tr style="background:#f3f4f6; border-bottom:1px solid #d1d5db;">
+            <th style="padding:6px; text-align:center; font-weight:600;">Série</th>
+            <th style="padding:6px; text-align:center; font-weight:600;">Reps</th>
+            <th style="padding:6px; text-align:center; font-weight:600;">Poids (kg)</th>
+            <th style="padding:6px; text-align:center; font-weight:600;">RPE</th>
+            <th style="padding:6px; text-align:left; font-weight:600;">Notes</th>
+          </tr>`;
+          
+          // Sort series by series_number
+          series.sort((a, b) => (a.series_number || 0) - (b.series_number || 0));
+          
+          series.forEach(s => {
+            const seriesNum = s.series_number || '—';
+            const reps = s.reps !== null && s.reps !== undefined ? s.reps.toFixed(1) : '—';
+            const load = s.load !== null && s.load !== undefined ? s.load.toFixed(1) : '—';
+            const rpe = s.rpe !== null && s.rpe !== undefined ? s.rpe : '—';
+            const notes = s.notes || '';
             
-            if (!data.series_by_date || Object.keys(data.series_by_date).length === 0) {
-              html += '<p style="color:#94a3b8;">Aucune série enregistrée</p>';
-              document.getElementById('series-detail-content').innerHTML = html;
-              return;
-            }
-            
-            // Sort dates in descending order
-            const sortedDates = Object.keys(data.series_by_date).sort().reverse();
-            
-            html += '<div style="display:flex; flex-direction:column; gap:12px;">';
-            
-            sortedDates.forEach(date => {
-              const series = data.series_by_date[date];
-              html += `<div style="border:1px solid #e5e7eb; border-radius:6px; padding:12px; background:#f9fafb;">`;
-              html += `<h5 style="margin:0 0 8px 0; color:#0b63d6;">${date}</h5>`;
-              html += '<table style="width:100%; border-collapse:collapse; font-size:0.9rem;">';
-              html += `<tr style="background:#f3f4f6; border-bottom:1px solid #d1d5db;">
-                <th style="padding:6px; text-align:center; font-weight:600;">Série</th>
-                <th style="padding:6px; text-align:center; font-weight:600;">Reps</th>
-                <th style="padding:6px; text-align:center; font-weight:600;">Poids (kg)</th>
-                <th style="padding:6px; text-align:center; font-weight:600;">RPE</th>
-                <th style="padding:6px; text-align:left; font-weight:600;">Notes</th>
-              </tr>`;
-              
-              // Sort series by series_number
-              series.sort((a, b) => (a.series_number || 0) - (b.series_number || 0));
-              
-              series.forEach(s => {
-                const seriesNum = s.series_number || '—';
-                const reps = s.reps !== null && s.reps !== undefined ? s.reps.toFixed(1) : '—';
-                const load = s.load !== null && s.load !== undefined ? s.load.toFixed(1) : '—';
-                const rpe = s.rpe !== null && s.rpe !== undefined ? s.rpe : '—';
-                const notes = s.notes || '';
-                
-                html += `<tr style="border-bottom:1px solid #e5e7eb;">
-                  <td style="padding:6px; text-align:center;">${seriesNum}</td>
-                  <td style="padding:6px; text-align:center;">${reps}</td>
-                  <td style="padding:6px; text-align:center;">${load}</td>
-                  <td style="padding:6px; text-align:center;">${rpe}</td>
-                  <td style="padding:6px; text-align:left; color:#666; font-size:0.85rem;">${notes}</td>
-                </tr>`;
-              });
-              
-              html += '</table>';
-              html += '</div>';
-            });
-            
-            html += '</div>';
-            
-            document.getElementById('series-detail-content').innerHTML = html;
-          }, 200);
-        })
-        .catch(err => {
-          console.error('Error loading series detail:', err);
-          document.getElementById('series-detail-content').innerHTML = '<p style="color:#ef4444;">Erreur lors du chargement des séries</p>';
+            html += `<tr style="border-bottom:1px solid #e5e7eb;">
+              <td style="padding:6px; text-align:center;">${seriesNum}</td>
+              <td style="padding:6px; text-align:center;">${reps}</td>
+              <td style="padding:6px; text-align:center;">${load}</td>
+              <td style="padding:6px; text-align:center;">${rpe}</td>
+              <td style="padding:6px; text-align:left; color:#666; font-size:0.85rem;">${notes}</td>
+            </tr>`;
+          });
+          
+          html += '</table>';
+          html += '</div>';
         });
+        
+        html += '</div>';
+        
+        document.getElementById('series-detail-content').innerHTML = html;
+      }, 100);
     }
   });
 });
