@@ -542,13 +542,16 @@
                 <h4 style="color: #333; font-size: 0.95em; margin: 0 0 12px 0;">Comparaisons hebdomadaires</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <!-- Comparison 1: S vs S-1 -->
-                    <div style="background: #f9fafb; border-radius: 6px; padding: 12px; border-left: 3px solid #667eea;">
-                        <h5 style="margin: 0 0 8px 0; color: #667eea; font-size: 0.85em; font-weight: 600;">S vs S-1</h5>
+                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #667eea; overflow: hidden;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; cursor: pointer;" class="comparison-header" data-table="${athleteId}-1">
+                            <h5 style="margin: 0; color: #667eea; font-size: 0.85em; font-weight: 600;">S vs S-1</h5>
+                            <span style="font-size: 1.2em; color: #667eea; transition: transform 0.2s;" class="collapse-toggle">▼</span>
+                        </div>
                         <div id="comparison-${athleteId}-1-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
                             <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                             <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
                         </div>
-                        <div id="comparison-${athleteId}-1-container" style="display: none;">
+                        <div id="comparison-${athleteId}-1-container" style="display: none; padding: 0 12px 12px 12px; max-height: 400px; overflow-y: auto;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
                                 <tbody id="comparison-${athleteId}-1-body"></tbody>
                             </table>
@@ -556,13 +559,16 @@
                     </div>
 
                     <!-- Comparison 2: S vs S-2 -->
-                    <div style="background: #f9fafb; border-radius: 6px; padding: 12px; border-left: 3px solid #764ba2;">
-                        <h5 style="margin: 0 0 8px 0; color: #764ba2; font-size: 0.85em; font-weight: 600;">S vs S-2</h5>
+                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #764ba2; overflow: hidden;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; cursor: pointer;" class="comparison-header" data-table="${athleteId}-2">
+                            <h5 style="margin: 0; color: #764ba2; font-size: 0.85em; font-weight: 600;">S vs S-2</h5>
+                            <span style="font-size: 1.2em; color: #764ba2; transition: transform 0.2s;" class="collapse-toggle">▼</span>
+                        </div>
                         <div id="comparison-${athleteId}-2-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
                             <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #764ba2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                             <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
                         </div>
-                        <div id="comparison-${athleteId}-2-container" style="display: none;">
+                        <div id="comparison-${athleteId}-2-container" style="display: none; padding: 0 12px 12px 12px; max-height: 400px; overflow-y: auto;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
                                 <tbody id="comparison-${athleteId}-2-body"></tbody>
                             </table>
@@ -570,13 +576,16 @@
                     </div>
 
                     <!-- Comparison 3: S-1 vs S-2 -->
-                    <div style="background: #f9fafb; border-radius: 6px; padding: 12px; border-left: 3px solid #667eea;">
-                        <h5 style="margin: 0 0 8px 0; color: #667eea; font-size: 0.85em; font-weight: 600;">S-1 vs S-2</h5>
+                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #667eea; overflow: hidden;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; cursor: pointer;" class="comparison-header" data-table="${athleteId}-3">
+                            <h5 style="margin: 0; color: #667eea; font-size: 0.85em; font-weight: 600;">S-1 vs S-2</h5>
+                            <span style="font-size: 1.2em; color: #667eea; transition: transform 0.2s;" class="collapse-toggle">▼</span>
+                        </div>
                         <div id="comparison-${athleteId}-3-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
                             <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                             <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
                         </div>
-                        <div id="comparison-${athleteId}-3-container" style="display: none;">
+                        <div id="comparison-${athleteId}-3-container" style="display: none; padding: 0 12px 12px 12px; max-height: 400px; overflow-y: auto;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
                                 <tbody id="comparison-${athleteId}-3-body"></tbody>
                             </table>
@@ -584,13 +593,16 @@
                     </div>
 
                     <!-- Comparison 4: S-1 vs S-3 -->
-                    <div style="background: #f9fafb; border-radius: 6px; padding: 12px; border-left: 3px solid #764ba2;">
-                        <h5 style="margin: 0 0 8px 0; color: #764ba2; font-size: 0.85em; font-weight: 600;">S-1 vs S-3</h5>
+                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #764ba2; overflow: hidden;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; cursor: pointer;" class="comparison-header" data-table="${athleteId}-4">
+                            <h5 style="margin: 0; color: #764ba2; font-size: 0.85em; font-weight: 600;">S-1 vs S-3</h5>
+                            <span style="font-size: 1.2em; color: #764ba2; transition: transform 0.2s;" class="collapse-toggle">▼</span>
+                        </div>
                         <div id="comparison-${athleteId}-4-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
                             <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #764ba2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
                             <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
                         </div>
-                        <div id="comparison-${athleteId}-4-container" style="display: none;">
+                        <div id="comparison-${athleteId}-4-container" style="display: none; padding: 0 12px 12px 12px; max-height: 400px; overflow-y: auto;">
                             <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
                                 <tbody id="comparison-${athleteId}-4-body"></tbody>
                             </table>
@@ -605,6 +617,24 @@
         // Hide loader and show content
         document.getElementById(`loader-${athleteId}`).classList.add('hidden');
         container.style.display = 'block';
+        
+        // Add collapse/expand handlers
+        const headers = container.querySelectorAll('.comparison-header');
+        headers.forEach(header => {
+            header.addEventListener('click', function() {
+                const tableId = this.dataset.table;
+                const containerEl = document.getElementById(`comparison-${tableId}-container`);
+                const toggle = this.querySelector('.collapse-toggle');
+                
+                if (containerEl.style.display === 'none') {
+                    containerEl.style.display = 'block';
+                    toggle.style.transform = 'rotate(0deg)';
+                } else {
+                    containerEl.style.display = 'none';
+                    toggle.style.transform = 'rotate(-90deg)';
+                }
+            });
+        });
         
         // Load comparisons for this athlete
         loadComparisonForAthlete(athleteId);
@@ -823,6 +853,30 @@
             <td style="padding:4px; text-align:center; font-size:0.65rem;">${formatDiff(data.sleep_diff, 1)} ${sommeilArrow}</td>
         `;
         tbody.appendChild(sommeilTr);
+        
+        // Tonnage by muscle group
+        if (data.tonnage_diff_by_muscle && Object.keys(data.tonnage_diff_by_muscle).length > 0) {
+            // Add a separator row
+            let sepTr = document.createElement('tr');
+            sepTr.innerHTML = `<td colspan="4" style="padding:6px 4px;"></td>`;
+            tbody.appendChild(sepTr);
+            
+            // Add tonnage rows
+            Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
+                const diff = data.tonnage_diff_by_muscle[muscle];
+                const arrow = getArrow(diff);
+                
+                let tonTr = document.createElement('tr');
+                tonTr.style.borderBottom = '1px solid #e5e7eb';
+                tonTr.innerHTML = `
+                    <td style="padding:4px; font-weight:500; font-size:0.65rem; color:#666;">${muscle}</td>
+                    <td style="padding:4px; text-align:center; font-size:0.7rem;">—</td>
+                    <td style="padding:4px; text-align:center; font-size:0.7rem;">—</td>
+                    <td style="padding:4px; text-align:center; font-size:0.65rem;">${formatDiff(diff, 0)} ${arrow}</td>
+                `;
+                tbody.appendChild(tonTr);
+            });
+        }
         
         loader.style.display = 'none';
         container.style.display = 'block';
