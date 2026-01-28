@@ -90,8 +90,20 @@ document.addEventListener('DOMContentLoaded', function(){
 
   // Update journal display
   function updateJournalDisplay() {
+    console.log('updateJournalDisplay called, journalData length:', journalData.length);
+    
     if (!journalData || journalData.length === 0) {
       console.log('No journal data');
+      document.getElementById('journal-avg-weight').textContent = '—';
+      document.getElementById('journal-avg-kcals').textContent = '—';
+      document.getElementById('journal-avg-water').textContent = '—';
+      document.getElementById('journal-avg-sleep').textContent = '—';
+      
+      journalChart.data.labels = [];
+      journalChart.data.datasets = [{ label: 'Poids (kg)', data: [], borderColor:'#0b63d6', yAxisID:'y', fill:false, borderWidth:2 }];
+      journalChart.update();
+      
+      document.getElementById('journal-table-body').innerHTML = '<tr><td colspan="5" style="padding:20px; text-align:center; color:#94a3b8;">Aucune donnée pour cette période</td></tr>';
       return;
     }
 
@@ -210,9 +222,14 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 
   async function loadJournal(athleteId){
+    console.log('loadJournal called for athlete', athleteId);
     const res = await fetch(`/coach/stats/athlete/${athleteId}/journal.json`);
-    if (!res.ok) return;
+    if (!res.ok) {
+      console.error('Journal fetch failed:', res.status);
+      return;
+    }
     journalData = await res.json();
+    console.log('Journal data loaded:', journalData.length, 'entries');
     journalCurrentDate = new Date();
     updateJournalDisplay();
   }
@@ -956,12 +973,16 @@ document.addEventListener('DOMContentLoaded', function(){
     document.getElementById('perf-chart-container').style.display = 'none';
     document.getElementById('other-series-chart-container').style.display = 'none';
     
+    // Load journal data
+    console.log(`Loading journal for athlete ${athleteId}...`);
+    await loadJournal(athleteId);
+    
     // Load quick-data FIRST (all summaries + exercise details in one call) - BLOCKING
     console.log(`Loading quick-data for athlete ${athleteId}...`);
     await loadQuickData(athleteId);
     
-    // Load performance and tonnage in background (NON-BLOCKING)
-    console.log('Starting background load of performance and tonnage...');
+    // Load performance in background (NON-BLOCKING)
+    console.log('Starting background load of performance...');
     loadPerformance(athleteId).then(() => console.log('Performance loaded'));
   });
   exSelect.addEventListener('change', function(){
