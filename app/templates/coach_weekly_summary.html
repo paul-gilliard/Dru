@@ -36,7 +36,7 @@
     /* Athletes grid */
     .athletes-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
         gap: 25px;
         margin-bottom: 30px;
     }
@@ -404,6 +404,9 @@
             </div>
 
             <div class="athlete-body">
+                <div id="variation-{{ athlete.id }}" style="background: #f0f4ff; border-left: 3px solid #667eea; padding: 10px 12px; margin-bottom: 12px; border-radius: 4px; font-size: 0.9em; color: #333; display:none;">
+                    <strong>Variation S vs S-1:</strong> <span id="variation-text-{{ athlete.id }}"></span>
+                </div>
                 <div id="loader-{{ athlete.id }}" class="summary-loader">
                     <div class="spinner-small"></div>
                     <span>Chargement des stats...</span>
@@ -471,6 +474,22 @@
   </div>
 </div>
 
+<!-- Modal for series detail -->
+<div id="series-detail-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1001; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:8px; padding:24px; max-width:700px; width:90%; max-height:80vh; overflow-y:auto; box-shadow:0 20px 25px rgba(0,0,0,0.15);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+      <h3 id="series-detail-title" style="margin:0;">Détail des séries</h3>
+      <button onclick="document.getElementById('series-detail-modal').style.display='none';" style="background:none; border:none; font-size:24px; cursor:pointer; color:#999;">×</button>
+    </div>
+    <div id="series-detail-content" style="color:#333; display:flex; justify-content:center; align-items:center; min-height:100px;">
+      <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+        <div style="width:30px; height:30px; border:3px solid #e5e7eb; border-top-color:#667eea; border-radius:50%; animation: spin 1s linear infinite;"></div>
+        <span style="color:#94a3b8; font-size:0.9rem;">Chargement des séries...</span>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
     const athletes = {{ athletes | map(attribute='id') | list | tojson }};
     const weekOffset = {{ week_offset }};
@@ -492,6 +511,16 @@
 
     function renderSummary(athleteId, data) {
         const container = document.getElementById(`summary-${athleteId}`);
+        
+        // Show variation section if tonnage_diff data exists
+        if (data.summary_7days && data.summary_7days.tonnage_diff_by_muscle) {
+            const totalDiff = Object.values(data.summary_7days.tonnage_diff_by_muscle || {}).reduce((a, b) => a + b, 0);
+            const variationText = totalDiff > 0 ? `+${totalDiff.toFixed(0)} kg (📈 Augmentation)` : 
+                                  (totalDiff < 0 ? `${totalDiff.toFixed(0)} kg (📉 Diminution)` : '→ Stable');
+            document.getElementById(`variation-${athleteId}`).style.display = 'block';
+            document.getElementById(`variation-text-${athleteId}`).textContent = variationText;
+        }
+        
         let html = '<table class="summary-table"><tbody>';
 
         // Poids
@@ -929,8 +958,10 @@
         }
     }
 
-    // Cache for muscle details
+    // Cache for muscle details and series
     let exerciseDetailsCache = {};
+    let seriesByExerciseCache = {};
+    let currentComparisonContext = {};
 
     // Event delegation for muscle detail buttons
     document.addEventListener('click', function(e) {
@@ -954,12 +985,23 @@
                 .then(res => res.json())
                 .then(data => {
                     let summaryKey;
+                    let labelMap = { '1': '7 jours', '2': '14 jours', '3': '21 jours', '4': '28 jours' };
+                    
                     switch(tableNum) {
                         case '1': summaryKey = 'summary_7days'; break;
                         case '2': summaryKey = 'summary_14days'; break;
                         case '3': summaryKey = 'summary_21days'; break;
                         case '4': summaryKey = 'summary_28days'; break;
                     }
+                    
+                    // Store context for series detail handler
+                    currentComparisonContext = {
+                        summary: summaryKey,
+                        label: labelMap[tableNum]
+                    };
+                    
+                    // Cache series data
+                    seriesByExerciseCache = data.series_by_exercise || {};
                     
                     const summary = data[summaryKey];
                     if (!summary || !summary.exercise_details_by_muscle || !summary.exercise_details_by_muscle[muscle]) {
@@ -974,9 +1016,10 @@
                     html += '<table style="width:100%; border-collapse:collapse; margin-top:12px; font-size:0.9rem;">';
                     html += `<tr style="background:#f3f4f6; border-bottom:2px solid #d1d5db;">
                         <th style="padding:8px; text-align:left; font-weight:600;">Exercice</th>
-                        <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Courant</th>
-                        <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Précédent</th>
-                        <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Diff</th>
+                        <th style="padding:8px; text-align:center; font-weight:600; width:90px;">Courant</th>
+                        <th style="padding:8px; text-align:center; font-weight:600; width:90px;">Précédent</th>
+                        <th style="padding:8px; text-align:center; font-weight:600; width:70px;">Diff</th>
+                        <th style="padding:8px; text-align:center; font-weight:600; width:70px;">Détail</th>
                     </tr>`;
                     
                     Object.keys(exercisesByMuscle || {}).sort().forEach(exercise => {
@@ -992,6 +1035,7 @@
                             <td style="padding:8px; text-align:center;">${current.toFixed(0)}</td>
                             <td style="padding:8px; text-align:center;">${previous.toFixed(0)}</td>
                             <td style="padding:8px; text-align:center;">${diffStr} ${arrow}</td>
+                            <td style="padding:8px; text-align:center;"><button class="show-exercise-series" data-exercise="${exercise}" style="background:none; border:none; color:#667eea; cursor:pointer; font-size:0.75rem; text-decoration:underline; padding:0;">Séries</button></td>
                         </tr>`;
                     });
                     
@@ -1002,6 +1046,67 @@
                     console.error('Error loading exercise details:', err);
                     document.getElementById('muscle-detail-content').innerHTML = '<p style="color:#ef4444;">Erreur de chargement</p>';
                 });
+        }
+    });
+
+    // Event delegation for exercise series detail buttons
+    document.addEventListener('click', function(e) {
+        if (e.target.matches('.show-exercise-series')) {
+            const exercise = e.target.getAttribute('data-exercise');
+            
+            document.getElementById('series-detail-modal').style.display = 'flex';
+            document.getElementById('series-detail-title').textContent = `Détail des séries - ${exercise}`;
+            document.getElementById('series-detail-content').innerHTML = `
+                <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
+                    <div style="width:30px; height:30px; border:3px solid #e5e7eb; border-top-color:#667eea; border-radius:50%; animation: spin 1s linear infinite;"></div>
+                    <span style="color:#94a3b8; font-size:0.9rem;">Chargement des séries...</span>
+                </div>
+            `;
+            
+            // Get series data from cache
+            const data = seriesByExerciseCache[exercise];
+            
+            if (!data || Object.keys(data).length === 0) {
+                let html = `<h4 style="margin-top:0;">${exercise}</h4>`;
+                html += '<p style="color:#94a3b8;">Aucune série enregistrée</p>';
+                document.getElementById('series-detail-content').innerHTML = html;
+                return;
+            }
+            
+            // Build series table
+            let html = `<h4 style="margin-top:0;">${exercise}</h4>`;
+            html += '<table style="width:100%; border-collapse:collapse; margin-top:12px; font-size:0.85rem;">';
+            html += `<tr style="background:#f3f4f6; border-bottom:2px solid #d1d5db; position:sticky; top:0;">
+                <th style="padding:8px; text-align:left; font-weight:600;">Date</th>
+                <th style="padding:8px; text-align:center; font-weight:600; width:60px;">Séries</th>
+                <th style="padding:8px; text-align:center; font-weight:600; width:60px;">Reps</th>
+                <th style="padding:8px; text-align:center; font-weight:600; width:70px;">Poids</th>
+                <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Tonnage</th>
+            </tr>`;
+            
+            // Sort dates in reverse order (most recent first)
+            const sortedDates = Object.keys(data).sort().reverse();
+            
+            sortedDates.forEach(date => {
+                const series = data[date];
+                
+                series.forEach((s, idx) => {
+                    const reps = s.reps || 0;
+                    const weight = s.weight || 0;
+                    const tonnage = (reps * weight).toFixed(0);
+                    
+                    html += `<tr style="border-bottom:1px solid #e5e7eb;">
+                        <td style="padding:8px;">${idx === 0 ? date : ''}</td>
+                        <td style="padding:8px; text-align:center;">${idx + 1}</td>
+                        <td style="padding:8px; text-align:center;">${reps}</td>
+                        <td style="padding:8px; text-align:center;">${weight.toFixed(1)} kg</td>
+                        <td style="padding:8px; text-align:center; font-weight:600;">${tonnage}</td>
+                    </tr>`;
+                });
+            });
+            
+            html += '</table>';
+            document.getElementById('series-detail-content').innerHTML = html;
         }
     });
 
