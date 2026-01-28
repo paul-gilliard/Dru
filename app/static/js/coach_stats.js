@@ -147,6 +147,7 @@ document.addEventListener('DOMContentLoaded', function(){
   }; // Cache for muscle details - preloaded on athlete selection
   
   let seriesCache = {}; // Cache for exercise series data - preloaded
+  let currentComparisonContext = {}; // Store current comparison context for series display
   
   // Global cache for summary data by athlete
   let summaryCache = {
@@ -454,7 +455,7 @@ document.addEventListener('DOMContentLoaded', function(){
         
         tr.innerHTML = `
           <td style="padding:8px; font-weight:600;">${muscle}</td>
-          <td style="padding:8px; text-align:center; text-decoration:underline; cursor:pointer;" class="show-muscle-detail" data-muscle="${muscle}" data-summary="${period}">Détails</td>
+          <td style="padding:8px; text-align:center; text-decoration:underline; cursor:pointer;" class="show-muscle-detail" data-muscle="${muscle}" data-summary="${period}" data-label1="${data.label1}" data-label2="${data.label2}">Détails</td>
           <td style="padding:8px; text-align:center;"></td>
           <td style="padding:8px; text-align:center;">${diffStr} ${arrow}</td>
         `;
@@ -1166,6 +1167,15 @@ document.addEventListener('DOMContentLoaded', function(){
     if (e.target.matches('.show-muscle-detail')) {
       const muscle = e.target.getAttribute('data-muscle');
       const summary = e.target.getAttribute('data-summary');
+      const label1 = e.target.getAttribute('data-label1');
+      const label2 = e.target.getAttribute('data-label2');
+      
+      // Store context for series display
+      currentComparisonContext = {
+        summary: summary,
+        label1: label1,
+        label2: label2
+      };
       
       // Show modal with spinner
       document.getElementById('muscle-detail-modal').style.display = 'flex';
@@ -1253,17 +1263,65 @@ document.addEventListener('DOMContentLoaded', function(){
         
         let html = `<h4 style="margin-top:0;">${exercise}</h4>`;
         
-        // Get today's date and calculate week boundaries
-        const today = new Date();
-        const currentWeekStart = new Date(today);
-        currentWeekStart.setDate(today.getDate() - today.getDay());
-        const currentWeekEnd = new Date(currentWeekStart);
-        currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+        // Get comparison context
+        const summary = currentComparisonContext.summary || '7days';
+        const label1 = currentComparisonContext.label1 || 'Semaine courante';
+        const label2 = currentComparisonContext.label2 || 'Semaine précédente';
         
-        const prevWeekStart = new Date(currentWeekStart);
-        prevWeekStart.setDate(currentWeekStart.getDate() - 7);
-        const prevWeekEnd = new Date(prevWeekStart);
-        prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
+        // Map summary to week boundaries
+        const today = new Date();
+        let currentWeekStart, currentWeekEnd, prevWeekStart, prevWeekEnd;
+        
+        if (summary === '7days') {
+          // S vs S-1
+          currentWeekStart = new Date(today);
+          currentWeekStart.setDate(today.getDate() - today.getDay());
+          currentWeekEnd = new Date(currentWeekStart);
+          currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+          
+          prevWeekStart = new Date(currentWeekStart);
+          prevWeekStart.setDate(currentWeekStart.getDate() - 7);
+          prevWeekEnd = new Date(prevWeekStart);
+          prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
+        } else if (summary === '14days') {
+          // S vs S-2
+          const currentWeekStart_temp = new Date(today);
+          currentWeekStart_temp.setDate(today.getDate() - today.getDay());
+          currentWeekStart = currentWeekStart_temp;
+          currentWeekEnd = new Date(currentWeekStart);
+          currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+          
+          prevWeekStart = new Date(currentWeekStart);
+          prevWeekStart.setDate(currentWeekStart.getDate() - 14);
+          prevWeekEnd = new Date(prevWeekStart);
+          prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
+        } else if (summary === '21days') {
+          // S-1 vs S-2
+          const currentWeekStart_temp = new Date(today);
+          currentWeekStart_temp.setDate(today.getDate() - today.getDay());
+          currentWeekStart = new Date(currentWeekStart_temp);
+          currentWeekStart.setDate(currentWeekStart_temp.getDate() - 7);
+          currentWeekEnd = new Date(currentWeekStart);
+          currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+          
+          prevWeekStart = new Date(currentWeekStart);
+          prevWeekStart.setDate(currentWeekStart.getDate() - 7);
+          prevWeekEnd = new Date(prevWeekStart);
+          prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
+        } else if (summary === '28days') {
+          // S-1 vs S-3
+          const currentWeekStart_temp = new Date(today);
+          currentWeekStart_temp.setDate(today.getDate() - today.getDay());
+          currentWeekStart = new Date(currentWeekStart_temp);
+          currentWeekStart.setDate(currentWeekStart_temp.getDate() - 7);
+          currentWeekEnd = new Date(currentWeekStart);
+          currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+          
+          prevWeekStart = new Date(currentWeekStart);
+          prevWeekStart.setDate(currentWeekStart.getDate() - 14);
+          prevWeekEnd = new Date(prevWeekStart);
+          prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
+        }
         
         // Function to check if date is in week range
         const isInWeek = (dateStr, weekStart, weekEnd) => {
@@ -1325,13 +1383,13 @@ document.addEventListener('DOMContentLoaded', function(){
           return table;
         };
         
-        // Build 2-column layout for current and previous week
+        // Build 2-column layout for current and previous week with actual labels
         html += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">';
         html += `<div style="border:1px solid #e5e7eb; border-radius:6px; padding:12px; background:#f9fafb;">`;
-        html += buildWeekTable(currentWeekDates, 'Semaine courante');
+        html += buildWeekTable(currentWeekDates, label1);
         html += '</div>';
         html += `<div style="border:1px solid #e5e7eb; border-radius:6px; padding:12px; background:#f9fafb;">`;
-        html += buildWeekTable(prevWeekDates, 'Semaine précédente');
+        html += buildWeekTable(prevWeekDates, label2);
         html += '</div>';
         html += '</div>';
         
