@@ -167,45 +167,19 @@
   </div>
 </div>
 
-<!-- Bottom row: Tonnage + Performances -->
-<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-  
-  <div class="card">
-    <h3>Tonnage par groupe musculaire</h3>
-    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-      <select id="stats-muscle-select">
-        <option value="">— choisir un groupe musculaire —</option>
-      </select>
-      <button id="clear-muscle" type="button" class="secondary">Effacer</button>
-    </div>
-    
-    <!-- Tonnage Chart -->
-    <div id="tonnage-chart-container" style="display:none;">
-      <canvas id="chart-tonnage" height="100"></canvas>
-      
-      <!-- Tonnage Table -->
-      <div style="margin-top:20px;">
-        <table id="tonnage-table" style="width:100%; border-collapse:collapse;">
-          <thead>
-            <tr style="background: #f3f4f6; border-bottom: 2px solid #d1d5db;">
-              <th style="padding:12px; text-align:left; font-weight:600;">Date</th>
-              <th style="padding:12px; text-align:center; font-weight:600;">Tonnage</th>
-            </tr>
-          </thead>
-          <tbody id="tonnage-table-body"></tbody>
-        </table>
-      </div>
+<!-- Performances -->
+<div class="card" style="margin-bottom:12px;">
+  <h3>Performances par exercice</h3>
+  <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+    <select id="stats-exercise-select">
+      <option value="">— choisir un exercice —</option>
+    </select>
+    <button id="clear-exercise" type="button" class="secondary">Effacer</button>
+    <div id="performance-loader" class="loading-container" style="margin-left:12px;">
+      <div class="spinner"></div>
+      <span style="font-size:0.9rem;">Chargement...</span>
     </div>
   </div>
-
-  <div class="card">
-    <h3>Performances par exercice</h3>
-    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-      <select id="stats-exercise-select">
-        <option value="">— choisir un exercice —</option>
-      </select>
-      <button id="clear-exercise" type="button" class="secondary">Effacer</button>
-    </div>
     
     <!-- Performance Chart by Date -->
     <div id="perf-chart-container" style="display:none; margin-bottom:20px;">

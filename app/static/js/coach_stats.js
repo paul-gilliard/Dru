@@ -1,10 +1,9 @@
 document.addEventListener('DOMContentLoaded', function(){
   const athleteSelect = document.getElementById('stats-athlete-select');
   const chartJournalCtx = document.getElementById('chart-journal').getContext('2d');
-  const muscleSelect = document.getElementById('stats-muscle-select');
-  const clearMuscle = document.getElementById('clear-muscle');
   const exSelect = document.getElementById('stats-exercise-select');
   const clearEx = document.getElementById('clear-exercise');
+  const performanceLoader = document.getElementById('performance-loader');
   const toggleKcals = document.getElementById('toggle-kcals');
   const toggleWater = document.getElementById('toggle-water');
   const toggleSleep = document.getElementById('toggle-sleep');
@@ -24,8 +23,6 @@ document.addEventListener('DOMContentLoaded', function(){
 
   let performanceChart = null;
   let otherSeriesChart = null;
-  let tonnageChart = null;
-  let tonnageCache = null;
   let dateRange = { start: null, end: null }; // Date filter state
 
   // Filter data by date range
@@ -60,7 +57,6 @@ document.addEventListener('DOMContentLoaded', function(){
     if (athleteId) {
       loadJournal(athleteId);
       loadPerformance(athleteId);
-      loadTonnage(athleteId);
       loadSummary(athleteId);
     }
   });
@@ -73,7 +69,6 @@ document.addEventListener('DOMContentLoaded', function(){
     if (athleteId) {
       loadJournal(athleteId);
       loadPerformance(athleteId);
-      loadTonnage(athleteId);
       loadSummary(athleteId);
     }
   });
@@ -155,70 +150,46 @@ document.addEventListener('DOMContentLoaded', function(){
 
   // Muscle details are now preloaded via loadQuickData() - no separate function needed
   async function loadPerformance(athleteId){
-    const res = await fetch(`/coach/stats/athlete/${athleteId}/performance.json`);
-    if (!res.ok) return;
-    let data = await res.json();
-    
-    // Filter performance data by date range
-    if (dateRange.start || dateRange.end) {
-      const filteredData = {};
-      Object.keys(data).forEach(ex => {
-        filteredData[ex] = filterByDateRange(data[ex]);
-      });
-      data = filteredData;
-    }
-    
-    perfCache = data;
-    // Populate exercise select with all exercises
-    exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
-    if (data) {
-      Object.keys(data).sort().forEach(ex => {
-        const opt = document.createElement('option');
-        opt.value = ex;
-        opt.textContent = ex;
-        exSelect.appendChild(opt);
-      });
-    }
-    
-    // clear tables
-    document.getElementById('main-series-table').querySelector('tbody').innerHTML = '';
-    document.getElementById('other-series-table').querySelector('tbody').innerHTML = '';
-    document.getElementById('main-series-container').style.display = 'none';
-    document.getElementById('other-series-container').style.display = 'none';
-    document.getElementById('perf-chart-container').style.display = 'none';
-    document.getElementById('other-series-chart-container').style.display = 'none';
-  }
-
-  async function loadTonnage(athleteId){
+    if (performanceLoader) performanceLoader.classList.add('show');
     try {
-      const res = await fetch(`/coach/stats/athlete/${athleteId}/tonnage-by-muscle.json`);
-      if (!res.ok) {
-        console.log('Tonnage load failed:', res.status);
-        return;
-      }
+      const res = await fetch(`/coach/stats/athlete/${athleteId}/performance.json`);
+      if (!res.ok) return;
       let data = await res.json();
       
-      // Filter tonnage data by date range
+      // Filter performance data by date range
       if (dateRange.start || dateRange.end) {
         const filteredData = {};
-        Object.keys(data).forEach(muscle => {
-          filteredData[muscle] = filterByDateRange(data[muscle]);
+        Object.keys(data).forEach(ex => {
+          filteredData[ex] = filterByDateRange(data[ex]);
         });
         data = filteredData;
       }
       
-      tonnageCache = data;
-      // populate muscle group select
-      muscleSelect.innerHTML = '<option value="">— choisir un groupe musculaire —</option>';
-      Object.keys(data).sort().forEach(muscle=>{
-        const opt = document.createElement('option'); opt.value = muscle; opt.textContent = muscle; muscleSelect.appendChild(opt);
-      });
-      // clear chart
-      document.getElementById('tonnage-chart-container').style.display = 'none';
-    } catch (err) {
-      console.error('Error loading tonnage:', err);
+      perfCache = data;
+      // Populate exercise select with all exercises
+      exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
+      if (data) {
+        Object.keys(data).sort().forEach(ex => {
+          const opt = document.createElement('option');
+          opt.value = ex;
+          opt.textContent = ex;
+          exSelect.appendChild(opt);
+        });
+      }
+      
+      // clear tables
+      document.getElementById('main-series-table').querySelector('tbody').innerHTML = '';
+      document.getElementById('other-series-table').querySelector('tbody').innerHTML = '';
+      document.getElementById('main-series-container').style.display = 'none';
+      document.getElementById('other-series-container').style.display = 'none';
+      document.getElementById('perf-chart-container').style.display = 'none';
+      document.getElementById('other-series-chart-container').style.display = 'none';
+    } finally {
+      if (performanceLoader) performanceLoader.classList.remove('show');
     }
   }
+
+
 
   // Generic function to load and cache summary data
   async function loadSummaryData(athleteId, period) {
@@ -681,78 +652,6 @@ document.addEventListener('DOMContentLoaded', function(){
     }
   }
 
-  function renderTonnage(muscleGroup){
-    if (!tonnageCache || !tonnageCache[muscleGroup]) return;
-    
-    const tonnageData = tonnageCache[muscleGroup];
-    createTonnageChart(tonnageData);
-    
-    // Fill tonnage table
-    const tonnageTableBody = document.getElementById('tonnage-table-body');
-    tonnageTableBody.innerHTML = '';
-    tonnageData.forEach(entry => {
-      const tr = document.createElement('tr');
-      tr.style.borderBottom = '1px solid #e5e7eb';
-      tr.innerHTML = `
-        <td style="padding:12px;">${entry.date}</td>
-        <td style="padding:12px; text-align:center;">${entry.tonnage !== null ? entry.tonnage.toFixed(2) : '—'}</td>
-      `;
-      tonnageTableBody.appendChild(tr);
-    });
-    
-    document.getElementById('tonnage-chart-container').style.display = 'block';
-  }
-
-  function createTonnageChart(tonnageData){
-    const tonnageCtx = document.getElementById('chart-tonnage').getContext('2d');
-    
-    // Destroy old chart if exists
-    if (tonnageChart) {
-      tonnageChart.destroy();
-    }
-    
-    const labels = tonnageData.map(d => d.date);
-    const tonnage = tonnageData.map(d => d.tonnage);
-    
-    tonnageChart = new Chart(tonnageCtx, {
-      type: 'line',
-      data: {
-        labels: labels,
-        datasets: [
-          {
-            label: 'Tonnage total (reps × poids)',
-            data: tonnage,
-            borderColor: '#10b981',
-            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-            tension: 0.3,
-            fill: true,
-            pointBackgroundColor: '#10b981',
-            pointRadius: 5,
-            pointBorderWidth: 2,
-            borderWidth: 2
-          }
-        ]
-      },
-      options: {
-        interaction: { mode: 'index', intersect: false },
-        scales: {
-          y: {
-            type: 'linear',
-            position: 'left',
-            title: { display: true, text: 'Tonnage (reps × kg)', font: { weight: 'bold' } },
-            beginAtZero: true
-          }
-        },
-        plugins: {
-          legend: {
-            display: true,
-            position: 'top'
-          }
-        }
-      }
-    });
-  }
-
   function renderExercise(ex){
     if (!perfCache || !perfCache[ex]) return;
     
@@ -977,56 +876,7 @@ document.addEventListener('DOMContentLoaded', function(){
     // Load performance and tonnage in background (NON-BLOCKING)
     console.log('Starting background load of performance and tonnage...');
     loadPerformance(athleteId).then(() => console.log('Performance loaded'));
-    loadTonnage(athleteId).then(() => console.log('Tonnage loaded'));
   });
-
-  // Function to update exercise select based on selected muscle group
-  function updateExercisesForMuscle(muscleGroup) {
-    exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
-    if (!muscleGroup) {
-      // Show all exercises from perfCache
-      if (perfCache) {
-        Object.keys(perfCache).sort().forEach(ex => {
-          const opt = document.createElement('option');
-          opt.value = ex;
-          opt.textContent = ex;
-          exSelect.appendChild(opt);
-        });
-      }
-      return;
-    }
-    // Show only exercises for selected muscle group
-    if (perfCache) {
-      Object.keys(perfCache).sort().forEach(ex => {
-        const exData = perfCache[ex];
-        // Check if exercise belongs to the selected muscle group
-        if (exData && exData.muscle_group === muscleGroup) {
-          const opt = document.createElement('option');
-          opt.value = ex;
-          opt.textContent = ex;
-          exSelect.appendChild(opt);
-        }
-      });
-    }
-  }
-
-  muscleSelect.addEventListener('change', function(){
-    const muscle = this.value;
-    if (!muscle) { 
-      document.getElementById('tonnage-chart-container').style.display = 'none';
-      updateExercisesForMuscle(null); // Show all exercises
-      return; 
-    }
-    renderTonnage(muscle);
-    updateExercisesForMuscle(muscle); // Filter exercises for this muscle group
-  });
-
-  clearMuscle.addEventListener('click', function(){
-    muscleSelect.value = '';
-    document.getElementById('tonnage-chart-container').style.display = 'none';
-    updateExercisesForMuscle(null); // Show all exercises
-  });
-
   exSelect.addEventListener('change', function(){
     const ex = this.value;
     if (!ex) { 
