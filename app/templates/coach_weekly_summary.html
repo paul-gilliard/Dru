@@ -36,7 +36,7 @@
     /* Athletes grid */
     .athletes-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
         gap: 25px;
         margin-bottom: 30px;
     }
@@ -1073,39 +1073,145 @@
                 return;
             }
             
-            // Build series table
             let html = `<h4 style="margin-top:0;">${exercise}</h4>`;
-            html += '<table style="width:100%; border-collapse:collapse; margin-top:12px; font-size:0.85rem;">';
-            html += `<tr style="background:#f3f4f6; border-bottom:2px solid #d1d5db; position:sticky; top:0;">
-                <th style="padding:8px; text-align:left; font-weight:600;">Date</th>
-                <th style="padding:8px; text-align:center; font-weight:600; width:60px;">Séries</th>
-                <th style="padding:8px; text-align:center; font-weight:600; width:60px;">Reps</th>
-                <th style="padding:8px; text-align:center; font-weight:600; width:70px;">Poids</th>
-                <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Tonnage</th>
-            </tr>`;
             
-            // Sort dates in reverse order (most recent first)
+            // Get comparison context
+            const summary = currentComparisonContext.summary || 'summary_7days';
+            
+            // Map summary to week boundaries
+            const today = new Date();
+            let currentWeekStart, currentWeekEnd, prevWeekStart, prevWeekEnd;
+            let label1 = 'Semaine courante', label2 = 'Semaine précédente';
+            
+            if (summary === 'summary_7days') {
+              currentWeekStart = new Date(today);
+              currentWeekStart.setDate(today.getDate() - today.getDay());
+              currentWeekEnd = new Date(currentWeekStart);
+              currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+              
+              prevWeekStart = new Date(currentWeekStart);
+              prevWeekStart.setDate(currentWeekStart.getDate() - 7);
+              prevWeekEnd = new Date(prevWeekStart);
+              prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
+              label1 = 'Semaine courante'; label2 = 'Semaine -1';
+            } else if (summary === 'summary_14days') {
+              const currentWeekStart_temp = new Date(today);
+              currentWeekStart_temp.setDate(today.getDate() - today.getDay());
+              currentWeekStart = currentWeekStart_temp;
+              currentWeekEnd = new Date(currentWeekStart);
+              currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+              
+              prevWeekStart = new Date(currentWeekStart);
+              prevWeekStart.setDate(currentWeekStart.getDate() - 14);
+              prevWeekEnd = new Date(prevWeekStart);
+              prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
+              label1 = 'Semaine courante'; label2 = 'Semaine -2';
+            } else if (summary === 'summary_21days') {
+              const currentWeekStart_temp = new Date(today);
+              currentWeekStart_temp.setDate(today.getDate() - today.getDay());
+              currentWeekStart = new Date(currentWeekStart_temp);
+              currentWeekStart.setDate(currentWeekStart_temp.getDate() - 7);
+              currentWeekEnd = new Date(currentWeekStart);
+              currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+              
+              prevWeekStart = new Date(currentWeekStart);
+              prevWeekStart.setDate(currentWeekStart.getDate() - 7);
+              prevWeekEnd = new Date(prevWeekStart);
+              prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
+              label1 = 'Semaine -1'; label2 = 'Semaine -2';
+            } else if (summary === 'summary_28days') {
+              const currentWeekStart_temp = new Date(today);
+              currentWeekStart_temp.setDate(today.getDate() - today.getDay());
+              currentWeekStart = new Date(currentWeekStart_temp);
+              currentWeekStart.setDate(currentWeekStart_temp.getDate() - 7);
+              currentWeekEnd = new Date(currentWeekStart);
+              currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
+              
+              prevWeekStart = new Date(currentWeekStart);
+              prevWeekStart.setDate(currentWeekStart.getDate() - 14);
+              prevWeekEnd = new Date(prevWeekStart);
+              prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
+              label1 = 'Semaine -1'; label2 = 'Semaine -3';
+            }
+            
+            // Function to check if date is in week range
+            const isInWeek = (dateStr, weekStart, weekEnd) => {
+              const d = new Date(dateStr);
+              return d >= weekStart && d <= weekEnd;
+            };
+            
+            // Sort dates
             const sortedDates = Object.keys(data).sort().reverse();
             
-            sortedDates.forEach(date => {
-                const series = data[date];
-                
-                series.forEach((s, idx) => {
-                    const reps = s.reps || 0;
-                    const weight = s.weight || 0;
-                    const tonnage = (reps * weight).toFixed(0);
-                    
-                    html += `<tr style="border-bottom:1px solid #e5e7eb;">
-                        <td style="padding:8px;">${idx === 0 ? date : ''}</td>
-                        <td style="padding:8px; text-align:center;">${idx + 1}</td>
-                        <td style="padding:8px; text-align:center;">${reps}</td>
-                        <td style="padding:8px; text-align:center;">${weight.toFixed(1)} kg</td>
-                        <td style="padding:8px; text-align:center; font-weight:600;">${tonnage}</td>
-                    </tr>`;
-                });
-            });
+            // Separate dates by week
+            const currentWeekDates = sortedDates.filter(d => isInWeek(d, currentWeekStart, currentWeekEnd));
+            const prevWeekDates = sortedDates.filter(d => isInWeek(d, prevWeekStart, prevWeekEnd));
+            const otherDates = sortedDates.filter(d => !isInWeek(d, currentWeekStart, currentWeekEnd) && !isInWeek(d, prevWeekStart, prevWeekEnd));
             
-            html += '</table>';
+            // Helper to build table for a set of dates
+            const buildWeekTable = (dates, weekLabel) => {
+              if (dates.length === 0) {
+                return `<div style="color:#94a3b8; text-align:center; padding:12px;">Aucune donnée</div>`;
+              }
+              
+              let table = `<div style="margin-bottom:12px;">`;
+              table += `<h5 style="margin:0 0 8px 0; color:#0b63d6; font-size:0.9rem;">${weekLabel}</h5>`;
+              
+              dates.forEach(date => {
+                const series = data[date];
+                table += `<div style="margin-bottom:8px; border:1px solid #d1d5db; border-radius:4px; padding:8px; background:#fff;">`;
+                table += `<div style="font-weight:600; font-size:0.85rem; color:#333; margin-bottom:6px;">${date}</div>`;
+                table += '<table style="width:100%; border-collapse:collapse; font-size:0.8rem;">';
+                table += `<tr style="background:#f9fafb; border-bottom:1px solid #e5e7eb;">
+                  <th style="padding:4px; text-align:center; font-weight:600;">S</th>
+                  <th style="padding:4px; text-align:center; font-weight:600;">Reps</th>
+                  <th style="padding:4px; text-align:center; font-weight:600;">Poids</th>
+                  <th style="padding:4px; text-align:center; font-weight:600;">RPE</th>
+                </tr>`;
+                
+                // Sort series by series_number
+                series.sort((a, b) => (a.series_number || 0) - (b.series_number || 0));
+                
+                series.forEach(s => {
+                  const seriesNum = s.series_number !== null && s.series_number !== undefined ? s.series_number : '—';
+                  const reps = s.reps !== null && s.reps !== undefined ? s.reps.toFixed(1) : '—';
+                  const load = s.load !== null && s.load !== undefined ? s.load.toFixed(1) : '—';
+                  const rpe = s.rpe !== null && s.rpe !== undefined ? s.rpe : '—';
+                  
+                  table += `<tr style="border-bottom:1px solid #e5e7eb;">
+                    <td style="padding:4px; text-align:center;">${seriesNum}</td>
+                    <td style="padding:4px; text-align:center;">${reps}</td>
+                    <td style="padding:4px; text-align:center;">${load}</td>
+                    <td style="padding:4px; text-align:center;">${rpe}</td>
+                  </tr>`;
+                });
+                
+                table += '</table>';
+                table += '</div>';
+              });
+              
+              table += '</div>';
+              return table;
+            };
+            
+            // Build 2-column layout for current and previous week
+            html += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">';
+            html += `<div style="border:1px solid #e5e7eb; border-radius:6px; padding:12px; background:#f9fafb;">`;
+            html += buildWeekTable(currentWeekDates, label1);
+            html += '</div>';
+            html += `<div style="border:1px solid #e5e7eb; border-radius:6px; padding:12px; background:#f9fafb;">`;
+            html += buildWeekTable(prevWeekDates, label2);
+            html += '</div>';
+            html += '</div>';
+            
+            // Add other dates below if any
+            if (otherDates.length > 0) {
+              html += '<div style="margin-top:12px; border-top:2px solid #e5e7eb; padding-top:12px;">';
+              html += '<h5 style="margin:0 0 8px 0; color:#64748b; font-size:0.9rem;">Autres dates</h5>';
+              html += buildWeekTable(otherDates, '');
+              html += '</div>';
+            }
+            
             document.getElementById('series-detail-content').innerHTML = html;
         }
     });
