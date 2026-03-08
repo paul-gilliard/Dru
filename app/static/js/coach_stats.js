@@ -254,14 +254,36 @@ document.addEventListener('DOMContentLoaded', function(){
   };
 
   // Muscle details are now preloaded via loadQuickData() - no separate function needed
+  // Load and populate all available exercises (do this only once per athlete)
+  async function populateExerciseSelect(athleteId) {
+    try {
+      const res = await fetch(`/coach/stats/athlete/${athleteId}/performance.json`);
+      if (!res.ok) return;
+      const rawData = await res.json();
+      
+      exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
+      if (rawData) {
+        Object.keys(rawData).sort().forEach(ex => {
+          const opt = document.createElement('option');
+          opt.value = ex;
+          opt.textContent = ex;
+          exSelect.appendChild(opt);
+        });
+      }
+    } catch (err) {
+      console.error('Error populating exercise select:', err);
+    }
+  }
+
   async function loadPerformance(athleteId){
     if (performanceLoader) performanceLoader.classList.add('show');
     try {
       const res = await fetch(`/coach/stats/athlete/${athleteId}/performance.json`);
       if (!res.ok) return;
-      let data = await res.json();
+      let rawData = await res.json(); // Keep the raw data
       
-      // Filter performance data by date range
+      // Now filter performance data by date range for display/cache only
+      let data = rawData;
       if (dateRange.start || dateRange.end) {
         const filteredData = {};
         Object.keys(data).forEach(ex => {
@@ -306,21 +328,8 @@ document.addEventListener('DOMContentLoaded', function(){
       
       console.log('Remarks loaded:', remarksData.length);
       displayRemarks();
-      
-      // Populate exercise select with all exercises that have data
-      exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
-      if (data) {
-        Object.keys(data).sort().forEach(ex => {
-          // Only add exercises that have data entries
-          if (data[ex] && data[ex].length > 0) {
-            const opt = document.createElement('option');
-            opt.value = ex;
-            opt.textContent = ex;
-            exSelect.appendChild(opt);
-          }
-        });
-      }
-            // clear tables
+            
+      // clear tables
       document.getElementById('main-series-table').querySelector('tbody').innerHTML = '';
       document.getElementById('other-series-table').querySelector('tbody').innerHTML = '';
       document.getElementById('main-series-container').style.display = 'none';
@@ -1051,6 +1060,10 @@ document.addEventListener('DOMContentLoaded', function(){
     // Load quick-data FIRST (all summaries + exercise details in one call) - BLOCKING
     console.log(`Loading quick-data for athlete ${athleteId}...`);
     await loadQuickData(athleteId);
+    
+    // Populate exercise select (only once per athlete)
+    console.log('Populating exercise select...');
+    await populateExerciseSelect(athleteId);
     
     // Load performance in background (NON-BLOCKING)
     console.log('Starting background load of performance...');
