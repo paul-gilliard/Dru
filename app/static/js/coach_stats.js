@@ -307,18 +307,20 @@ document.addEventListener('DOMContentLoaded', function(){
       console.log('Remarks loaded:', remarksData.length);
       displayRemarks();
       
-      // Populate exercise select with all exercises
+      // Populate exercise select with all exercises that have data
       exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
       if (data) {
         Object.keys(data).sort().forEach(ex => {
-          const opt = document.createElement('option');
-          opt.value = ex;
-          opt.textContent = ex;
-          exSelect.appendChild(opt);
+          // Only add exercises that have data entries
+          if (data[ex] && data[ex].length > 0) {
+            const opt = document.createElement('option');
+            opt.value = ex;
+            opt.textContent = ex;
+            exSelect.appendChild(opt);
+          }
         });
       }
-      
-      // clear tables
+            // clear tables
       document.getElementById('main-series-table').querySelector('tbody').innerHTML = '';
       document.getElementById('other-series-table').querySelector('tbody').innerHTML = '';
       document.getElementById('main-series-container').style.display = 'none';
