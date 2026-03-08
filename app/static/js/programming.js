@@ -244,6 +244,9 @@ function populateExerciseSelects(container = null) {
           if (nameDisplay && select.value) {
             nameDisplay.textContent = select.value;
           }
+          // Update the card display (name and series badge) with the correct exercise
+          const exerciseBlock = select.closest('.exercise-block');
+          if (exerciseBlock) updateExerciseCardDisplay(exerciseBlock);
         }
       });
     })
