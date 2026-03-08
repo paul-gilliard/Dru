@@ -11,6 +11,24 @@ function updateExerciseOrderNumbers() {
   });
 }
 
+// Fonction pour mettre à jour l'affichage de la carte de l'exercice (nom et badge séries)
+function updateExerciseCardDisplay(exerciseBlock) {
+  // Mettre à jour le nom
+  const nameDisplay = exerciseBlock.querySelector('.exercise-name');
+  const select = exerciseBlock.querySelector('.exercise-select');
+  if (nameDisplay && select) {
+    nameDisplay.textContent = select.value || '—';
+  }
+  
+  // Mettre à jour le badge du nombre de séries
+  const badge = exerciseBlock.querySelector('.exercise-badge');
+  if (badge) {
+    const seriesItems = exerciseBlock.querySelector('.series-items');
+    const seriesCount = seriesItems ? seriesItems.querySelectorAll('.series-row').length : 0;
+    badge.textContent = `${seriesCount}S`;
+  }
+}
+
 document.addEventListener('click', function(e){
   // Collapse all exercises
   if (e.target.matches('#collapse-all-btn')) {
@@ -59,6 +77,9 @@ document.addEventListener('click', function(e){
     if (select) {
       nameDisplay.textContent = select.value || '—';
     }
+    
+    // Update the card display (name and series badge) whenever we toggle
+    updateExerciseCardDisplay(exerciseBlock);
     
     // Update order numbers
     updateExerciseOrderNumbers();
@@ -109,6 +130,8 @@ document.addEventListener('click', function(e){
       // Update exercise name display for collapsed view
       const nameDisplay = exerciseBlock.querySelector('.exercise-name-display');
       nameDisplay.textContent = this.value || '—';
+      // Update the card display (name and series badge)
+      updateExerciseCardDisplay(exerciseBlock);
     });
     
     container.appendChild(clone);
@@ -126,16 +149,22 @@ document.addEventListener('click', function(e){
     const seriesList = e.target.closest('.series-list');
     const seriesItems = seriesList.querySelector('.series-items');
     addSeriesRow(seriesItems);
+    // Update the card display to reflect the new series count
+    const exerciseBlock = e.target.closest('.exercise-block');
+    if (exerciseBlock) updateExerciseCardDisplay(exerciseBlock);
   }
 
   // Delete series row
   if (e.target.matches('.delete-series')) {
     e.preventDefault();
     const seriesRow = e.target.closest('.series-row');
+    const exerciseBlock = seriesRow.closest('.exercise-block');
     seriesRow.remove();
     // Update series numbers
     const seriesItems = seriesRow.closest('.series-items');
     updateSeriesNumbers(seriesItems);
+    // Update the card display to reflect the new series count
+    if (exerciseBlock) updateExerciseCardDisplay(exerciseBlock);
   }
 
   // Delete exercise
@@ -287,7 +316,15 @@ document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('.exercise-select').forEach(select => {
     select.addEventListener('change', function() {
       updateMuscleName(this);
+      // Update the card display when exercise changes
+      const exerciseBlock = this.closest('.exercise-block');
+      if (exerciseBlock) updateExerciseCardDisplay(exerciseBlock);
     });
+  });
+  
+  // Initialize card displays for all existing exercises
+  document.querySelectorAll('.exercise-block').forEach(exerciseBlock => {
+    updateExerciseCardDisplay(exerciseBlock);
   });
 });
 
