@@ -1070,8 +1070,8 @@ body.dark-mode .exercise-muscle {
 }
 
 body.dark-mode .series-row {
-  background: #0f172a;
-  border-color: rgba(226, 232, 240, 0.05);
+  background: #0f172a !important;
+  border-color: rgba(226, 232, 240, 0.1) !important;
 }
 
 body.dark-mode .series-row > div {
