@@ -35,7 +35,10 @@
       {% for p in programs %}
       <tr>
         <td>{{ p.id }}</td>
-        <td>{{ p.name }}</td>
+        <td style="display: flex; align-items: center; gap: 8px;">
+          <span>{{ p.name }}</span>
+          <button type="button" class="rename-btn" onclick="openRenameModal({{ p.id }}, '{{ p.name }}')" title="Renommer" style="background: none; border: none; cursor: pointer; padding: 4px; color: #0b63d6; font-size: 1rem; display: flex; align-items: center;">✎</button>
+        </td>
         <td>{{ p.athlete.username }}</td>
         <td>
           <div class="action-group">
@@ -96,6 +99,23 @@
   </div>
 </div>
 
+<!-- Modal for renaming program -->
+<div id="rename-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:12px; padding:30px; max-width:400px; width:90%; box-shadow:0 20px 60px rgba(0,0,0,0.3); animation:slideUp 0.3s ease-out;">
+    <h3 style="margin:0 0 16px 0; color:#1e293b; font-size:1.2rem;">Renommer le programme</h3>
+    <form id="rename-form" method="post" style="margin:0;">
+      <div style="margin-bottom:20px;">
+        <label for="rename_input" style="display:block; margin-bottom:8px; font-weight:600; color:#1e293b;">Nouveau nom</label>
+        <input type="text" id="rename_input" name="new_name" required style="width:100%; padding:10px; border:1px solid #cbd5e1; border-radius:6px; font-size:0.95rem; box-sizing:border-box;">
+      </div>
+      <div style="display:flex; gap:12px; justify-content:flex-end;">
+        <button type="button" onclick="closeRenameModal()" style="background:#e2e8f0; color:#1e293b; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:600; transition:all 0.2s ease;" onmouseover="this.style.background='#cbd5e1'" onmouseout="this.style.background='#e2e8f0'">Annuler</button>
+        <button type="submit" style="background:#0b63d6; color:white; border:none; padding:10px 20px; border-radius:6px; cursor:pointer; font-weight:600; transition:all 0.2s ease;" onmouseover="this.style.background='#0952b8'" onmouseout="this.style.background='#0b63d6'">Renommer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <style>
   @keyframes slideUp {
     from {
@@ -112,6 +132,7 @@
 <script>
   let duplicateProgramId = null;
   let currentAthleteId = null;
+  let renameProgramId = null;
 
   function openDuplicateModal(programId, programName, athleteId) {
     duplicateProgramId = programId;
@@ -134,6 +155,24 @@
     currentAthleteId = null;
   }
 
+  function openRenameModal(programId, programName) {
+    renameProgramId = programId;
+    const modal = document.getElementById('rename-modal');
+    const input = document.getElementById('rename_input');
+    
+    input.value = programName;
+    
+    modal.style.display = 'flex';
+    input.focus();
+    input.select();
+  }
+
+  function closeRenameModal() {
+    const modal = document.getElementById('rename-modal');
+    modal.style.display = 'none';
+    renameProgramId = null;
+  }
+
   document.getElementById('duplicate-form').addEventListener('submit', function(e) {
     e.preventDefault();
     if (duplicateProgramId) {
@@ -143,10 +182,26 @@
     }
   });
 
+  document.getElementById('rename-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    if (renameProgramId) {
+      const newName = document.getElementById('rename_input').value;
+      const form = this;
+      form.action = `/coach/programming/${renameProgramId}/rename`;
+      form.submit();
+    }
+  });
+
   // Fermer la modal en cliquant en dehors
   document.getElementById('duplicate-modal').addEventListener('click', function(e) {
     if (e.target === this) {
       closeDuplicateModal();
+    }
+  });
+
+  document.getElementById('rename-modal').addEventListener('click', function(e) {
+    if (e.target === this) {
+      closeRenameModal();
     }
   });
 

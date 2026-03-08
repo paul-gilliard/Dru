@@ -580,6 +580,25 @@ def register_routes(app):
         flash(f'Programme "{new_prog.name}" créé (copie de "{prog.name}")')
         return redirect(url_for('coach_programming'))
 
+    @app.route('/coach/programming/<int:program_id>/rename', methods=['POST'])
+    def coach_programming_rename(program_id):
+        forbidden = _require_coach()
+        if forbidden:
+            return forbidden
+        
+        prog = Program.query.get_or_404(program_id)
+        new_name = request.form.get('new_name', '').strip()
+        
+        if not new_name:
+            flash('Le nom du programme est requis')
+            return redirect(url_for('coach_programming'))
+        
+        old_name = prog.name
+        prog.name = new_name
+        db.session.commit()
+        flash(f'Programme "{old_name}" renommé en "{new_name}"')
+        return redirect(url_for('coach_programming'))
+
     @app.route('/athlete/journal', methods=['GET', 'POST'])
     def athlete_journal():
         if 'user_id' not in session:

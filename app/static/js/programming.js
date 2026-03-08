@@ -406,6 +406,12 @@ function parseSeriesDescription(row, description) {
           });
         }
         
+        // Show loading popup
+        const loadingPopup = document.getElementById('loading-popup');
+        if (loadingPopup) {
+          loadingPopup.classList.add('show');
+        }
+        
         // submit form
         if (form) {
           // disable buttons to prevent multiple submit
@@ -533,23 +539,6 @@ function parseSeriesDescription(row, description) {
 
 // Drag and drop functionality for reordering exercises
 let draggedElement = null;
-
-// Handle save button click - submit the form
-document.addEventListener('click', function(e) {
-  if (e.target.matches('.save-program-btn')) {
-    // Show loading popup
-    const loadingPopup = document.getElementById('loading-popup');
-    if (loadingPopup) {
-      loadingPopup.classList.add('show');
-    }
-    
-    // Submit the form
-    const form = document.getElementById('program-form');
-    if (form) {
-      form.submit();
-    }
-  }
-});
 
 document.addEventListener('dragstart', function(e) {
   if (e.target.matches('.exercise-block')) {
