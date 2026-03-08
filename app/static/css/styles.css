@@ -864,3 +864,167 @@ a:focus, button:focus, input:focus, select:focus { box-shadow: 0 0 0 4px rgba(59
   }
   .coach-tab { white-space:nowrap; padding:9px 14px; }
 }
+
+/* ============================================ */
+/* DARK MODE STYLES */
+/* ============================================ */
+
+body.dark-mode {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+body.dark-mode nav {
+  background: rgba(15, 23, 42, 0.8);
+  border-bottom-color: rgba(226, 232, 240, 0.1);
+}
+
+body.dark-mode nav a {
+  color: #cbd5e1;
+}
+
+body.dark-mode nav a:hover {
+  background: rgba(226, 232, 240, 0.1);
+  color: #e2e8f0;
+}
+
+body.dark-mode .card {
+  background: #1e293b;
+  border-color: rgba(226, 232, 240, 0.1);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+}
+
+body.dark-mode label {
+  color: #cbd5e1;
+}
+
+body.dark-mode input[type="text"],
+body.dark-mode input[type="password"],
+body.dark-mode input[type="email"],
+body.dark-mode input[type="number"],
+body.dark-mode input[type="date"],
+body.dark-mode select,
+body.dark-mode textarea {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-color: rgba(226, 232, 240, 0.15);
+}
+
+body.dark-mode input:focus,
+body.dark-mode select:focus,
+body.dark-mode textarea:focus {
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 4px 18px rgba(59, 130, 246, 0.15);
+  background: #0f172a;
+}
+
+body.dark-mode input::placeholder,
+body.dark-mode textarea::placeholder {
+  color: #64748b;
+}
+
+body.dark-mode button.secondary {
+  background: rgba(226, 232, 240, 0.1);
+  color: #93c5fd;
+}
+
+body.dark-mode button.secondary:hover {
+  background: rgba(226, 232, 240, 0.15);
+}
+
+body.dark-mode table {
+  background: #1e293b;
+  color: #e2e8f0;
+  border-color: rgba(226, 232, 240, 0.1);
+}
+
+body.dark-mode table th {
+  background: #0f172a;
+  color: #cbd5e1;
+  border-color: rgba(226, 232, 240, 0.1);
+}
+
+body.dark-mode table td {
+  border-color: rgba(226, 232, 240, 0.05);
+  color: #cbd5e1;
+}
+
+body.dark-mode table tr:hover {
+  background: rgba(226, 232, 240, 0.05);
+}
+
+body.dark-mode h1,
+body.dark-mode h2,
+body.dark-mode h3,
+body.dark-mode h4,
+body.dark-mode h5,
+body.dark-mode h6 {
+  color: #e2e8f0;
+}
+
+body.dark-mode .flashes {
+  background: #1e293b;
+  border-color: rgba(226, 232, 240, 0.2);
+}
+
+body.dark-mode .flashes li {
+  color: #e2e8f0;
+}
+
+/* Dark mode toggle button */
+.dark-mode-toggle {
+  background: none;
+  border: 1px solid rgba(226, 232, 240, 0.2);
+  color: #cbd5e1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+body:not(.dark-mode) .dark-mode-toggle:hover {
+  background: rgba(15, 23, 42, 0.06);
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+body.dark-mode .dark-mode-toggle {
+  color: #e2e8f0;
+  border-color: rgba(226, 232, 240, 0.3);
+}
+
+body.dark-mode .dark-mode-toggle:hover {
+  background: rgba(226, 232, 240, 0.1);
+  border-color: rgba(226, 232, 240, 0.4);
+}
+
+/* Modal dark mode */
+body.dark-mode #global-loading-popup > div {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+/* Exercise block dark mode */
+body.dark-mode .exercise-block {
+  background: #1e293b;
+  border-color: rgba(226, 232, 240, 0.1);
+}
+
+body.dark-mode .exercise-header {
+  background: #0f172a;
+}
+
+body.dark-mode .exercise-badge {
+  background: #0b63d6;
+  color: #fff;
+}
+
+body.dark-mode .drag-handle {
+  color: #64748b;
+}
+
+/* Status/alert styling in dark mode */
+body.dark-mode .status-success { color: #4ade80; }
+body.dark-mode .status-error { color: #f87171; }
+body.dark-mode .status-warning { color: #fbbf24; }
