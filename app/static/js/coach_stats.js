@@ -246,8 +246,14 @@ document.addEventListener('DOMContentLoaded', function(){
   // Load and populate all available exercises (do this only once per athlete)
   async function populateExerciseSelect(athleteId) {
     try {
+      // Show the loader when starting to fetch exercises
+      if (performanceLoader) performanceLoader.classList.add('show');
+      
       const res = await fetch(`/coach/stats/athlete/${athleteId}/performance.json`);
-      if (!res.ok) return;
+      if (!res.ok) {
+        if (performanceLoader) performanceLoader.classList.remove('show');
+        return;
+      }
       const rawData = await res.json();
       
       // Immediately populate perfCache with raw (unfiltered) data
@@ -263,8 +269,13 @@ document.addEventListener('DOMContentLoaded', function(){
           exSelect.appendChild(opt);
         });
       }
+      
+      // Hide the loader ONLY when exercises are actually populated
+      if (performanceLoader) performanceLoader.classList.remove('show');
+      console.log(`Exercises loaded: ${Object.keys(rawData || {}).length} exercises available`);
     } catch (err) {
       console.error('Error populating exercise select:', err);
+      if (performanceLoader) performanceLoader.classList.remove('show');
     }
   }
 
