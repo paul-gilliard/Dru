@@ -250,6 +250,10 @@ document.addEventListener('DOMContentLoaded', function(){
       if (!res.ok) return;
       const rawData = await res.json();
       
+      // Immediately populate perfCache with raw (unfiltered) data
+      // So that renderExercise can display data while loadPerformance filters in background
+      perfCache = rawData;
+      
       exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
       if (rawData) {
         Object.keys(rawData).sort().forEach(ex => {
@@ -839,7 +843,11 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 
   function renderExercise(ex){
-    if (!perfCache || !perfCache[ex]) return;
+    console.log('renderExercise called with:', ex, 'perfCache:', perfCache);
+    if (!perfCache || !perfCache[ex]) {
+      console.warn(`No data in perfCache for exercise: ${ex}`);
+      return;
+    }
     
     const mainSeriesContainer = document.getElementById('main-series-container');
     const otherSeriesContainer = document.getElementById('other-series-container');
@@ -851,6 +859,7 @@ document.addEventListener('DOMContentLoaded', function(){
     otherTableBody.innerHTML = '';
     
     const data = perfCache[ex];
+    console.log('Exercise data:', data);
     
     // Render main series
     if (data.main_series && data.main_series.length > 0) {
@@ -1069,6 +1078,7 @@ document.addEventListener('DOMContentLoaded', function(){
   });
   exSelect.addEventListener('change', function(){
     const ex = this.value;
+    console.log('Exercise select changed to:', ex);
     if (!ex) { 
       document.getElementById('main-series-container').style.display = 'none';
       document.getElementById('other-series-container').style.display = 'none';
