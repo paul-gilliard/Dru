@@ -176,6 +176,7 @@
   document.getElementById('duplicate-form').addEventListener('submit', function(e) {
     e.preventDefault();
     if (duplicateProgramId) {
+      showLoadingPopup();
       const form = this;
       form.action = `/coach/programming/${duplicateProgramId}/duplicate`;
       form.submit();
@@ -185,6 +186,7 @@
   document.getElementById('rename-form').addEventListener('submit', function(e) {
     e.preventDefault();
     if (renameProgramId) {
+      showLoadingPopup();
       const newName = document.getElementById('rename_input').value;
       const form = this;
       form.action = `/coach/programming/${renameProgramId}/rename`;
@@ -230,7 +232,10 @@
     }
 
     yesBtn.addEventListener('click', function(){
-      if (pendingForm) pendingForm.submit();
+      if (pendingForm) {
+        showLoadingPopup();
+        pendingForm.submit();
+      }
       hide();
     });
     noBtn.addEventListener('click', hide);
