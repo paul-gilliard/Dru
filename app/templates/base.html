@@ -299,10 +299,11 @@
         document.addEventListener('DOMContentLoaded', function() {
             document.querySelectorAll('form').forEach(form => {
                 form.addEventListener('submit', function(e) {
-                    // Ne pas afficher la popup pour les formulaires sans action ou avec actions asynchrones
+                    // Ne pas afficher la popup pour les formulaires sans action, avec actions asynchrones, ou les formulaires de suppression
                     const action = form.getAttribute('action');
-                    if (action && !action.includes('http')) {
-                        // C'est un formulaire qui va recharger la page
+                    const isDeleteForm = form.classList.contains('delete-form');
+                    if (action && !action.includes('http') && !isDeleteForm) {
+                        // C'est un formulaire qui va recharger la page (sauf les suppressions)
                         showLoadingPopup();
                     }
                 });
