@@ -537,6 +537,12 @@ let draggedElement = null;
 // Handle save button click - submit the form
 document.addEventListener('click', function(e) {
   if (e.target.matches('.save-program-btn')) {
+    // Show loading popup
+    const loadingPopup = document.getElementById('loading-popup');
+    if (loadingPopup) {
+      loadingPopup.classList.add('show');
+    }
+    
     // Submit the form
     const form = document.getElementById('program-form');
     if (form) {
