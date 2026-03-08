@@ -40,20 +40,9 @@ document.addEventListener('DOMContentLoaded', function(){
   let journalCurrentDate = new Date(); // Current date for navigation
 
   // Filter data by date range
+  // Filter data by date range (for arrays like main_series or other_series)
   function filterByDateRange(data) {
-    if (!dateRange.start && !dateRange.end) return data;
-    return data.filter(entry => {
-      const entryDate = new Date(entry.date);
-      const start = dateRange.start ? new Date(dateRange.start) : null;
-      const end = dateRange.end ? new Date(dateRange.end) : null;
-      if (start && entryDate < start) return false;
-      if (end && entryDate > end) return false;
-      return true;
-    });
-  }
-
-  // Filter data by date range
-  function filterByDateRange(data) {
+    if (!data || !Array.isArray(data)) return data;
     if (!dateRange.start && !dateRange.end) return data;
     return data.filter(entry => {
       const entryDate = new Date(entry.date);
@@ -287,7 +276,11 @@ document.addEventListener('DOMContentLoaded', function(){
       if (dateRange.start || dateRange.end) {
         const filteredData = {};
         Object.keys(data).forEach(ex => {
-          filteredData[ex] = filterByDateRange(data[ex]);
+          const exData = data[ex];
+          filteredData[ex] = {
+            main_series: exData.main_series ? filterByDateRange(exData.main_series) : [],
+            other_series: exData.other_series ? filterByDateRange(exData.other_series) : []
+          };
         });
         data = filteredData;
       }
@@ -650,25 +643,30 @@ document.addEventListener('DOMContentLoaded', function(){
       const weightArrow = getArrow(data.weight_diff);
       const weightValue = data.weight_diff !== null ? 
         `${formatDiff(data.weight_diff, 2)} kg ${weightArrow}` : '—';
-      document.getElementById('summary-weight').textContent = weightValue;
+      const wEl = document.getElementById('summary-weight');
+      if (wEl) wEl.textContent = weightValue;
       
       const kcalsArrow = getArrow(data.kcals_diff);
       const kcalsValue = data.kcals_diff !== null ? 
         `${formatDiff(data.kcals_diff, 0)} cal ${kcalsArrow}` : '—';
-      document.getElementById('summary-kcals').textContent = kcalsValue;
+      const kEl = document.getElementById('summary-kcals');
+      if (kEl) kEl.textContent = kcalsValue;
       
       const waterArrow = getArrow(data.water_diff);
       const waterValue = data.water_diff !== null ? 
         `${formatDiff(data.water_diff, 0)} ml ${waterArrow}` : '—';
-      document.getElementById('summary-water').textContent = waterValue;
+      const wtrEl = document.getElementById('summary-water');
+      if (wtrEl) wtrEl.textContent = waterValue;
       
       const sleepArrow = getArrow(data.sleep_diff);
       const sleepValue = data.sleep_diff !== null ? 
         `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
-      document.getElementById('summary-sleep').textContent = sleepValue;
+      const slEl = document.getElementById('summary-sleep');
+      if (slEl) slEl.textContent = sleepValue;
       
       // Fill tonnage rows with detail buttons
       const tonnageBody = document.getElementById('summary-tonnage-body');
+      if (!tonnageBody) return;
       tonnageBody.innerHTML = '';
       
       Object.keys(data.tonnage_diff_by_muscle).sort().forEach(muscle => {
