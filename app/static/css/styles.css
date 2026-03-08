@@ -1024,6 +1024,126 @@ body.dark-mode .drag-handle {
   color: #64748b;
 }
 
+body.dark-mode .drag-handle:hover {
+  color: #0b63d6;
+  background: rgba(11, 99, 214, 0.2);
+}
+
+/* Programming edit page dark mode */
+body.dark-mode .day-row {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
+  border-left-color: #0b63d6;
+}
+
+body.dark-mode .exercise-block {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
+  border-color: rgba(11, 99, 214, 0.25) !important;
+}
+
+body.dark-mode .exercise-block:hover {
+  background: linear-gradient(135deg, #1e293b 0%, #1e293b 100%) !important;
+  border-color: rgba(11, 99, 214, 0.45) !important;
+  box-shadow: 0 3px 12px rgba(11, 99, 214, 0.2) !important;
+}
+
+body.dark-mode .exercise-block.dragging {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%) !important;
+}
+
+body.dark-mode .exercise-block.drag-over {
+  background: linear-gradient(135deg, #0f3a5c 0%, #0f172a 100%) !important;
+  border: 2px solid #0b63d6 !important;
+}
+
+body.dark-mode .exercise-header-expanded {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+body.dark-mode .exercise-header-expanded div {
+  color: #e2e8f0;
+}
+
+body.dark-mode .exercise-muscle {
+  background: #0f172a !important;
+  color: #cbd5e1;
+}
+
+body.dark-mode .series-row {
+  background: #0f172a;
+  border-color: rgba(226, 232, 240, 0.05);
+}
+
+body.dark-mode .series-row > div {
+  color: #cbd5e1;
+}
+
+body.dark-mode .series-number {
+  color: #cbd5e1;
+}
+
+body.dark-mode .series-row input {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-color: rgba(226, 232, 240, 0.1);
+}
+
+body.dark-mode .series-row input:focus {
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+body.dark-mode .series-row label {
+  color: #cbd5e1;
+}
+
+body.dark-mode .series-main-checkbox {
+  accent-color: #0b63d6;
+}
+
+body.dark-mode .delete-exercise,
+body.dark-mode .delete-series {
+  background: #dc2626;
+}
+
+body.dark-mode .delete-exercise:hover,
+body.dark-mode .delete-series:hover {
+  background: #b91c1c;
+}
+
+body.dark-mode .add-series,
+body.dark-mode .add-exercise {
+  background: #0b63d6;
+  color: #fff;
+}
+
+body.dark-mode .add-series:hover,
+body.dark-mode .add-exercise:hover {
+  background: #0952b8;
+}
+
+body.dark-mode .exercise-header {
+  background: #0f172a;
+  color: #e2e8f0;
+}
+
+body.dark-mode .exercise-name {
+  color: #e2e8f0;
+}
+
+body.dark-mode .exercise-meta {
+  color: #cbd5e1;
+}
+
+body.dark-mode .exercise-info {
+  color: #e2e8f0;
+}
+
+body.dark-mode .programming-edit-root .card {
+  background: #1e293b;
+  border-color: rgba(226, 232, 240, 0.1);
+}
+
 /* Status/alert styling in dark mode */
 body.dark-mode .status-success { color: #4ade80; }
 body.dark-mode .status-error { color: #f87171; }
