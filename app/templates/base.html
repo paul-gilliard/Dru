@@ -222,6 +222,7 @@
             border-color: #0f172a;
         }
     </style>
+    {% block extra_head %}{% endblock %}
 </head>
 <body{% if request.endpoint == 'athlete_home' %} class="athlete-page"{% endif %}>
     <nav>

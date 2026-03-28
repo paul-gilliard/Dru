@@ -1,5 +1,11 @@
 {% extends 'base.html' %}
 
+{% block extra_head %}
+<style>
+  body { background: #FFFF00 !important; }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="athlete-page-bg">
 <h2>Bienvenue, {{ athlete.username }}</h2>
