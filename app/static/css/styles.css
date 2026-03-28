@@ -1005,6 +1005,14 @@ body.dark-mode #global-loading-popup > div {
   color: #e2e8f0;
 }
 
+/* Athlete page - pink background */
+.athlete-page-bg {
+  background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
+  padding: 24px;
+  border-radius: 12px;
+  min-height: calc(100vh - 200px);
+}
+
 /* Exercise block dark mode */
 body.dark-mode .exercise-block {
   background: #1e293b;
