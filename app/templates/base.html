@@ -223,7 +223,7 @@
         }
     </style>
 </head>
-<body>
+<body{% if request.endpoint == 'athlete_home' %} class="athlete-page"{% endif %}>
     <nav>
         <div class="navbar-container" style="width: 100%; display: flex; align-items: center; justify-content: space-between;">
             {% if session.get('role') == 'athlete' %}

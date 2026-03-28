@@ -1005,9 +1005,13 @@ body.dark-mode #global-loading-popup > div {
   color: #e2e8f0;
 }
 
-/* Athlete page - pink background */
+/* Athlete page - yellow background */
+body.athlete-page {
+  background: #FFFF00 !important;
+}
+
 .athlete-page-bg {
-  background: #ffb6d9;
+  background: #FFFF00 !important;
   padding: 24px;
   border-radius: 12px;
   min-height: calc(100vh - 200px);
