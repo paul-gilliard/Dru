@@ -1007,7 +1007,7 @@ body.dark-mode #global-loading-popup > div {
 
 /* Athlete page - pink background */
 .athlete-page-bg {
-  background: linear-gradient(135deg, #fce7f3 0%, #fbcfe8 100%);
+  background: #ffb6d9;
   padding: 24px;
   border-radius: 12px;
   min-height: calc(100vh - 200px);
