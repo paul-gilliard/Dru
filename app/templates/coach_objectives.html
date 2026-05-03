@@ -234,7 +234,7 @@
                     <div class="objective-actions">
                         <a href="{{ url_for('coach_objectives_edit', objective_id=obj.id) }}" class="btn-small btn-edit">Modifier</a>
                         <form method="post" action="{{ url_for('coach_objectives_delete', objective_id=obj.id) }}" style="display: inline; margin: 0;">
-                            <button type="submit" class="btn-small btn-delete" onclick="return confirm('Êtes-vous sûr ?')">Supprimer</button>
+                            <button type="submit" class="btn-small btn-delete" data-confirm-msg="Supprimer cet objectif ?">Supprimer</button>
                         </form>
                     </div>
                 </div>

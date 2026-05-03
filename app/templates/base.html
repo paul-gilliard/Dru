@@ -297,6 +297,19 @@
         </div>
     </div>
 
+    <!-- Global Confirm Delete Modal -->
+    <div id="global-confirm-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.55); z-index:10000; align-items:center; justify-content:center;">
+        <div style="background:white; border-radius:12px; padding:28px 32px; max-width:420px; width:90%; box-shadow:0 12px 48px rgba(0,0,0,0.28); text-align:center;">
+            <div style="font-size:2.2em; margin-bottom:12px;">🗑️</div>
+            <p id="global-confirm-message" style="font-size:1.05em; font-weight:600; color:#1e293b; margin-bottom:6px;"></p>
+            <p style="font-size:0.88em; color:#64748b; margin-bottom:22px;">Cette action est irréversible.</p>
+            <div style="display:flex; gap:12px; justify-content:center;">
+                <button id="global-confirm-no" onclick="_confirmClose()" style="flex:1; padding:10px 0; border:1px solid #cbd5e1; background:white; border-radius:8px; font-size:0.97em; font-weight:600; cursor:pointer; color:#475569;">Non, annuler</button>
+                <button id="global-confirm-yes" style="flex:1; padding:10px 0; border:none; background:#dc2626; border-radius:8px; font-size:0.97em; font-weight:700; cursor:pointer; color:white;">Oui, supprimer</button>
+            </div>
+        </div>
+    </div>
+
     <style>
         @keyframes spin {
             0% { transform: rotate(0deg); }
@@ -406,6 +419,50 @@
                     menu.classList.remove('active');
                 }
             });
+        });
+
+        // ============ GLOBAL CONFIRM MODAL ============
+        let _confirmCallback = null;
+
+        function askConfirm(message, onYes) {
+            _confirmCallback = onYes;
+            document.getElementById('global-confirm-message').textContent = message;
+            const modal = document.getElementById('global-confirm-modal');
+            modal.style.display = 'flex';
+            document.getElementById('global-confirm-yes').onclick = function() {
+                modal.style.display = 'none';
+                if (_confirmCallback) _confirmCallback();
+                _confirmCallback = null;
+            };
+        }
+
+        function _confirmClose() {
+            document.getElementById('global-confirm-modal').style.display = 'none';
+            _confirmCallback = null;
+        }
+
+        // Fermer si clic sur l'overlay
+        document.getElementById('global-confirm-modal').addEventListener('click', function(e) {
+            if (e.target === this) _confirmClose();
+        });
+
+        // Intercepter les boutons avec data-confirm-msg pour les soumissions de formulaires
+        document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('click', function(e) {
+                const btn = e.target.closest('[data-confirm-msg]');
+                if (!btn) return;
+                e.preventDefault();
+                e.stopPropagation();
+                const msg = btn.getAttribute('data-confirm-msg');
+                askConfirm(msg, function() {
+                    const form = btn.closest('form');
+                    if (form) {
+                        // Retirer l'attribut pour éviter une boucle
+                        btn.removeAttribute('data-confirm-msg');
+                        btn.click();
+                    }
+                });
+            }, true);
         });
     </script>
 </body>

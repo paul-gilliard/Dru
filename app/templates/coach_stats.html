@@ -32,6 +32,47 @@
     100% { transform: rotate(360deg); }
   }
 
+  /* Stats tabs */
+  #stats-tabs-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #e5e7eb;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .stats-tab {
+    background: none;
+    border: none;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    padding: 10px 20px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #64748b;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    white-space: nowrap;
+  }
+  .stats-tab:hover { color: #0b63d6; }
+  .stats-tab.active {
+    color: #0b63d6;
+    border-bottom-color: #0b63d6;
+  }
+  .stats-tab-pane { display: none; }
+  .stats-tab-pane.active { display: block; }
+  .tab-spinner {
+    display: none;
+    width: 8px;
+    height: 8px;
+    border: 2px solid #d1d5db;
+    border-top-color: #0b63d6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-left: 6px;
+  }
+  .tab-spinner.loading { display: inline-block; }
+
 </style>
 
 <h2>Suivi statistiques</h2>
@@ -75,6 +116,24 @@
     </div>
   </div>
 </div>
+
+<!-- Tab navigation -->
+<div id="stats-tabs">
+  <div id="stats-tabs-nav">
+    <button class="stats-tab active" data-tab="recaps">Récap hebdo <span class="tab-spinner" id="tab-spinner-recaps"></span></button>
+    <button class="stats-tab" data-tab="sante">Santé &amp; Poids <span class="tab-spinner" id="tab-spinner-sante"></span></button>
+    <button class="stats-tab" data-tab="exercices">Exercices <span class="tab-spinner" id="tab-spinner-exercices"></span></button>
+    <button class="stats-tab" data-tab="analyse">Analyse avancée <span class="tab-spinner" id="tab-spinner-analyse"></span></button>
+  </div>
+  <div id="no-athlete-msg" style="padding:36px; text-align:center; color:#94a3b8; font-size:1rem; background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 8px 8px; margin-bottom:12px;">
+    Sélectionnez un athlète ci-dessus pour afficher les statistiques.
+  </div>
+</div>
+
+<div id="stats-panes-wrapper" style="display:none;">
+
+<!-- Tab: Récap hebdo -->
+<div id="tab-recaps" class="stats-tab-pane active">
 
 <!-- New Comparisons: 2 weeks and 4 weeks -->
 <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
@@ -156,75 +215,98 @@
   </div>
 </div>
 
-<!-- Full width: Poids & journaux -->
+</div><!-- /tab-recaps -->
+
+<!-- Tab: Santé & Poids -->
+<div id="tab-sante" class="stats-tab-pane">
+
+<!-- Section 1 : Comparaison de semaines -->
 <div class="card" style="margin-bottom:12px;">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-    <h3 style="margin:0;">Poids & Santé</h3>
-    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-      <label style="display:flex; align-items:center; gap:6px; font-size:0.9rem;">
-        <input id="toggle-kcals" type="checkbox" checked> Kcals
-      </label>
-      <label style="display:flex; align-items:center; gap:6px; font-size:0.9rem;">
-        <input id="toggle-water" type="checkbox" checked> Eau
-      </label>
-      <label style="display:flex; align-items:center; gap:6px; font-size:0.9rem;">
-        <input id="toggle-sleep" type="checkbox"> Sommeil
-      </label>
-      <div style="border-left:1px solid #e5e7eb; margin:0 8px;"></div>
-      <button id="journal-prev-period" class="secondary" style="padding:6px 12px;">← Précédent</button>
-      <select id="journal-view-mode" style="padding:6px 8px;">
-        <option value="week">Semaine</option>
-        <option value="month">Mois</option>
-      </select>
-      <button id="journal-next-period" class="secondary" style="padding:6px 12px;">Suivant →</button>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+    <h3 style="margin:0;">Sant&eacute; &amp; Poids</h3>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <label style="font-size:0.85rem; color:#64748b; font-weight:600;">Sem. A :</label>
+        <select id="sante-week-a" style="border:1px solid #e2e8f0; border-radius:6px; padding:4px 8px; font-size:0.85rem; background:#fff;"></select>
+      </div>
+      <span style="color:#94a3b8; font-weight:700;">vs</span>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <label style="font-size:0.85rem; color:#64748b; font-weight:600;">Sem. B :</label>
+        <select id="sante-week-b" style="border:1px solid #e2e8f0; border-radius:6px; padding:4px 8px; font-size:0.85rem; background:#fff;"></select>
+      </div>
     </div>
   </div>
-
-  <!-- Stats cards row -->
-  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:12px;">
-    <div style="background:#f8fafc; border-radius:6px; padding:12px; border-left:4px solid #0b63d6;">
-      <div style="font-size:0.8rem; color:#64748b; margin-bottom:4px;">Poids moyen</div>
-      <div style="font-size:1.5rem; font-weight:700; color:#0b63d6;" id="journal-avg-weight">—</div>
-    </div>
-    <div style="background:#f8fafc; border-radius:6px; padding:12px; border-left:4px solid #10b981;">
-      <div style="font-size:0.8rem; color:#64748b; margin-bottom:4px;">Kcals moyen</div>
-      <div style="font-size:1.5rem; font-weight:700; color:#10b981;" id="journal-avg-kcals">—</div>
-    </div>
-    <div style="background:#f8fafc; border-radius:6px; padding:12px; border-left:4px solid #f59e0b;">
-      <div style="font-size:0.8rem; color:#64748b; margin-bottom:4px;">Eau moyenne</div>
-      <div style="font-size:1.5rem; font-weight:700; color:#f59e0b;" id="journal-avg-water">—</div>
-    </div>
-    <div style="background:#f8fafc; border-radius:6px; padding:12px; border-left:4px solid #8b5cf6;">
-      <div style="font-size:0.8rem; color:#64748b; margin-bottom:4px;">Sommeil moyen</div>
-      <div style="font-size:1.5rem; font-weight:700; color:#8b5cf6;" id="journal-avg-sleep">—</div>
-    </div>
-  </div>
-
-  <!-- Chart -->
-  <div style="position:relative; height:250px; margin-bottom:12px;">
-    <canvas id="chart-journal"></canvas>
-  </div>
-
-  <!-- Data table -->
-  <div style="margin-top:20px;">
-    <h4 style="margin:0 0 12px 0; color:#334155;">Données détaillées</h4>
-    <div style="overflow-x:auto;">
-      <table style="width:100%; border-collapse:collapse; font-size:0.9rem;">
-        <thead>
-          <tr style="background:#f1f5f9; border-bottom:2px solid #cbd5e1;">
-            <th style="padding:10px; text-align:left; font-weight:600;">Date</th>
-            <th style="padding:10px; text-align:center; font-weight:600;">Poids (kg)</th>
-            <th style="padding:10px; text-align:center; font-weight:600;">Kcals</th>
-            <th style="padding:10px; text-align:center; font-weight:600;">Eau (ml)</th>
-            <th style="padding:10px; text-align:center; font-weight:600;">Sommeil (h)</th>
-          </tr>
-        </thead>
-        <tbody id="journal-table-body">
-        </tbody>
-      </table>
-    </div>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:12px;">
+    <div id="sante-card-weight"></div>
+    <div id="sante-card-kcals"></div>
+    <div id="sante-card-water"></div>
+    <div id="sante-card-sleep"></div>
   </div>
 </div>
+
+<!-- Section 2 : &Eacute;volution multi-semaines -->
+<div class="card" style="margin-bottom:12px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+    <h4 style="margin:0; color:#0b63d6;">&Eacute;volution hebdomadaire</h4>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <select id="sante-evolution-weeks" style="border:1px solid #e2e8f0; border-radius:6px; padding:4px 8px; font-size:0.85rem; background:#fff;">
+        <option value="4">4 sem.</option>
+        <option value="8" selected>8 sem.</option>
+        <option value="12">12 sem.</option>
+        <option value="24">24 sem.</option>
+      </select>
+    </div>
+  </div>
+  <div style="display:flex; flex-wrap:wrap; gap:8px 16px; margin-top:10px; padding:10px 0 4px; border-top:1px solid #f1f5f9;">
+    <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; cursor:pointer; white-space:nowrap;"><input id="sante-evo-kcals"   type="checkbox"> <span style="color:#ef4444; font-weight:600;">&#9632;</span> Kcals</label>
+    <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; cursor:pointer; white-space:nowrap;"><input id="sante-evo-protein" type="checkbox"> <span style="color:#10b981; font-weight:600;">&#9632;</span> Prot&eacute;ines</label>
+    <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; cursor:pointer; white-space:nowrap;"><input id="sante-evo-carbs"   type="checkbox"> <span style="color:#f59e0b; font-weight:600;">&#9632;</span> Glucides</label>
+    <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; cursor:pointer; white-space:nowrap;"><input id="sante-evo-fats"    type="checkbox"> <span style="color:#f97316; font-weight:600;">&#9632;</span> Lipides</label>
+    <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; cursor:pointer; white-space:nowrap;"><input id="sante-evo-water"   type="checkbox"> <span style="color:#06b6d4; font-weight:600;">&#9632;</span> Eau</label>
+    <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; cursor:pointer; white-space:nowrap;"><input id="sante-evo-steps"   type="checkbox"> <span style="color:#84cc16; font-weight:600;">&#9632;</span> Pas</label>
+    <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; cursor:pointer; white-space:nowrap;"><input id="sante-evo-sleep"   type="checkbox"> <span style="color:#8b5cf6; font-weight:600;">&#9632;</span> Sommeil</label>
+    <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; cursor:pointer; white-space:nowrap;"><input id="sante-evo-energy"  type="checkbox"> <span style="color:#eab308; font-weight:600;">&#9632;</span> &Eacute;nergie</label>
+    <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; cursor:pointer; white-space:nowrap;"><input id="sante-evo-stress"  type="checkbox"> <span style="color:#dc2626; font-weight:600;">&#9632;</span> Stress</label>
+    <label style="display:flex; align-items:center; gap:5px; font-size:0.82rem; cursor:pointer; white-space:nowrap;"><input id="sante-evo-hunger"  type="checkbox"> <span style="color:#78716c; font-weight:600;">&#9632;</span> Faim</label>
+  </div>
+  <div style="position:relative; height:220px; margin-top:6px;">
+    <canvas id="chart-sante-evolution"></canvas>
+  </div>
+</div>
+
+<!-- Section 3 : D&eacute;tail semaine -->
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+    <h4 style="margin:0; color:#0b63d6;" id="sante-detail-title">D&eacute;tail &mdash; Semaine courante</h4>
+    <div style="display:flex; gap:8px; align-items:center;">
+      <button id="sante-detail-prev" class="secondary" style="padding:4px 10px; font-size:0.85rem;">&larr; Pr&eacute;c.</button>
+      <span id="sante-detail-range" style="font-size:0.82rem; color:#64748b; min-width:140px; text-align:center;"></span>
+      <button id="sante-detail-next" class="secondary" style="padding:4px 10px; font-size:0.85rem;" disabled>Suiv. &rarr;</button>
+    </div>
+  </div>
+  <div style="position:relative; height:200px; margin-bottom:12px;">
+    <canvas id="chart-journal"></canvas>
+  </div>
+  <div style="overflow-x:auto;">
+    <table style="width:100%; border-collapse:collapse; font-size:0.88rem;">
+      <thead>
+        <tr style="background:#f1f5f9; border-bottom:2px solid #cbd5e1;">
+          <th style="padding:8px; text-align:left; font-weight:600;">Date</th>
+          <th style="padding:8px; text-align:center; font-weight:600;">Poids (kg)</th>
+          <th style="padding:8px; text-align:center; font-weight:600;">Kcals</th>
+          <th style="padding:8px; text-align:center; font-weight:600;">Eau (ml)</th>
+          <th style="padding:8px; text-align:center; font-weight:600;">Sommeil (h)</th>
+        </tr>
+      </thead>
+      <tbody id="journal-table-body"></tbody>
+    </table>
+  </div>
+</div>
+
+</div><!-- /tab-sante -->
+
+<!-- Tab: Exercices -->
+<div id="tab-exercices" class="stats-tab-pane">
 
 <!-- Performances -->
 <div class="card" style="margin-bottom:12px;">
@@ -284,6 +366,72 @@
     </div>
   </div>
 </div>
+
+</div><!-- /tab-exercices -->
+
+<!-- Tab: Analyse avancée -->
+<div id="tab-analyse" class="stats-tab-pane">
+
+<!-- Section: Analyse avancée -->
+<div class="card" id="advanced-stats-section" style="display:none; margin-bottom:12px;">
+  <h3 style="margin-bottom:20px;">Analyse avancée</h3>
+
+  <!-- Feature 5: Régularité des séances -->
+  <div style="margin-bottom:28px;">
+    <h4 style="color:#0b63d6; margin-bottom:12px;">Régularité — séances par semaine</h4>
+    <div id="regularity-container" style="display:none;">
+      <div id="regularity-badges" style="display:flex; gap:12px; flex-wrap:wrap;"></div>
+    </div>
+    <div id="regularity-empty" style="display:none; color:#94a3b8; font-size:0.9rem;">Aucune donnée disponible</div>
+  </div>
+
+  <!-- Feature 1: Tonnage hebdo par groupe musculaire (barres empilées) -->
+  <div style="margin-bottom:28px;">
+    <h4 style="color:#0b63d6; margin-bottom:12px;">Tonnage hebdo par groupe musculaire</h4>
+    <div id="weekly-volume-container" style="display:none;">
+      <canvas id="chart-weekly-volume" height="110"></canvas>
+    </div>
+    <div id="weekly-volume-empty" style="display:none; color:#94a3b8; font-size:0.9rem;">Aucune donnée disponible</div>
+  </div>
+
+  <!-- Feature 4: Radar du tonnage S vs S-1 -->
+  <div style="margin-bottom:28px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap;">
+      <h4 style="color:#0b63d6; margin:0;">Radar du tonnage &mdash; cette semaine vs semaine pr&eacute;c&eacute;dente</h4>
+      <select id="radar-compare-mode" style="border:1px solid #e2e8f0; border-radius:6px; padding:4px 10px; font-size:0.85rem; color:#374151; background:#fff; cursor:pointer;">
+        <option value="0-1">S vs S-1</option>
+        <option value="0-2">S vs S-2</option>
+        <option value="1-2">S-1 vs S-2</option>
+        <option value="1-3">S-1 vs S-3</option>
+      </select>
+    </div>
+    <div id="muscle-radar-container" style="display:none; max-width:420px; margin:0 auto;">
+      <canvas id="chart-muscle-radar"></canvas>
+    </div>
+    <div id="muscle-radar-empty" style="display:none; color:#94a3b8; font-size:0.9rem;">Aucune donn&eacute;e disponible pour la p&eacute;riode s&eacute;lectionn&eacute;e</div>
+  </div>
+
+  <!-- Feature 3: Comparatif par exercice -->
+  <div>
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap;">
+      <h4 style="color:#0b63d6; margin:0;">Comparatif par exercice — charge max (kg)</h4>
+      <select id="exercise-compare-mode" style="border:1px solid #e2e8f0; border-radius:6px; padding:4px 10px; font-size:0.85rem; color:#374151; background:#fff; cursor:pointer;">
+        <option value="0-1">S vs S-1</option>
+        <option value="0-2">S vs S-2</option>
+        <option value="1-2">S-1 vs S-2</option>
+        <option value="1-3">S-1 vs S-3</option>
+      </select>
+    </div>
+    <div id="exercise-compare-container" style="display:none;">
+      <canvas id="chart-exercise-compare" height="140"></canvas>
+    </div>
+    <div id="exercise-compare-empty" style="display:none; color:#94a3b8; font-size:0.9rem;">Aucune donnée disponible pour la période sélectionnée</div>
+  </div>
+</div>
+
+</div><!-- /tab-analyse -->
+
+</div><!-- /stats-panes-wrapper -->
 
 <!-- Modal for muscle detail -->
 <div id="muscle-detail-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:1000; align-items:center; justify-content:center;">

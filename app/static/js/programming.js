@@ -1,3 +1,31 @@
+// ── Helpers : conversion décimal minutes ↔ MM:SS ──────────────────────────
+function decMinToMMSS(dec) {
+  // 0.5 → "0:30"  |  1.5 → "1:30"  |  2 → "2:00"
+  const val = parseFloat(dec);
+  if (isNaN(val)) return '';
+  const m = Math.floor(val);
+  const s = Math.round((val - m) * 60);
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+function mmssToDecMin(str) {
+  // "1:30" → "1.5"  |  "0:45" → "0.75"  |  "2:00" → "2"
+  // Compat arrière : si c'est déjà un nombre décimal, on le garde tel quel
+  if (!str || !String(str).trim()) return '';
+  const s = String(str).trim();
+  if (s.includes(':')) {
+    const [minPart, secPart] = s.split(':');
+    const m = parseInt(minPart) || 0;
+    const sc = parseInt(secPart) || 0;
+    const dec = m + sc / 60;
+    // Arrondi propre sans trailing zeros
+    return parseFloat(dec.toFixed(6)).toString();
+  }
+  // Nombre brut (compatibilité anciens enregistrements)
+  return s;
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 // Fonction pour mettre à jour les numéros d'ordre des exercices réduits
 function updateExerciseOrderNumbers() {
   document.querySelectorAll('.exercises-container').forEach(container => {
@@ -334,7 +362,7 @@ document.addEventListener('DOMContentLoaded', function() {
 function parseSeriesDescription(row, description) {
   // Example: "S1: 8 reps, Rest: 0.5min, RIR: 2" or "S1: 15-20 reps, Rest: 0.5min, RIR: 2"
   // Extract: reps (can be range like 15-20), rest, rir
-  const repsMatch = description.match(/(\d+(?:-\d+)?)\s*reps/i);
+  const repsMatch = description.match(/(\d+\+?(?:-\d+\+?)?)\s*reps/i);
   const restMatch = description.match(/Rest:\s*([\d.]+)\s*min/i);
   const rirMatch = description.match(/RIR:\s*([\d.]+)/i);
 
@@ -345,9 +373,9 @@ function parseSeriesDescription(row, description) {
     return;
   }
 
-  // inputs are: Reps, Rest, RIR (in order from grid template)
+  // inputs are: Reps, Rest (MM:SS), RIR (in order from grid template)
   if (repsMatch) inputs[0].value = repsMatch[1];
-  if (restMatch) inputs[1].value = restMatch[1];
+  if (restMatch) inputs[1].value = decMinToMMSS(restMatch[1]);
   if (rirMatch) inputs[2].value = rirMatch[1];
 }
 
@@ -412,11 +440,12 @@ function parseSeriesDescription(row, description) {
             
             seriesRows.forEach((row, sIdx) => {
               const reps = row.querySelector('input[placeholder="Reps"]')?.value || '';
-              const rest = row.querySelector('input[placeholder="Rest (min)"]')?.value || '';
+              const restRaw = row.querySelector('input.rest-input')?.value || '';
+              const rest = mmssToDecMin(restRaw);
               const rir = row.querySelector('input[placeholder="RIR"]')?.value || '';
               const isMain = row.querySelector('.series-main-checkbox')?.checked || false;
               
-              // Build series line: "S1: 15-20 reps, Rest: 0.5min, RIR: 2"
+              // Build series line: "S1: 15-20 reps, Rest: 1:30 → stored as 1.5min"
               let line = `S${sIdx + 1}:`;
               if (reps) line += ` ${reps} reps`;
               if (rest) line += `, Rest: ${rest}min`;

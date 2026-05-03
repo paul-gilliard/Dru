@@ -1414,13 +1414,18 @@ def register_routes(app):
         data = []
         for e in entries:
             data.append({
-                'date': e.entry_date.isoformat(),
-                'weight': e.weight,
-                'kcals': e.kcals,
-                'water_ml': e.water_ml,
+                'date':        e.entry_date.isoformat(),
+                'weight':      e.weight,
+                'kcals':       e.kcals,
+                'protein':     e.protein,
+                'carbs':       e.carbs,
+                'fats':        e.fats,
+                'water_ml':    e.water_ml,
+                'steps':       e.steps,
                 'sleep_hours': e.sleep_hours,
-                'energy': e.energy,
-                'stress': e.stress
+                'energy':      e.energy,
+                'stress':      e.stress,
+                'hunger':      e.hunger,
             })
         return jsonify(data)
 
@@ -1692,6 +1697,9 @@ def register_routes(app):
             if not user or user.role != 'coach':
                 return jsonify({'error':'forbidden'}), 403
             
+            # Preload all exercises into a dict to avoid N+1 queries
+            exercise_map = {ex.name: ex.muscle_group for ex in Exercise.query.all()}
+
             # Get all performance entries for this athlete
             entries = PerformanceEntry.query.filter_by(athlete_id=athlete_id).order_by(PerformanceEntry.entry_date.asc()).all()
             
@@ -1701,12 +1709,9 @@ def register_routes(app):
                 if not e.exercise:
                     continue
                 
-                # Get exercise to find muscle group
-                ex = Exercise.query.filter_by(name=e.exercise).first()
-                if not ex:
+                muscle_group = exercise_map.get(e.exercise)
+                if not muscle_group:
                     continue
-                
-                muscle_group = ex.muscle_group
                 date_str = e.entry_date.isoformat()
                 
                 if muscle_group not in tonnage_data:
@@ -2931,6 +2936,7 @@ def register_routes(app):
                 simple_sugars = float(simple_sugars) if simple_sugars else None
                 fiber = float(fiber) if fiber else None
                 salt = float(salt) if salt else None
+                brand = request.form.get('brand', '').strip() or None
                 
                 if not name or kcal <= 0 or proteins < 0 or lipids < 0 or carbs < 0:
                     flash('Erreur: vérifiez les champs obligatoires')
@@ -2943,6 +2949,7 @@ def register_routes(app):
                 
                 food = Food(
                     name=name,
+                    brand=brand,
                     kcal=kcal,
                     proteins=proteins,
                     lipids=lipids,
@@ -2993,6 +3000,7 @@ def register_routes(app):
                 food.simple_sugars = float(simple_sugars) if simple_sugars else None
                 food.fiber = float(fiber) if fiber else None
                 food.salt = float(salt) if salt else None
+                food.brand = request.form.get('brand', '').strip() or None
                 
                 if not food.name or food.kcal <= 0 or food.proteins < 0 or food.lipids < 0 or food.carbs < 0:
                     flash('Erreur: vérifiez les champs obligatoires')
@@ -3111,8 +3119,9 @@ def register_routes(app):
         foods = Food.query.order_by(Food.name).all()
         
         # Organize meals by meal_number
+        meal_count = meal_plan.meal_count or 6
         meals_by_number = {}
-        for i in range(1, 7):
+        for i in range(1, meal_count + 1):
             meals_by_number[i] = sorted(
                 [m for m in meal_plan.meals if m.meal_number == i],
                 key=lambda x: x.position or 0
@@ -3125,6 +3134,57 @@ def register_routes(app):
                              foods=foods,
                              meals_by_number=meals_by_number,
                              daily_totals=daily_totals)
+
+    @app.route('/coach/meal-plans/<int:meal_plan_id>/duplicate', methods=['POST'])
+    def coach_meal_plan_duplicate(meal_plan_id):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            flash('Accès réservé aux coachs')
+            return redirect(url_for('home'))
+
+        from app.models import MealPlan, MealEntry
+        original = MealPlan.query.get_or_404(meal_plan_id)
+        if original.coach_id != user.id:
+            flash('Accès non autorisé')
+            return redirect(url_for('coach_meal_plans'))
+
+        new_name = request.form.get('new_name', f"{original.name} (copie)").strip() or f"{original.name} (copie)"
+        new_athlete_id = request.form.get('athlete_id')
+        if not new_athlete_id:
+            new_athlete_id = original.athlete_id
+        else:
+            new_athlete_id = int(new_athlete_id)
+
+        new_plan = MealPlan(
+            name=new_name,
+            athlete_id=new_athlete_id,
+            coach_id=user.id,
+            meal_count=original.meal_count,
+            meal_time_1=original.meal_time_1, meal_time_2=original.meal_time_2,
+            meal_time_3=original.meal_time_3, meal_time_4=original.meal_time_4,
+            meal_time_5=original.meal_time_5, meal_time_6=original.meal_time_6,
+            meal_label_1=original.meal_label_1, meal_label_2=original.meal_label_2,
+            meal_label_3=original.meal_label_3, meal_label_4=original.meal_label_4,
+            meal_label_5=original.meal_label_5, meal_label_6=original.meal_label_6,
+        )
+        db.session.add(new_plan)
+        db.session.flush()
+
+        for entry in original.meals:
+            new_entry = MealEntry(
+                meal_plan_id=new_plan.id,
+                food_id=entry.food_id,
+                meal_number=entry.meal_number,
+                quantity=entry.quantity,
+                position=entry.position,
+            )
+            db.session.add(new_entry)
+
+        db.session.commit()
+        flash(f'Plan "{new_plan.name}" créé (copie de "{original.name}")')
+        return redirect(url_for('coach_meal_plan_edit', meal_plan_id=new_plan.id))
 
     @app.route('/coach/meal-plans/<int:meal_plan_id>/delete', methods=['POST'])
     def coach_meal_plan_delete(meal_plan_id):
@@ -3246,6 +3306,94 @@ def register_routes(app):
         except Exception as e:
             return jsonify({'error': str(e)}), 400
 
+    @app.route('/api/meal-plans/<int:meal_plan_id>/copy-meal', methods=['POST'])
+    def api_meal_plan_copy_meal(meal_plan_id):
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            return jsonify({'error': 'forbidden'}), 403
+
+        from app.models import MealPlan, MealEntry
+        meal_plan = MealPlan.query.get_or_404(meal_plan_id)
+        if meal_plan.coach_id != user.id:
+            return jsonify({'error': 'forbidden'}), 403
+
+        data = request.get_json()
+        from_meal = data.get('from_meal')
+        to_meal = data.get('to_meal')
+        if not from_meal or not to_meal:
+            return jsonify({'error': 'from_meal and to_meal required'}), 400
+
+        # Supprimer les entrées existantes du repas cible
+        MealEntry.query.filter_by(meal_plan_id=meal_plan_id, meal_number=to_meal).delete()
+
+        # Copier les entrées du repas source vers le repas cible
+        sources = MealEntry.query.filter_by(meal_plan_id=meal_plan_id, meal_number=from_meal).all()
+        for src in sources:
+            new_entry = MealEntry(
+                meal_plan_id=meal_plan_id,
+                food_id=src.food_id,
+                meal_number=to_meal,
+                quantity=src.quantity,
+                position=src.position
+            )
+            db.session.add(new_entry)
+
+        db.session.commit()
+        return jsonify({'success': True, 'copied': len(sources)}), 200
+
+    @app.route('/api/meal-plans/<int:meal_plan_id>/add-meal', methods=['POST'])
+    def api_meal_plan_add_meal(meal_plan_id):
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            return jsonify({'error': 'forbidden'}), 403
+        from app.models import MealPlan
+        meal_plan = MealPlan.query.get_or_404(meal_plan_id)
+        if meal_plan.coach_id != user.id:
+            return jsonify({'error': 'forbidden'}), 403
+        current = meal_plan.meal_count or 6
+        if current >= 6:
+            return jsonify({'error': 'Maximum 6 repas atteint'}), 400
+        meal_plan.meal_count = current + 1
+        db.session.commit()
+        return jsonify({'success': True, 'meal_count': meal_plan.meal_count}), 200
+
+    @app.route('/api/meal-plans/<int:meal_plan_id>/remove-meal', methods=['POST'])
+    def api_meal_plan_remove_meal(meal_plan_id):
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            return jsonify({'error': 'forbidden'}), 403
+        from app.models import MealPlan, MealEntry
+        meal_plan = MealPlan.query.get_or_404(meal_plan_id)
+        if meal_plan.coach_id != user.id:
+            return jsonify({'error': 'forbidden'}), 403
+        data = request.get_json()
+        n = data.get('meal_number')
+        if not n:
+            return jsonify({'error': 'meal_number required'}), 400
+        current = meal_plan.meal_count or 6
+        if current <= 1:
+            return jsonify({'error': 'Minimum 1 repas requis'}), 400
+        # Supprimer les entrées du repas N
+        MealEntry.query.filter_by(meal_plan_id=meal_plan_id, meal_number=n).delete()
+        # Décaler les repas N+1..current vers N..current-1
+        for i in range(n + 1, current + 1):
+            for entry in MealEntry.query.filter_by(meal_plan_id=meal_plan_id, meal_number=i).all():
+                entry.meal_number = i - 1
+            setattr(meal_plan, f'meal_label_{i-1}', getattr(meal_plan, f'meal_label_{i}'))
+            setattr(meal_plan, f'meal_time_{i-1}', getattr(meal_plan, f'meal_time_{i}'))
+        # Vider le dernier slot
+        setattr(meal_plan, f'meal_label_{current}', None)
+        setattr(meal_plan, f'meal_time_{current}', None)
+        meal_plan.meal_count = current - 1
+        db.session.commit()
+        return jsonify({'success': True, 'meal_count': meal_plan.meal_count}), 200
+
     @app.route('/api/meal-plans/<int:meal_plan_id>/totals', methods=['GET'])
     def api_meal_plan_totals(meal_plan_id):
         if 'user_id' not in session:
@@ -3255,6 +3403,46 @@ def register_routes(app):
         meal_plan = MealPlan.query.get_or_404(meal_plan_id)
         
         return jsonify(meal_plan.get_daily_totals()), 200
+
+    @app.route('/api/meal-plans/<int:meal_plan_id>/meal-time', methods=['POST'])
+    def api_meal_plan_set_time(meal_plan_id):
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            return jsonify({'error': 'forbidden'}), 403
+        from app.models import MealPlan
+        meal_plan = MealPlan.query.get_or_404(meal_plan_id)
+        if meal_plan.coach_id != user.id:
+            return jsonify({'error': 'forbidden'}), 403
+        data = request.get_json()
+        meal_number = data.get('meal_number')
+        time_value = data.get('time', '').strip()
+        if meal_number not in range(1, 7):
+            return jsonify({'error': 'meal_number invalide'}), 400
+        setattr(meal_plan, f'meal_time_{meal_number}', time_value or None)
+        db.session.commit()
+        return jsonify({'success': True}), 200
+
+    @app.route('/api/meal-plans/<int:meal_plan_id>/meal-label', methods=['POST'])
+    def api_meal_plan_set_label(meal_plan_id):
+        if 'user_id' not in session:
+            return jsonify({'error': 'not authenticated'}), 401
+        user = User.query.get(session['user_id'])
+        if not user or user.role != 'coach':
+            return jsonify({'error': 'forbidden'}), 403
+        from app.models import MealPlan
+        meal_plan = MealPlan.query.get_or_404(meal_plan_id)
+        if meal_plan.coach_id != user.id:
+            return jsonify({'error': 'forbidden'}), 403
+        data = request.get_json()
+        meal_number = data.get('meal_number')
+        label_value = data.get('label', '').strip()
+        if meal_number not in range(1, 7):
+            return jsonify({'error': 'meal_number invalide'}), 400
+        setattr(meal_plan, f'meal_label_{meal_number}', label_value or None)
+        db.session.commit()
+        return jsonify({'success': True}), 200
 
     # ============ BILAN HEBDO API ============
     @app.route('/api/coach/bilan-hebdo/unchecked-count', methods=['GET'])

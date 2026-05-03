@@ -47,6 +47,27 @@ def create_app():
         except Exception as e:
             # Silently continue if schema check fails
             pass
+
+        # Add meal_time columns to meal_plan if they don't exist
+        try:
+            from sqlalchemy import inspect as sa_inspect
+            inspector2 = sa_inspect(db.engine)
+            mp_columns = {col['name'] for col in inspector2.get_columns('meal_plan')}
+            for i in range(1, 7):
+                if f'meal_time_{i}' not in mp_columns:
+                    db.session.execute(db.text(f"ALTER TABLE meal_plan ADD COLUMN meal_time_{i} VARCHAR(5) NULL"))
+                if f'meal_label_{i}' not in mp_columns:
+                    db.session.execute(db.text(f"ALTER TABLE meal_plan ADD COLUMN meal_label_{i} VARCHAR(100) NULL"))
+            # Add brand to food if missing
+            food_columns = {col['name'] for col in inspector2.get_columns('food')}
+            if 'brand' not in food_columns:
+                db.session.execute(db.text("ALTER TABLE food ADD COLUMN brand VARCHAR(100) NULL"))
+            # Add meal_count to meal_plan if missing
+            if 'meal_count' not in mp_columns:
+                db.session.execute(db.text("ALTER TABLE meal_plan ADD COLUMN meal_count INT DEFAULT 6"))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
         
         # Créer l'utilisateur admin par défaut s'il n'existe pas
         from app.models import User
@@ -90,7 +111,27 @@ def create_app():
     # Import routes after app is created to avoid circular imports
     from app import routes
     routes.register_routes(app)
-    
+
+    # Jinja filter: formate "Rest: 0.5min" → "Repos: 0:30"
+    import re, math
+    def _dec_min_to_mmss(dec_str):
+        try:
+            val = float(dec_str)
+            m = int(math.floor(val))
+            s = round((val - m) * 60)
+            return f"{m}:{str(s).zfill(2)}"
+        except (ValueError, TypeError):
+            return dec_str
+
+    @app.template_filter('format_rest')
+    def format_rest_filter(text):
+        """Remplace 'Rest: 1.5min' par 'Repos: 1:30' dans une description de série"""
+        if not text:
+            return text
+        def replacer(m):
+            return f"Repos: {_dec_min_to_mmss(m.group(1))}"
+        return re.sub(r'Rest:\s*([\d.]+)\s*min', replacer, text, flags=re.IGNORECASE)
+
     return app
 
 

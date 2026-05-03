@@ -663,9 +663,7 @@
     }
 
     function deleteEntry(entryId) {
-        if (!confirm('Êtes-vous sûr de vouloir supprimer cette entrée ?')) {
-            return;
-        }
+        askConfirm('Supprimer cette entrée de journal ?', async function() {
 
         fetch(`/api/journal/entry/${entryId}`, {
             method: 'DELETE',
@@ -702,6 +700,7 @@
             console.error('Error deleting entry:', error);
             alert('Erreur lors de la suppression de l\'entrée');
         });
+        }); // fin askConfirm
     }
 
     function closeEditModal() {

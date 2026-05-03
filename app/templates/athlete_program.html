@@ -350,7 +350,7 @@
                                 {% if series_list %}
                                     <div class="exercise-series">
                                         {% for s in series_list %}
-                                            <div>{{ s.text }}</div>
+                                            <div>{{ s.text | format_rest }}</div>
                                         {% endfor %}
                                     </div>
                                 {% endif %}

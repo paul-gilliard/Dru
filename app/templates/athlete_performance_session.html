@@ -783,13 +783,13 @@
 
     // ============ SUPPRESSION PERFORMANCE ============
     function deletePerformance(entryId, exerciseName) {
-      if (confirm(`Êtes-vous sûr de vouloir supprimer cette performance (${exerciseName}) ?`)) {
+      askConfirm(`Supprimer cette performance (${exerciseName}) ?`, function() {
         const form = document.createElement('form');
         form.method = 'POST';
         form.action = `/athlete/performance/entry/${entryId}/delete`;
         document.body.appendChild(form);
         form.submit();
-      }
+      });
     }
 </script>
 

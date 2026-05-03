@@ -208,6 +208,7 @@ class Food(db.Model):
     """Banque d'aliments"""
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(192), nullable=False, unique=True)
+    brand = db.Column(db.String(100), nullable=True)
     kcal = db.Column(db.Float, nullable=False)
     proteins = db.Column(db.Float)
     lipids = db.Column(db.Float)
@@ -226,6 +227,7 @@ class Food(db.Model):
         return {
             'id': self.id,
             'name': self.name,
+            'brand': self.brand,
             'kcal': self.kcal,
             'proteins': self.proteins,
             'lipids': self.lipids,
@@ -246,6 +248,20 @@ class MealPlan(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    meal_time_1 = db.Column(db.String(5), nullable=True)  # e.g. "08:00"
+    meal_time_2 = db.Column(db.String(5), nullable=True)
+    meal_time_3 = db.Column(db.String(5), nullable=True)
+    meal_time_4 = db.Column(db.String(5), nullable=True)
+    meal_time_5 = db.Column(db.String(5), nullable=True)
+    meal_time_6 = db.Column(db.String(5), nullable=True)
+    meal_label_1 = db.Column(db.String(100), nullable=True)
+    meal_label_2 = db.Column(db.String(100), nullable=True)
+    meal_label_3 = db.Column(db.String(100), nullable=True)
+    meal_label_4 = db.Column(db.String(100), nullable=True)
+    meal_label_5 = db.Column(db.String(100), nullable=True)
+    meal_label_6 = db.Column(db.String(100), nullable=True)
+    meal_count = db.Column(db.Integer, default=6, nullable=True)  # nb de repas actifs (1-6)
+
     athlete = db.relationship('User', foreign_keys=[athlete_id], backref='meal_plans_as_athlete')
     coach = db.relationship('User', foreign_keys=[coach_id], backref='meal_plans_as_coach')
     meals = db.relationship('MealEntry', backref='meal_plan', cascade='all, delete-orphan', order_by='MealEntry.meal_number')
@@ -256,10 +272,8 @@ class MealPlan(db.Model):
     def get_daily_totals(self):
         """Calcule les totaux journaliers"""
         totals = {
-            'kcals': 0,
-            'proteins': 0,
-            'lipids': 0,
-            'carbs': 0
+            'kcals': 0, 'proteins': 0, 'lipids': 0, 'carbs': 0,
+            'saturated_fats': 0, 'simple_sugars': 0, 'fiber': 0, 'salt': 0
         }
         
         for meal in self.meals:
@@ -269,6 +283,10 @@ class MealPlan(db.Model):
                 totals['proteins'] += (meal.food.proteins or 0) * quantity_factor
                 totals['lipids'] += (meal.food.lipids or 0) * quantity_factor
                 totals['carbs'] += (meal.food.carbs or 0) * quantity_factor
+                totals['saturated_fats'] += (meal.food.saturated_fats or 0) * quantity_factor
+                totals['simple_sugars'] += (meal.food.simple_sugars or 0) * quantity_factor
+                totals['fiber'] += (meal.food.fiber or 0) * quantity_factor
+                totals['salt'] += (meal.food.salt or 0) * quantity_factor
         
         return totals
 

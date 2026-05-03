@@ -90,14 +90,18 @@
                                                     {% endif %}
                                                 </small>
                                             </td>
-                                            <td>
+                                            <td class="d-flex gap-1 flex-wrap">
                                                 <a href="{{ url_for('coach_meal_plan_edit', meal_plan_id=plan.id) }}" 
                                                    class="btn btn-sm btn-info">✏️ Éditer</a>
+                                                <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                        onclick="openDuplicateModal({{ plan.id }}, '{{ plan.name|e }}')">
+                                                    📋 Dupliquer
+                                                </button>
                                                 <form method="POST" 
                                                       action="{{ url_for('coach_meal_plan_delete', meal_plan_id=plan.id) }}" 
                                                       style="display:inline;">
                                                     <button type="submit" class="btn btn-sm btn-danger" 
-                                                            onclick="return confirm('Supprimer ce plan ?')">🗑️ Supprimer</button>
+                                                            data-confirm-msg="Supprimer ce plan alimentaire ?">🗑️ Supprimer</button>
                                                 </form>
                                             </td>
                                         </tr>
@@ -115,4 +119,43 @@
         </div>
     </div>
 </div>
+
+<!-- Modal dupliquer un plan -->
+<div id="duplicateModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; align-items:center; justify-content:center;">
+    <div style="background:white; border-radius:10px; padding:24px; max-width:500px; width:90%; box-shadow:0 10px 40px rgba(0,0,0,0.25);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <h5 style="margin:0; font-size:1.1em; font-weight:700;">📋 Dupliquer un plan alimentaire</h5>
+            <button onclick="closeDuplicateModal()" style="background:none; border:none; font-size:1.4em; cursor:pointer; line-height:1;">&times;</button>
+        </div>
+        <form id="duplicateForm" method="POST">
+            <div style="margin-bottom:14px;">
+                <label style="display:block; font-weight:600; margin-bottom:6px;">Nom du nouveau plan</label>
+                <input type="text" name="new_name" id="duplicateNewName" class="form-control" required>
+            </div>
+            <div style="margin-bottom:16px;">
+                <label style="display:block; font-weight:600; margin-bottom:6px;">Attribuer à l'athlète</label>
+                <select name="athlete_id" class="form-select">
+                    {% for athlete in athletes %}
+                        <option value="{{ athlete.id }}">{{ athlete.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button type="button" onclick="closeDuplicateModal()" class="btn btn-secondary">Annuler</button>
+                <button type="submit" class="btn btn-primary">📋 Dupliquer</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openDuplicateModal(planId, planName) {
+    document.getElementById('duplicateNewName').value = planName + ' (copie)';
+    document.getElementById('duplicateForm').action = '/coach/meal-plans/' + planId + '/duplicate';
+    document.getElementById('duplicateModal').style.display = 'flex';
+}
+function closeDuplicateModal() {
+    document.getElementById('duplicateModal').style.display = 'none';
+}
+</script>
 {% endblock %}

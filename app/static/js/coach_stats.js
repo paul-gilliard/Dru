@@ -4,16 +4,10 @@ document.addEventListener('DOMContentLoaded', function(){
   const exSelect = document.getElementById('stats-exercise-select');
   const clearEx = document.getElementById('clear-exercise');
   const performanceLoader = document.getElementById('performance-loader');
-  const toggleKcals = document.getElementById('toggle-kcals');
-  const toggleWater = document.getElementById('toggle-water');
-  const toggleSleep = document.getElementById('toggle-sleep');
   const datePreset = document.getElementById('date-preset');
   const dateStart = document.getElementById('date-start');
   const dateEnd = document.getElementById('date-end');
   const applyDateFilter = document.getElementById('apply-date-filter');
-  const journalViewMode = document.getElementById('journal-view-mode');
-  const journalPrevButton = document.getElementById('journal-prev-period');
-  const journalNextButton = document.getElementById('journal-next-period');
 
   let journalChart = new Chart(chartJournalCtx, {
     type: 'line',
@@ -34,12 +28,16 @@ document.addEventListener('DOMContentLoaded', function(){
 
   let performanceChart = null;
   let otherSeriesChart = null;
-  let dateRange = { start: null, end: null }; // Date filter state
-  let journalData = []; // All journal data loaded
-  let journalViewMode_value = 'week'; // 'week' or 'month'
-  let journalCurrentDate = new Date(); // Current date for navigation
+  let weeklyVolumeChart = null;
+  let muscleRadarChart = null;
+  let exerciseCompareChart = null;
+  let santeEvolutionChart = null;
+  let santeDetailWeek = 0;
+  let advancedTonnageData = null;
+  let advancedPerfData = null;
+  let dateRange = { start: null, end: null };
+  let journalData = [];
 
-  // Filter data by date range
   // Filter data by date range (for arrays like main_series or other_series)
   function filterByDateRange(data) {
     if (!data || !Array.isArray(data)) return data;
@@ -54,128 +52,231 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
-  // Get date range for journal view
-  function getJournalDateRange() {
-    const current = journalCurrentDate;
-    let start, end;
-    
-    if (journalViewMode_value === 'week') {
-      const d = new Date(current);
-      const day = d.getDay();
-      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-      start = new Date(d.setDate(diff));
-      end = new Date(start);
-      end.setDate(end.getDate() + 6);
-    } else {
-      start = new Date(current.getFullYear(), current.getMonth(), 1);
-      end = new Date(current.getFullYear(), current.getMonth() + 1, 0);
-    }
-    
+  // ── SANTÉ & POIDS ────────────────────────────────────────────────────────
+
+  // Config-driven metrics (all numeric journal fields except weight)
+  const SANTE_EVO_METRICS = [
+    { id: 'sante-evo-kcals',   dataKey: 'kcals',       label: 'Kcals',      color: '#ef4444', unit: 'kcal', dec: 0, axis: 'y_right' },
+    { id: 'sante-evo-protein', dataKey: 'protein',     label: 'Protéines',  color: '#10b981', unit: 'g',    dec: 0, axis: 'y_right' },
+    { id: 'sante-evo-carbs',   dataKey: 'carbs',       label: 'Glucides',   color: '#f59e0b', unit: 'g',    dec: 0, axis: 'y_right' },
+    { id: 'sante-evo-fats',    dataKey: 'fats',        label: 'Lipides',    color: '#f97316', unit: 'g',    dec: 0, axis: 'y_right' },
+    { id: 'sante-evo-water',   dataKey: 'water_ml',    label: 'Eau',        color: '#06b6d4', unit: 'ml',   dec: 0, axis: 'y_right' },
+    { id: 'sante-evo-steps',   dataKey: 'steps',       label: 'Pas',        color: '#84cc16', unit: '',     dec: 0, axis: 'y_right' },
+    { id: 'sante-evo-sleep',   dataKey: 'sleep_hours', label: 'Sommeil',    color: '#8b5cf6', unit: 'h',    dec: 1, axis: 'y' },
+    { id: 'sante-evo-energy',  dataKey: 'energy',      label: 'Énergie',    color: '#eab308', unit: '/10',  dec: 0, axis: 'y' },
+    { id: 'sante-evo-stress',  dataKey: 'stress',      label: 'Stress',     color: '#dc2626', unit: '/10',  dec: 0, axis: 'y' },
+    { id: 'sante-evo-hunger',  dataKey: 'hunger',      label: 'Faim',       color: '#78716c', unit: '/10',  dec: 0, axis: 'y' },
+  ];
+
+  function getSanteWeekBounds(weeksAgo) {
+    const d = new Date();
+    d.setDate(d.getDate() - weeksAgo * 7);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const start = new Date(d);
+    start.setDate(diff);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
     return {
       start: start.toISOString().split('T')[0],
-      end: end.toISOString().split('T')[0]
+      end:   end.toISOString().split('T')[0],
+      label: weeksAgo === 0 ? 'Cette sem.' : `S-${weeksAgo}`
     };
   }
 
-  // Update journal display
-  function updateJournalDisplay() {
-    console.log('updateJournalDisplay called, journalData length:', journalData.length);
-    
-    if (!journalData || journalData.length === 0) {
-      console.log('No journal data');
-      document.getElementById('journal-avg-weight').textContent = '—';
-      document.getElementById('journal-avg-kcals').textContent = '—';
-      document.getElementById('journal-avg-water').textContent = '—';
-      document.getElementById('journal-avg-sleep').textContent = '—';
-      
-      journalChart.data.labels = [];
-      journalChart.data.datasets = [{ label: 'Poids (kg)', data: [], borderColor:'#0b63d6', yAxisID:'y', fill:false, borderWidth:2 }];
-      journalChart.update();
-      
-      document.getElementById('journal-table-body').innerHTML = '<tr><td colspan="5" style="padding:20px; text-align:center; color:#94a3b8;">Aucune donnée pour cette période</td></tr>';
-      return;
+  function calcWeekStats(weeksAgo) {
+    const { start, end } = getSanteWeekBounds(weeksAgo);
+    const data = journalData.filter(e => e.date >= start && e.date <= end);
+    const avg = key => {
+      const vals = data.map(e => e[key]).filter(v => v !== null && v !== undefined);
+      return vals.length ? vals.reduce((a, b) => a + Number(b), 0) / vals.length : null;
+    };
+    const stats = { weight: avg('weight'), count: data.length };
+    SANTE_EVO_METRICS.forEach(m => { stats[m.dataKey] = avg(m.dataKey); });
+    return stats;
+  }
+
+  function populateSanteWeekSelects() {
+    const selA = document.getElementById('sante-week-a');
+    const selB = document.getElementById('sante-week-b');
+    if (!selA || !selB) return;
+    const aVal = selA.value || '0';
+    const bVal = selB.value || '1';
+    const opts = Array.from({ length: 13 }, (_, i) => {
+      const { start, label } = getSanteWeekBounds(i);
+      return `<option value="${i}">${label} (${start})</option>`;
+    }).join('');
+    selA.innerHTML = opts;
+    selB.innerHTML = opts;
+    selA.value = aVal;
+    selB.value = bVal;
+  }
+
+  function renderSanteComparison() {
+    const aWeeks = parseInt(document.getElementById('sante-week-a')?.value ?? 0);
+    const bWeeks = parseInt(document.getElementById('sante-week-b')?.value ?? 1);
+    const a = calcWeekStats(aWeeks);
+    const b = calcWeekStats(bWeeks);
+    const { label: aLabel } = getSanteWeekBounds(aWeeks);
+    const { label: bLabel } = getSanteWeekBounds(bWeeks);
+
+    const card = (id, title, icon, color, aVal, bVal, unit, dec) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const fmt = v => v !== null ? Number(v).toFixed(dec) : '—';
+      const diff = (aVal !== null && bVal !== null) ? aVal - bVal : null;
+      const dSign = diff !== null && diff > 0 ? '+' : '';
+      const dFmt = diff !== null ? dSign + diff.toFixed(dec) + ' ' + unit : '—';
+      const dColor = diff === null ? '#94a3b8' : Math.abs(diff) < 0.05 ? '#64748b' : diff > 0 ? '#10b981' : '#ef4444';
+      const arrow = diff === null ? '' : Math.abs(diff) < 0.05 ? '→' : diff > 0 ? '▲' : '▼';
+      el.innerHTML = `
+        <div style="background:#f8fafc; border-radius:8px; padding:14px; border-left:4px solid ${color};">
+          <div style="font-size:0.78rem; color:#64748b; margin-bottom:10px; font-weight:600;">${icon} ${title}</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:10px;">
+            <div>
+              <div style="font-size:0.7rem; color:#94a3b8; margin-bottom:2px;">${aLabel}</div>
+              <div style="font-size:1.25rem; font-weight:700; color:${color};">${fmt(aVal)}${aVal !== null ? ' '+unit : ''}</div>
+            </div>
+            <div>
+              <div style="font-size:0.7rem; color:#94a3b8; margin-bottom:2px;">${bLabel}</div>
+              <div style="font-size:1.25rem; font-weight:700; color:#64748b;">${fmt(bVal)}${bVal !== null ? ' '+unit : ''}</div>
+            </div>
+          </div>
+          <div style="font-size:0.88rem; font-weight:600; color:${dColor}; border-top:1px solid #e5e7eb; padding-top:8px;">${arrow} ${dFmt}</div>
+        </div>`;
+    };
+    card('sante-card-weight', 'Poids moyen',   '⚖️', '#0b63d6', a.weight,      b.weight,      'kg',   1);
+    card('sante-card-kcals',  'Kcals moyen',   '🔥', '#ef4444', a.kcals,       b.kcals,       'kcal', 0);
+    card('sante-card-water',  'Eau moyenne',   '💧', '#06b6d4', a.water_ml,    b.water_ml,    'ml',   0);
+    card('sante-card-sleep',  'Sommeil moyen', '😴', '#8b5cf6', a.sleep_hours, b.sleep_hours, 'h',    1);
+  }
+
+  function renderSanteEvolution() {
+    const n = parseInt(document.getElementById('sante-evolution-weeks')?.value ?? 8);
+
+    const labels = [];
+    const weeklyStats = [];
+    for (let i = n - 1; i >= 0; i--) {
+      labels.push(getSanteWeekBounds(i).label);
+      weeklyStats.push(calcWeekStats(i));
     }
 
-    const range = getJournalDateRange();
-    const viewData = journalData.filter(e => e.date >= range.start && e.date <= range.end);
+    const datasets = [{
+      label: 'Poids (kg)',
+      data: weeklyStats.map(s => s.weight !== null ? Math.round(s.weight * 10) / 10 : null),
+      borderColor: '#0b63d6', backgroundColor: 'rgba(11,99,214,0.08)',
+      fill: true, tension: 0.3, yAxisID: 'y', borderWidth: 2, pointRadius: 4
+    }];
 
-    console.log('Displaying', viewData.length, 'entries from', range.start, 'to', range.end);
+    const scales = {
+      y: { type: 'linear', position: 'left', title: { display: true, text: 'Poids (kg)' } }
+    };
+    let hasRightAxis = false;
 
-    // Calculate stats
-    let weightSum = 0, weightCount = 0;
-    let kcalsSum = 0, kcalsCount = 0;
-    let waterSum = 0, waterCount = 0;
-    let sleepSum = 0, sleepCount = 0;
-
-    viewData.forEach(entry => {
-      if (entry.weight !== null && entry.weight !== undefined) {
-        weightSum += Number(entry.weight);
-        weightCount++;
-      }
-      if (entry.kcals !== null && entry.kcals !== undefined) {
-        kcalsSum += Number(entry.kcals);
-        kcalsCount++;
-      }
-      if (entry.water_ml !== null && entry.water_ml !== undefined) {
-        waterSum += Number(entry.water_ml);
-        waterCount++;
-      }
-      if (entry.sleep_hours !== null && entry.sleep_hours !== undefined) {
-        sleepSum += Number(entry.sleep_hours);
-        sleepCount++;
-      }
+    SANTE_EVO_METRICS.forEach(m => {
+      if (!document.getElementById(m.id)?.checked) return;
+      if (m.axis === 'y_right') hasRightAxis = true;
+      const round = v => v !== null ? (m.dec > 0 ? Math.round(v * Math.pow(10, m.dec)) / Math.pow(10, m.dec) : Math.round(v)) : null;
+      datasets.push({
+        label: m.label + (m.unit ? ' (' + m.unit + ')' : ''),
+        data: weeklyStats.map(s => round(s[m.dataKey])),
+        borderColor: m.color, fill: false, tension: 0.3,
+        yAxisID: m.axis, borderWidth: 2, pointRadius: 3
+      });
     });
 
-    // Update stat cards
-    document.getElementById('journal-avg-weight').textContent = weightCount > 0 ? (weightSum/weightCount).toFixed(1) + ' kg' : '—';
-    document.getElementById('journal-avg-kcals').textContent = kcalsCount > 0 ? Math.round(kcalsSum/kcalsCount) : '—';
-    document.getElementById('journal-avg-water').textContent = waterCount > 0 ? Math.round(waterSum/waterCount) + ' ml' : '—';
-    document.getElementById('journal-avg-sleep').textContent = sleepCount > 0 ? (sleepSum/sleepCount).toFixed(1) + ' h' : '—';
-
-    // Update chart
-    const labels = viewData.map(d => d.date);
-    const weights = viewData.map(d => d.weight !== null && d.weight !== undefined ? Number(d.weight) : null);
-    const kcalsData = viewData.map(d => d.kcals !== null && d.kcals !== undefined ? Number(d.kcals) : null);
-    const waterData = viewData.map(d => d.water_ml !== null && d.water_ml !== undefined ? Number(d.water_ml) : null);
-    const sleepData = viewData.map(d => d.sleep_hours !== null && d.sleep_hours !== undefined ? Number(d.sleep_hours) : null);
-
-    journalChart.data.labels = labels;
-    journalChart.data.datasets = [
-      { label: 'Poids (kg)', data: weights, borderColor:'#0b63d6', yAxisID:'y', fill:false, borderWidth:2, tension:0.3 }
-    ];
-
-    if (toggleKcals.checked) {
-      journalChart.data.datasets.push({ label:'Kcals', data: kcalsData, borderColor:'#ef4444', yAxisID:'y_kcals', fill:false, borderWidth:2, tension:0.3 });
-      journalChart.options.scales.y_kcals = { display:true, position:'right' };
-    } else {
-      journalChart.options.scales.y_kcals = { display:false };
+    if (hasRightAxis) {
+      scales.y_right = { type: 'linear', position: 'right', grid: { drawOnChartArea: false } };
     }
 
-    if (toggleWater.checked) {
-      journalChart.data.datasets.push({ label:'Eau (ml)', data: waterData, borderColor:'#06b6d4', yAxisID:'y', fill:false, borderWidth:2, tension:0.3 });
-    }
-
-    if (toggleSleep.checked) {
-      journalChart.data.datasets.push({ label:'Sommeil (h)', data: sleepData, borderColor:'#8b5cf6', yAxisID:'y', fill:false, borderWidth:2, tension:0.3 });
-    }
-
-    journalChart.update();
-
-    // Update table
-    const tableBody = document.getElementById('journal-table-body');
-    tableBody.innerHTML = '';
-    viewData.forEach((entry, idx) => {
-      const tr = document.createElement('tr');
-      tr.style.borderBottom = '1px solid #e5e7eb';
-      tr.style.background = idx % 2 === 0 ? '#ffffff' : '#f8fafc';
-      const w = entry.weight !== null && entry.weight !== undefined ? Number(entry.weight).toFixed(1) : '—';
-      const k = entry.kcals !== null && entry.kcals !== undefined ? Math.round(Number(entry.kcals)) : '—';
-      const wa = entry.water_ml !== null && entry.water_ml !== undefined ? Math.round(Number(entry.water_ml)) : '—';
-      const s = entry.sleep_hours !== null && entry.sleep_hours !== undefined ? Number(entry.sleep_hours).toFixed(1) : '—';
-      tr.innerHTML = `<td style="padding:10px;">${entry.date}</td><td style="padding:10px; text-align:center;">${w}</td><td style="padding:10px; text-align:center;">${k}</td><td style="padding:10px; text-align:center;">${wa}</td><td style="padding:10px; text-align:center;">${s}</td>`;
-      tableBody.appendChild(tr);
+    if (santeEvolutionChart) { santeEvolutionChart.destroy(); santeEvolutionChart = null; }
+    const canvas = document.getElementById('chart-sante-evolution');
+    if (!canvas) return;
+    santeEvolutionChart = new Chart(canvas, {
+      type: 'line',
+      data: { labels, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        scales,
+        plugins: { legend: { position: 'bottom' } }
+      }
     });
   }
+
+  function renderSanteDetail() {
+    const { start, end, label } = getSanteWeekBounds(santeDetailWeek);
+    const titleEl = document.getElementById('sante-detail-title');
+    const rangeEl = document.getElementById('sante-detail-range');
+    const nextBtn = document.getElementById('sante-detail-next');
+    if (titleEl) titleEl.textContent = `Détail — ${label}`;
+    if (rangeEl) rangeEl.textContent = `${start} → ${end}`;
+    if (nextBtn) nextBtn.disabled = santeDetailWeek === 0;
+
+    const viewData = journalData.filter(e => e.date >= start && e.date <= end);
+    const fv = (e, k) => (e[k] !== null && e[k] !== undefined) ? Number(e[k]) : null;
+
+    journalChart.data.labels = viewData.map(d => d.date);
+    journalChart.data.datasets = [
+      { label: 'Poids (kg)',  data: viewData.map(d => fv(d,'weight')),      borderColor:'#0b63d6', fill:false, tension:0.3, yAxisID:'y',       borderWidth:2, pointRadius:4 },
+      { label: 'Kcals',       data: viewData.map(d => fv(d,'kcals')),       borderColor:'#ef4444', fill:false, tension:0.3, yAxisID:'y_kcals', borderWidth:2, borderDash:[4,4], pointRadius:3 },
+      { label: 'Eau (ml)',    data: viewData.map(d => fv(d,'water_ml')),    borderColor:'#06b6d4', fill:false, tension:0.3, yAxisID:'y',       borderWidth:2, pointRadius:3 },
+      { label: 'Sommeil (h)', data: viewData.map(d => fv(d,'sleep_hours')), borderColor:'#8b5cf6', fill:false, tension:0.3, yAxisID:'y',       borderWidth:2, pointRadius:3 }
+    ];
+    journalChart.options.scales.y_kcals = { display: true, position: 'right', grid: { drawOnChartArea: false } };
+    journalChart.update();
+
+    const tbody = document.getElementById('journal-table-body');
+    if (!tbody) return;
+    const cols = [
+      { key: 'weight',      label: 'Poids (kg)',    fmt: v => Number(v).toFixed(1)   },
+      { key: 'kcals',       label: 'Kcals',         fmt: v => Math.round(Number(v))  },
+      { key: 'protein',     label: 'Prot. (g)',     fmt: v => Math.round(Number(v))  },
+      { key: 'carbs',       label: 'Gluc. (g)',     fmt: v => Math.round(Number(v))  },
+      { key: 'fats',        label: 'Lip. (g)',      fmt: v => Math.round(Number(v))  },
+      { key: 'water_ml',    label: 'Eau (ml)',      fmt: v => Math.round(Number(v))  },
+      { key: 'steps',       label: 'Pas',           fmt: v => Math.round(Number(v))  },
+      { key: 'sleep_hours', label: 'Sommeil (h)',   fmt: v => Number(v).toFixed(1)   },
+      { key: 'energy',      label: 'Énergie',       fmt: v => Number(v) + '/10'      },
+      { key: 'stress',      label: 'Stress',        fmt: v => Number(v) + '/10'      },
+      { key: 'hunger',      label: 'Faim',          fmt: v => Number(v) + '/10'      },
+    ];
+    // Rebuild header dynamically
+    const thead = tbody.closest('table').querySelector('thead tr');
+    if (thead) {
+      thead.innerHTML = '<th style="padding:8px; text-align:left; font-weight:600;">Date</th>' +
+        cols.map(c => `<th style="padding:8px; text-align:center; font-weight:600;">${c.label}</th>`).join('');
+    }
+    if (viewData.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="${cols.length + 1}" style="padding:20px; text-align:center; color:#94a3b8;">Aucune donnée pour cette semaine</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = '';
+    viewData.forEach((e, idx) => {
+      const tr = document.createElement('tr');
+      tr.style.cssText = `border-bottom:1px solid #e5e7eb; background:${idx % 2 === 0 ? '#fff' : '#f8fafc'};`;
+      const cells = `<td style="padding:8px;">${e.date}</td>` +
+        cols.map(c => {
+          const v = e[c.key];
+          const txt = (v !== null && v !== undefined) ? c.fmt(v) : '—';
+          return `<td style="padding:8px;text-align:center;">${txt}</td>`;
+        }).join('');
+      tr.innerHTML = cells;
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderSante() {
+    populateSanteWeekSelects();
+    renderSanteComparison();
+    renderSanteEvolution();
+    renderSanteDetail();
+  }
+
+  // Keep backward compat (datePreset, applyDateFilter callers)
+  function updateJournalDisplay() { renderSante(); }
+
   datePreset.addEventListener('change', function() {
     if (!this.value) {
       dateStart.value = '';
@@ -211,16 +312,14 @@ document.addEventListener('DOMContentLoaded', function(){
   });
 
   async function loadJournal(athleteId){
-    console.log('loadJournal called for athlete', athleteId);
     const res = await fetch(`/coach/stats/athlete/${athleteId}/journal.json`);
     if (!res.ok) {
       console.error('Journal fetch failed:', res.status);
       return;
     }
     journalData = await res.json();
-    console.log('Journal data loaded:', journalData.length, 'entries');
-    journalCurrentDate = new Date();
-    updateJournalDisplay();
+    santeDetailWeek = 0;
+    renderSante();
   }
 
   let perfCache = null;
@@ -431,35 +530,7 @@ document.addEventListener('DOMContentLoaded', function(){
       const data = await res.json();
       const endTime = performance.now();
       console.log(`Quick-data loaded in ${(endTime - startTime).toFixed(2)}ms`);
-      
-      // Process journal data
-      if (data.journal) {
-        console.log(`Processing ${data.journal.length} journal entries...`);
-        const labels = data.journal.map(d=>d.date);
-        const weight = data.journal.map(d=> d.weight === null ? null : Number(d.weight));
-        const kcals = data.journal.map(d=> d.kcals === null ? null : Number(d.kcals));
-        const water = data.journal.map(d=> d.water_ml === null ? null : Number(d.water_ml));
-        const sleep = data.journal.map(d=> d.sleep_hours === null ? null : Number(d.sleep_hours));
 
-        journalChart.data.labels = labels;
-        journalChart.data.datasets = [
-          { label: 'Poids (kg)', data: weight, borderColor:'#0b63d6', tension:0.2, yAxisID:'y' }
-        ];
-        if (toggleKcals.checked) {
-          journalChart.data.datasets.push({ label:'Kcals', data: kcals, borderColor:'#ef4444', tension:0.2, yAxisID:'y_kcals' });
-          journalChart.options.scales.y_kcals = { display:true, position:'right' };
-        } else {
-          journalChart.options.scales.y_kcals = { display:false };
-        }
-        if (toggleWater.checked) {
-          journalChart.data.datasets.push({ label:'Eau (ml)', data: water, borderColor:'#06b6d4', tension:0.2, yAxisID:'y' });
-        }
-        if (toggleSleep.checked) {
-          journalChart.data.datasets.push({ label:'Sommeil (h)', data: sleep, borderColor:'#10b981', tension:0.2, yAxisID:'y' });
-        }
-        journalChart.update();
-      }
-      
       // Cache the summary data and exercise details
       if (data.summary_7days) {
         summaryCache['7days'][athleteId] = data.summary_7days;
@@ -1052,6 +1123,289 @@ document.addEventListener('DOMContentLoaded', function(){
     });
   }
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // ADVANCED STATS — Features 1, 3, 4, 5
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /** Returns ISO-8601 week key, e.g. "2024-W04" */
+  function getISOWeekKey(date) {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    const weekNum = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return `${d.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+  }
+
+  function getCurrentAndPrevWeekKeys() {
+    const today = new Date();
+    const prevWeek = new Date(today);
+    prevWeek.setDate(today.getDate() - 7);
+    return { current: getISOWeekKey(today), prev: getISOWeekKey(prevWeek) };
+  }
+
+  function getWeekKeyAgo(n) {
+    const d = new Date();
+    d.setDate(d.getDate() - n * 7);
+    return getISOWeekKey(d);
+  }
+
+  function setTabLoading(tabName, loading) {
+    const s = document.getElementById('tab-spinner-' + tabName);
+    if (s) s.classList.toggle('loading', loading);
+  }
+
+  function renderAdvancedCharts() {
+    if (advancedTonnageData === null || advancedPerfData === null) return;
+    renderWeeklyVolume(advancedTonnageData);
+    renderMuscleRadar(advancedTonnageData);
+    renderExerciseWeekComparison(advancedPerfData);
+  }
+
+  async function loadAndRenderAdvancedStats(athleteId) {
+    const section = document.getElementById('advanced-stats-section');
+    if (!section) return;
+    try {
+      // Fetch only tonnage (performance data is already in perfCache from loadPerformance)
+      const tonnageRes = await fetch(`/coach/stats/athlete/${athleteId}/tonnage-by-muscle.json`);
+      advancedTonnageData = tonnageRes.ok ? await tonnageRes.json() : {};
+      // perfCache is populated by loadPerformance which runs in parallel — wait for it
+      advancedPerfData = perfCache || {};
+      section.style.display = 'block';
+      renderRegularity(advancedPerfData);
+      // Render charts immediately if the analyse tab is currently visible
+      if (document.getElementById('tab-analyse').classList.contains('active')) {
+        renderAdvancedCharts();
+      }
+      setTabLoading('analyse', false);
+    } catch (err) {
+      console.error('Error loading advanced stats:', err);
+      setTabLoading('analyse', false);
+    }
+  }
+
+  /** Feature 5 — Sessions per week over last 4 weeks */
+  function renderRegularity(perfData) {
+    const container = document.getElementById('regularity-container');
+    const empty     = document.getElementById('regularity-empty');
+    const badges    = document.getElementById('regularity-badges');
+    if (!container || !badges) return;
+
+    const dateSet = new Set();
+    Object.values(perfData).forEach(ex => {
+      (ex.main_series  || []).forEach(s => dateSet.add(s.date));
+      (ex.other_series || []).forEach(s => dateSet.add(s.date));
+    });
+
+    if (dateSet.size === 0) {
+      empty.style.display = 'block';
+      container.style.display = 'none';
+      return;
+    }
+
+    const today = new Date();
+    const weeks = [];
+    for (let w = 3; w >= 0; w--) {
+      const ref = new Date(today);
+      ref.setDate(today.getDate() - w * 7);
+      weeks.push({ key: getISOWeekKey(ref), label: w === 0 ? 'Cette sem.' : `S-${w}`, count: 0 });
+    }
+
+    dateSet.forEach(dateStr => {
+      const key = getISOWeekKey(new Date(dateStr));
+      const w = weeks.find(w => w.key === key);
+      if (w) w.count++;
+    });
+
+    const colors = ['#e5e7eb', '#f59e0b', '#0b63d6', '#10b981'];
+    badges.innerHTML = weeks.map(w => {
+      const colorIdx = Math.min(w.count, 3);
+      const bg = colors[colorIdx];
+      const textColor = colorIdx === 0 ? '#94a3b8' : 'white';
+      return `<div style="background:${bg}; color:${textColor}; border-radius:8px; padding:12px 20px; text-align:center; min-width:90px;">
+        <div style="font-size:0.78rem; margin-bottom:4px; opacity:0.9;">${w.label}</div>
+        <div style="font-size:1.6rem; font-weight:700; line-height:1;">${w.count}</div>
+        <div style="font-size:0.72rem; margin-top:4px;">séance${w.count !== 1 ? 's' : ''}</div>
+      </div>`;
+    }).join('');
+
+    container.style.display = 'block';
+    empty.style.display = 'none';
+  }
+
+  /** Feature 1 — Weekly volume stacked bar chart */
+  function renderWeeklyVolume(tonnageData) {
+    const container = document.getElementById('weekly-volume-container');
+    const empty     = document.getElementById('weekly-volume-empty');
+    if (!container) return;
+
+    if (weeklyVolumeChart) { weeklyVolumeChart.destroy(); weeklyVolumeChart = null; }
+
+    if (Object.keys(tonnageData).length === 0) {
+      empty.style.display = 'block';
+      container.style.display = 'none';
+      return;
+    }
+
+    const weeklyTonnage = {};
+    Object.entries(tonnageData).forEach(([muscle, dates]) => {
+      dates.forEach(({ date, tonnage }) => {
+        const key = getISOWeekKey(new Date(date));
+        if (!weeklyTonnage[key]) weeklyTonnage[key] = {};
+        weeklyTonnage[key][muscle] = (weeklyTonnage[key][muscle] || 0) + tonnage;
+      });
+    });
+
+    const weekKeys = Object.keys(weeklyTonnage).sort().slice(-8);
+    if (weekKeys.length === 0) {
+      empty.style.display = 'block';
+      container.style.display = 'none';
+      return;
+    }
+
+    const muscles = [...new Set(Object.values(weeklyTonnage).flatMap(w => Object.keys(w)))].sort();
+    const palette = ['#0b63d6','#ef4444','#10b981','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#84cc16','#f97316','#64748b'];
+    const datasets = muscles.map((m, i) => ({
+      label: m,
+      data: weekKeys.map(k => Math.round(weeklyTonnage[k]?.[m] || 0)),
+      backgroundColor: palette[i % palette.length]
+    }));
+
+    container.style.display = 'block';
+    empty.style.display = 'none';
+    weeklyVolumeChart = new Chart(document.getElementById('chart-weekly-volume'), {
+      type: 'bar',
+      data: { labels: weekKeys, datasets },
+      options: {
+        responsive: true,
+        scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, title: { display: true, text: 'Tonnage (kg)' } } },
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+
+  /** Feature 4 — Muscle radar (dynamic week comparison) */
+  function renderMuscleRadar(tonnageData) {
+    const container = document.getElementById('muscle-radar-container');
+    const empty     = document.getElementById('muscle-radar-empty');
+    if (!container) return;
+
+    if (muscleRadarChart) { muscleRadarChart.destroy(); muscleRadarChart = null; }
+
+    if (Object.keys(tonnageData).length === 0) {
+      empty.style.display = 'block';
+      container.style.display = 'none';
+      return;
+    }
+
+    const modeSelect = document.getElementById('radar-compare-mode');
+    const mode = modeSelect ? modeSelect.value : '0-1';
+    const [aWeeks, bWeeks] = mode.split('-').map(Number);
+    const aKey = getWeekKeyAgo(aWeeks);
+    const bKey = getWeekKeyAgo(bWeeks);
+    const weekLabel = n => n === 0 ? 'Cette semaine' : `S-${n}`;
+
+    const weeklyTonnage = {};
+    Object.entries(tonnageData).forEach(([muscle, dates]) => {
+      dates.forEach(({ date, tonnage }) => {
+        const key = getISOWeekKey(new Date(date));
+        if (!weeklyTonnage[key]) weeklyTonnage[key] = {};
+        weeklyTonnage[key][muscle] = (weeklyTonnage[key][muscle] || 0) + tonnage;
+      });
+    });
+
+    const muscles = Object.keys(tonnageData).sort();
+    const aData = muscles.map(m => Math.round(weeklyTonnage[aKey]?.[m] || 0));
+    const bData = muscles.map(m => Math.round(weeklyTonnage[bKey]?.[m] || 0));
+
+    if ([...aData, ...bData].every(v => v === 0)) {
+      empty.style.display = 'block';
+      container.style.display = 'none';
+      return;
+    }
+
+    container.style.display = 'block';
+    empty.style.display = 'none';
+    muscleRadarChart = new Chart(document.getElementById('chart-muscle-radar'), {
+      type: 'radar',
+      data: {
+        labels: muscles,
+        datasets: [
+          { label: weekLabel(aWeeks), data: aData, borderColor: '#0b63d6', backgroundColor: 'rgba(11,99,214,0.15)', pointBackgroundColor: '#0b63d6' },
+          { label: weekLabel(bWeeks), data: bData, borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.12)', pointBackgroundColor: '#ef4444' }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+
+  /** Feature 3 — Exercise comparison (dynamic: S vs S-1, S vs S-2, S-1 vs S-2, S-1 vs S-3) */
+  function renderExerciseWeekComparison(perfData) {
+    const container = document.getElementById('exercise-compare-container');
+    const empty     = document.getElementById('exercise-compare-empty');
+    if (!container) return;
+
+    if (exerciseCompareChart) { exerciseCompareChart.destroy(); exerciseCompareChart = null; }
+
+    if (Object.keys(perfData).length === 0) {
+      empty.style.display = 'block';
+      container.style.display = 'none';
+      return;
+    }
+
+    const modeSelect = document.getElementById('exercise-compare-mode');
+    const mode = modeSelect ? modeSelect.value : '0-1';
+    const [aWeeks, bWeeks] = mode.split('-').map(Number);
+    const aKey = getWeekKeyAgo(aWeeks);
+    const bKey = getWeekKeyAgo(bWeeks);
+    const weekLabel = n => n === 0 ? 'Cette semaine' : `S-${n}`;
+    const aLabel = weekLabel(aWeeks) + ' (kg)';
+    const bLabel = weekLabel(bWeeks) + ' (kg)';
+
+    const maxLoad = series => {
+      const vals = series.map(s => s.load || s.avg_load || 0).filter(v => v > 0);
+      return vals.length ? Math.max(...vals) : 0;
+    };
+
+    const exercises = [];
+    Object.entries(perfData).forEach(([name, ex]) => {
+      const all = [...(ex.main_series || []), ...(ex.other_series || [])];
+      const a = maxLoad(all.filter(s => getISOWeekKey(new Date(s.date)) === aKey));
+      const b = maxLoad(all.filter(s => getISOWeekKey(new Date(s.date)) === bKey));
+      if (a > 0 || b > 0) exercises.push({ name, a, b });
+    });
+
+    if (exercises.length === 0) {
+      empty.style.display = 'block';
+      container.style.display = 'none';
+      return;
+    }
+
+    exercises.sort((x, y) => (y.a || y.b) - (x.a || x.b));
+    const top = exercises.slice(0, 10);
+
+    container.style.display = 'block';
+    empty.style.display = 'none';
+    exerciseCompareChart = new Chart(document.getElementById('chart-exercise-compare'), {
+      type: 'bar',
+      data: {
+        labels: top.map(e => e.name),
+        datasets: [
+          { label: aLabel, data: top.map(e => e.a), backgroundColor: '#0b63d6' },
+          { label: bLabel, data: top.map(e => e.b), backgroundColor: 'rgba(239,68,68,0.75)' }
+        ]
+      },
+      options: {
+        responsive: true,
+        scales: { y: { beginAtZero: true } },
+        plugins: { legend: { position: 'bottom' } }
+      }
+    });
+  }
+
   athleteSelect.addEventListener('change', async function(){
     const athleteId = this.value;
     if (!athleteId) {
@@ -1064,6 +1418,14 @@ document.addEventListener('DOMContentLoaded', function(){
     // Show loaders when athlete is selected
     const remarksLoader = document.getElementById('remarks-loader');
     if (remarksLoader) remarksLoader.classList.add('show');
+
+    // Reset advanced data and show tab spinners
+    advancedTonnageData = null;
+    advancedPerfData = null;
+    setTabLoading('recaps', true);
+    setTabLoading('sante', true);
+    setTabLoading('exercices', true);
+    setTabLoading('analyse', true);
     
     // Clear performance data
     document.getElementById('main-series-container').style.display = 'none';
@@ -1074,18 +1436,32 @@ document.addEventListener('DOMContentLoaded', function(){
     // Load journal data
     console.log(`Loading journal for athlete ${athleteId}...`);
     await loadJournal(athleteId);
+    setTabLoading('sante', false);
     
     // Load quick-data FIRST (all summaries + exercise details in one call) - BLOCKING
     console.log(`Loading quick-data for athlete ${athleteId}...`);
     await loadQuickData(athleteId);
+    setTabLoading('recaps', false);
     
-    // Populate exercise select (only once per athlete)
+    // Show content NOW (recaps + sante are ready)
+    document.getElementById('no-athlete-msg').style.display = 'none';
+    document.getElementById('stats-panes-wrapper').style.display = 'block';
+
+    // Populate exercise select + load performance (non-blocking from here)
     console.log('Populating exercise select...');
-    await populateExerciseSelect(athleteId);
+    populateExerciseSelect(athleteId);
     
-    // Load performance in background (NON-BLOCKING)
+    // Load performance then advanced stats (share the same data)
     console.log('Starting background load of performance...');
-    loadPerformance(athleteId).then(() => console.log('Performance loaded'));
+    loadPerformance(athleteId).then(() => {
+      setTabLoading('exercices', false);
+      console.log('Performance loaded');
+      loadAndRenderAdvancedStats(athleteId);
+    }).catch(err => {
+      console.error('Performance load failed:', err);
+      setTabLoading('exercices', false);
+      setTabLoading('analyse', false);
+    });
   });
   exSelect.addEventListener('change', function(){
     const ex = this.value;
@@ -1108,35 +1484,36 @@ document.addEventListener('DOMContentLoaded', function(){
     document.getElementById('other-series-chart-container').style.display = 'none';
   });
 
-  [toggleKcals, toggleWater, toggleSleep].forEach(el=>{
-    el.addEventListener('change', function(){
-      updateJournalDisplay();
+  // Re-render radar when mode changes
+  const radarMode = document.getElementById('radar-compare-mode');
+  if (radarMode) {
+    radarMode.addEventListener('change', function() {
+      if (advancedTonnageData) renderMuscleRadar(advancedTonnageData);
     });
-  });
+  }
 
-  // Journal navigation
-  journalViewMode.addEventListener('change', function() {
-    journalViewMode_value = this.value;
-    journalCurrentDate = new Date();
-    updateJournalDisplay();
-  });
+  // Re-render exercise comparison when mode changes
+  const exCompareMode = document.getElementById('exercise-compare-mode');
+  if (exCompareMode) {
+    exCompareMode.addEventListener('change', function() {
+      if (advancedPerfData) renderExerciseWeekComparison(advancedPerfData);
+    });
+  }
 
-  journalPrevButton.addEventListener('click', function() {
-    if (journalViewMode_value === 'week') {
-      journalCurrentDate.setDate(journalCurrentDate.getDate() - 7);
-    } else {
-      journalCurrentDate.setMonth(journalCurrentDate.getMonth() - 1);
-    }
-    updateJournalDisplay();
+  // Santé & Poids – event listeners
+  document.getElementById('sante-week-a')?.addEventListener('change', renderSanteComparison);
+  document.getElementById('sante-week-b')?.addEventListener('change', renderSanteComparison);
+  document.getElementById('sante-evolution-weeks')?.addEventListener('change', renderSanteEvolution);
+  SANTE_EVO_METRICS.forEach(m => {
+    document.getElementById(m.id)?.addEventListener('change', renderSanteEvolution);
   });
-
-  journalNextButton.addEventListener('click', function() {
-    if (journalViewMode_value === 'week') {
-      journalCurrentDate.setDate(journalCurrentDate.getDate() + 7);
-    } else {
-      journalCurrentDate.setMonth(journalCurrentDate.getMonth() + 1);
-    }
-    updateJournalDisplay();
+  document.getElementById('sante-detail-prev')?.addEventListener('click', function() {
+    santeDetailWeek++;
+    renderSanteDetail();
+  });
+  document.getElementById('sante-detail-next')?.addEventListener('click', function() {
+    santeDetailWeek = Math.max(0, santeDetailWeek - 1);
+    renderSanteDetail();
   });
 
   // Event delegation for muscle detail buttons - data is preloaded in cache
@@ -1382,4 +1759,20 @@ document.addEventListener('DOMContentLoaded', function(){
       }, 100);
     }
   });
+
+  // Tab switching
+  document.querySelectorAll('.stats-tab').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      document.querySelectorAll('.stats-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.stats-tab-pane').forEach(p => p.classList.remove('active'));
+      this.classList.add('active');
+      const pane = document.getElementById('tab-' + this.dataset.tab);
+      if (pane) pane.classList.add('active');
+      // Lazy-render advanced charts when tab becomes visible (data may already be loaded)
+      if (this.dataset.tab === 'analyse') {
+        renderAdvancedCharts();
+      }
+    });
+  });
+
 });

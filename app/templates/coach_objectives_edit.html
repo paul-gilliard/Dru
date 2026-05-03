@@ -154,7 +154,7 @@
             <h3 style="color: #ef4444; margin: 0 0 12px 0;">Zone de danger</h3>
             <p style="color: #64748b; margin: 0 0 12px 0; font-size: 0.95rem;">Supprimer cet objectif supprimera définitivement toutes les données associées.</p>
             <form method="post" action="{{ url_for('coach_objectives_delete', objective_id=objective.id) }}" style="display: inline;">
-                <button type="submit" class="btn btn-danger" onclick="return confirm('Êtes-vous sûr de vouloir supprimer cet objectif ? Cette action est irréversible.')">🗑️ Supprimer définitivement</button>
+                <button type="submit" class="btn btn-danger" data-confirm-msg="Supprimer définitivement cet objectif ?">🗑️ Supprimer définitivement</button>
             </form>
         </div>
     </div>

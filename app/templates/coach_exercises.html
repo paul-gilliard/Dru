@@ -60,7 +60,7 @@
                                     ✏️ Éditer
                                 </a>
                                 <form method="POST" action="{{ url_for('coach_exercises_delete', exercise_id=exercise.id) }}" style="display: inline;">
-                                    <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Confirmer la suppression ?')">
+                                    <button type="submit" class="btn btn-sm btn-danger" data-confirm-msg="Confirmer la suppression de cet exercice ?">
                                         🗑️ Supprimer
                                     </button>
                                 </form>

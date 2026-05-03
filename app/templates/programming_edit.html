@@ -1,560 +1,639 @@
-{% extends 'base.html' %}
+﻿{% extends 'base.html' %}
 {% block title %}Éditer programme — {{ program.name }}{% endblock %}
 {% block content %}
 <style>
-  .programming-edit {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 16px !important;
-  }
+  /* ================================================================
+     PROGRAMMING EDIT — DESIGN PROPRE
+     ================================================================ */
 
-  .day-row {
+  /* RESET global "form div { flex-direction: column }" from styles.css */
+  #program-form div { display: block; flex-direction: unset; margin-bottom: 0; gap: 0; }
+
+  .prog-page-header {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
   }
-
-  .day-row h4 {
-    font-size: 1rem !important;
-    margin-bottom: 8px !important;
+  .prog-page-header h2 {
+    margin: 0;
+    font-size: 1.3rem;
+    color: #0f172a;
+    font-weight: 700;
   }
-
-  .programming-edit-root {
-    padding: 20px !important;
+  .prog-page-header h2 span {
+    font-size: 0.9rem;
+    color: #94a3b8;
+    font-weight: 400;
   }
+  .prog-header-btns {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+  }
+  .btn-collapse-all, .btn-expand-all {
+    padding: 7px 13px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.82rem;
+    transition: opacity 0.15s;
+  }
+  .btn-collapse-all { background: #0b63d6; color: white; }
+  .btn-expand-all   { background: #64748b; color: white; }
+  .btn-collapse-all:hover { opacity: 0.88; }
+  .btn-expand-all:hover   { opacity: 0.88; }
 
   .day-row {
-    padding: 16px !important;
-    border-left: 4px solid #0b63d6;
-    background: linear-gradient(135deg, #f9fafb 0%, #ffffff 100%);
+    background: white;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.04);
   }
-
-  .day-row h5 {
-    display: none;
+  .day-header {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 12px !important;
+    padding: 9px 14px !important;
+    background: linear-gradient(90deg, #f8fafc 0%, #f1f5f9 100%);
+    border-bottom: 1px solid #e2e8f0;
+    margin-bottom: 0 !important;
+  }
+  .day-label {
+    font-weight: 700;
+    color: #0b63d6;
+    font-size: 0.9rem;
+    min-width: 76px;
+    letter-spacing: 0.01em;
+  }
+  .day-header input[type="text"] {
+    flex: 1;
+    max-width: 220px;
+    padding: 6px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: #374151;
+    transition: border-color 0.15s;
+  }
+  .day-header input[type="text"]:focus {
+    outline: none;
+    border-color: #0b63d6;
+  }
+  .day-body {
+    padding: 12px 14px;
   }
 
   .exercises-container {
-    gap: 10px !important;
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: flex-start;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 5px !important;
+    margin-bottom: 10px !important;
   }
 
   .exercise-block {
-    cursor: grab;
-    transition: all 0.3s ease;
-    border: 1px solid rgba(11, 99, 214, 0.15) !important;
-    border-radius: 8px !important;
-    padding: 8px !important;
-    background: linear-gradient(135deg, #ffffff 0%, #f9fafb 100%) !important;
-    display: flex !important;
-    gap: 8px !important;
-    position: relative;
-    align-items: flex-start;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scroll-behavior: smooth;
-    min-width: 600px;
-    flex-shrink: 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: white;
+    overflow: hidden;
+    transition: border-color 0.2s, box-shadow 0.2s;
   }
-  
   .exercise-block:hover {
-    background: linear-gradient(135deg, #f0f6ff 0%, #f9fafb 100%) !important;
-    border-color: rgba(11, 99, 214, 0.35) !important;
-    box-shadow: 0 3px 12px rgba(11, 99, 214, 0.12) !important;
+    border-color: #bfdbfe;
+    box-shadow: 0 2px 8px rgba(11,99,214,0.07);
   }
-  
   .exercise-block.dragging {
-    opacity: 0.5;
+    opacity: 0.45;
     cursor: grabbing;
-    background: linear-gradient(135deg, #e0e7ff 0%, #e8ebff 100%) !important;
   }
-  
   .exercise-block.drag-over {
-    background: linear-gradient(135deg, #dbeafe 0%, #e8ebff 100%) !important;
-    border: 2px solid #0b63d6 !important;
+    border: 2px solid #0b63d6;
+    background: #eff6ff;
   }
-  
-  .exercise-block.collapsed {
-    padding: 6px 8px !important;
-    gap: 6px !important;
+
+  .ex-card-header {
+    display: flex !important;
+    flex-direction: row !important;
     align-items: center !important;
+    gap: 8px !important;
+    padding: 8px 10px !important;
+    background: #f8fafc;
+    border-bottom: 1px solid #f1f5f9;
+    min-height: 36px !important;
+    margin-bottom: 0 !important;
+    cursor: default;
+  }
+  .exercise-block.collapsed .ex-card-header {
+    border-bottom: none;
   }
 
   .drag-handle {
+    color: #94a3b8;
+    font-size: 0.95rem;
     cursor: grab;
-    color: #cbd5e1;
-    font-size: 0.9rem;
-    margin-right: 0;
-    flex-shrink: 0;
-    align-self: center;
-    padding: 4px 6px;
+    padding: 2px 5px;
     border-radius: 4px;
-    transition: all 0.2s ease;
+    flex-shrink: 0;
+    user-select: none;
+    letter-spacing: -1px;
   }
-  
   .drag-handle:hover {
     color: #0b63d6;
-    background: rgba(11, 99, 214, 0.1);
+    background: #eff6ff;
   }
 
-  .exercise-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+  .exercise-order-number {
+    display: none !important;
+    background: #f59e0b;
+    color: white;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 3px 7px;
+    border-radius: 4px;
+    min-width: 22px;
+    text-align: center;
     flex-shrink: 0;
-    min-width: 0;
+  }
+  .exercise-block.collapsed .exercise-order-number {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
   }
 
   .exercise-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%);
+    background: #0b63d6;
     color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 0.65rem;
+    font-size: 0.68rem;
     font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
     flex-shrink: 0;
-    min-width: 45px;
+    min-width: 30px;
     text-align: center;
   }
 
-  .exercise-badge.muscle {
-    background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
-  }
-
   .exercise-info {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    flex-shrink: 0;
-    min-width: 120px;
+    flex: 1 !important;
+    min-width: 0;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1px !important;
+    margin-bottom: 0 !important;
   }
-
   .exercise-name {
     font-weight: 700;
-    color: #0b63d6;
+    color: #1e293b;
     font-size: 0.85rem;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
-
   .exercise-meta {
-    font-size: 0.7rem;
-    color: #999;
-  }
-  
-  .exercise-details {
-    display: flex;
-    gap: 6px;
-    align-items: flex-start;
-    flex-shrink: 0;
+    font-size: 0.68rem;
+    color: #94a3b8;
   }
 
+  .exercise-name-display { display: none !important; }
+
+  .toggle-collapse {
+    background: #0b63d6;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    min-width: 30px;
+    text-align: center;
+    line-height: 1.2;
+    transition: background 0.15s;
+  }
+  .toggle-collapse:hover { background: #0952b8; }
+
+  .exercise-details {
+    padding: 12px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    margin-bottom: 0 !important;
+    border-top: 1px solid #f1f5f9;
+  }
   .exercise-block.collapsed .exercise-details {
     display: none !important;
   }
-  
+
   .exercise-header-expanded {
-    display: flex;
-    gap: 6px;
-    align-items: flex-start;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: flex-end !important;
+    gap: 10px !important;
+    flex-wrap: nowrap !important;
+    margin-bottom: 0 !important;
+  }
+  .ex-select-wrap {
+    flex: 1 !important;
+    min-width: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    margin-bottom: 0 !important;
+  }
+  .ex-muscle-wrap {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    width: 80px !important;
+    flex-shrink: 0 !important;
+    margin-bottom: 0 !important;
+  }
+  .exercise-header-expanded label {
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    color: #0b63d6 !important;
+    margin: 0 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .exercise-header-expanded select {
+    padding: 7px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    width: 100%;
+    color: #374151;
+  }
+  .exercise-header-expanded select:focus {
+    outline: none;
+    border-color: #0b63d6;
+  }
+  .exercise-muscle {
+    padding: 7px 10px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    background: #f8fafc;
+    color: #374151;
+    text-align: center;
+    font-weight: 600;
+  }
+  .delete-exercise {
+    padding: 7px 13px;
+    background: #ef4444;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    align-self: flex-end;
+    flex-shrink: 0;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .delete-exercise:hover { background: #dc2626; }
+
+  .series-section-header {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    margin-bottom: 6px !important;
+  }
+  .series-section-header > span {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .add-series {
+    padding: 5px 10px;
+    background: #0b63d6;
+    color: white;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.78rem;
+    font-weight: 600;
+    transition: background 0.15s;
+  }
+  .add-series:hover { background: #0952b8; }
+
+  .series-items {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 5px !important;
+    margin-bottom: 0 !important;
+  }
+
+  .series-row {
+    display: grid !important;
+    grid-template-columns: 30px 1fr 90px 60px 68px !important;
+    gap: 4px !important;
+    align-items: center !important;
+    padding: 5px 7px !important;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 5px;
+    margin-bottom: 0 !important;
+  }
+  .series-row > div {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 3px !important;
+    margin-bottom: 0 !important;
+  }
+  .series-number {
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+    color: #64748b !important;
+    margin: 0 !important;
+    text-align: center;
+    width: 100%;
+    display: block;
+  }
+  .series-row input[type="text"],
+  .series-row input[type="number"] {
+    width: 100%;
+    padding: 5px 6px;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    box-sizing: border-box;
+  }
+  .series-row input:focus {
+    outline: none;
+    border-color: #0b63d6;
+  }
+  .series-row > div:last-child {
+    justify-content: flex-end;
+    gap: 4px;
+  }
+  .series-main-checkbox {
+    width: 14px !important;
+    height: 14px !important;
+    cursor: pointer;
+    accent-color: #0b63d6;
     flex-shrink: 0;
   }
-
-  .exercise-block.collapsed .exercise-header-expanded {
-    display: none !important;
-  }
-
-  /* Afficher le numéro d'ordre en mode réduit */
-  .exercise-order-number {
-    display: none;
+  .series-p-label {
+    font-size: 0.62rem;
+    color: #0b63d6;
     font-weight: 700;
-    font-size: 0.8rem;
-    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  .delete-series {
+    padding: 3px 7px;
+    background: #ef4444;
     color: white;
-    padding: 4px 8px;
+    border: none;
     border-radius: 4px;
-    min-width: 28px;
-    text-align: center;
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-weight: 600;
+    line-height: 1;
+    flex-shrink: 0;
+    transition: background 0.15s;
+  }
+  .delete-series:hover { background: #dc2626; }
+
+  .notes-section > span {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: block;
+    margin-bottom: 4px;
+  }
+  textarea[name*="ex_rem_"] {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    font-size: 0.825rem;
+    min-height: 52px;
+    resize: vertical;
+    color: #374151;
+    box-sizing: border-box;
+    font-family: inherit;
+  }
+  textarea[name*="ex_rem_"]:focus {
+    outline: none;
+    border-color: #0b63d6;
   }
 
-  .exercise-block.collapsed .exercise-order-number {
+  .add-exercise {
+    padding: 7px 14px;
+    background: #0b63d6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.83rem;
+    font-weight: 600;
+    transition: background 0.15s, box-shadow 0.15s;
+  }
+  .add-exercise:hover {
+    background: #0952b8;
+    box-shadow: 0 3px 10px rgba(11,99,214,0.2);
+  }
+
+  .floating-actions {
+    position: fixed;
+    bottom: 24px;
+    left: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 200;
+  }
+  .floating-actions button {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 0.88rem;
+    white-space: nowrap;
+    transition: opacity 0.15s;
+  }
+  .floating-actions button:hover { opacity: 0.88; }
+
+  .confirm-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9000;
+  }
+  .confirm-modal[aria-hidden="false"] {
     display: flex;
     align-items: center;
     justify-content: center;
   }
-
-  .exercise-header-expanded > div {
+  .confirm-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+  }
+  .confirm-modal-panel {
+    position: relative;
+    background: white;
+    border-radius: 10px;
+    padding: 24px;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  }
+  .confirm-modal-body p {
+    margin: 0;
+    color: #374151;
+    font-size: 0.95rem;
+  }
+  .confirm-modal-actions {
     display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex-shrink: 0;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 18px;
   }
-
-  .exercise-header-expanded label {
-    font-size: 0.7rem !important;
-    font-weight: 600 !important;
-    color: #0b63d6 !important;
-    margin-bottom: 0 !important;
-  }
-
-  .exercise-header-expanded select,
-  .exercise-header-expanded input {
-    font-size: 0.8rem !important;
-    padding: 4px 6px !important;
-    min-width: 100px;
-  }
-
-  .series-list {
-    margin: 0 !important;
-    padding: 0;
-    display: flex;
-    gap: 6px;
-    align-items: flex-start;
-    flex-shrink: 0;
-  }
-
-  .series-list > div:first-child {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .series-list > div:first-child label {
-    font-weight: 600 !important;
-    color: #374151 !important;
-    font-size: 0.7rem !important;
-    margin-bottom: 0 !important;
-  }
-
-  .series-items {
-    display: flex !important;
-    flex-direction: row !important;
-    gap: 6px !important;
-    flex-wrap: wrap;
-    align-items: flex-start;
-  }
-
-  .series-row {
-    padding: 6px 8px !important;
-    gap: 6px !important;
-    display: inline-flex !important;
-    align-items: center;
-    font-size: 0.75rem !important;
-    border: 1px solid rgba(15,23,42,0.1) !important;
-    border-radius: 4px !important;
-    flex-shrink: 0;
-    white-space: nowrap;
-    background: #ffffff !important;
-    min-width: 380px;
-  }
-
-  .series-row > div {
-    display: flex !important;
-    align-items: center;
-    gap: 3px;
-  }
-
-  .series-row > div:first-child {
-    min-width: 25px;
-  }
-
-  .series-row input {
-    padding: 4px 6px !important;
-    font-size: 0.75rem !important;
-    width: 70px !important;
-    min-width: 70px !important;
-    flex: 1;
-  }
-
-  .series-row label {
-    font-size: 0.65rem !important;
-    margin-bottom: 0 !important;
-  }
-
-  .add-series {
-    padding: 6px 10px !important;
-    font-size: 0.8rem !important;
-    background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%) !important;
-    color: white !important;
-    border-radius: 4px !important;
-    flex-shrink: 0;
-    font-weight: 600;
-  }
-
-  .delete-exercise, .delete-series {
-    padding: 6px 10px !important;
-    font-size: 0.75rem !important;
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
-    color: white !important;
-    border-radius: 3px !important;
-    flex-shrink: 0;
-    font-weight: 600;
-  }
-
-  textarea[name*="ex_rem_"] {
-    font-size: 0.8rem !important;
-    min-height: 60px !important;
-    padding: 6px 8px !important;
-    min-width: 200px;
-    flex-shrink: 0;
-  }
-
-  .toggle-collapse {
-    background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%);
+  .confirm-yes {
+    padding: 8px 18px;
+    background: #ef4444;
     color: white;
     border: none;
-    padding: 6px 10px;
-    border-radius: 5px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 0.8rem;
-    font-weight: 700;
-    transition: all 0.2s ease;
-    white-space: nowrap;
-    flex-shrink: 0;
-    min-width: 40px;
-  }
-  
-  .toggle-collapse:hover {
-    background: linear-gradient(135deg, #0952b8 0%, #0741a0 100%);
-    box-shadow: 0 2px 6px rgba(11, 99, 214, 0.3);
-  }
-
-  .exercise-muscle {
-    font-size: 0.75rem !important;
-    padding: 3px 6px !important;
-    text-align: center !important;
-  }
-
-  .exercise-name-display {
-    display: none;
     font-weight: 600;
-    color: #0b63d6;
-    flex: 1;
-    padding-left: 4px;
-    font-size: 0.85rem;
+    font-size: 0.9rem;
   }
-
-  .exercise-muscle {
-    font-size: 0.85rem !important;
-    padding: 6px 10px !important;
-  }
-
-  .series-row {
-    padding: 8px !important;
-    gap: 6px !important;
-    grid-template-columns: 40px 1fr 1fr 1fr 90px !important;
+  .confirm-no {
+    padding: 8px 18px;
+    background: #e2e8f0;
+    color: #374151;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
     font-size: 0.9rem;
   }
 
-  .series-row input {
-    padding: 6px 8px !important;
-    font-size: 0.85rem !important;
-  }
-
-  .series-row label {
-    font-size: 0.75rem !important;
-    margin-bottom: 0 !important;
-  }
-
-  .series-list {
-    margin-bottom: 10px !important;
-  }
-
-  .series-list label:first-of-type {
-    font-size: 0.9rem !important;
-    font-weight: 600 !important;
-  }
-
-  .add-series {
-    padding: 5px 10px !important;
-    font-size: 0.8rem !important;
-    background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%) !important;
-    color: white !important;
-    border-radius: 5px !important;
-  }
-
-  .delete-exercise, .delete-series {
-    padding: 5px 8px !important;
-    font-size: 0.75rem !important;
-    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
-    color: white !important;
-    border-radius: 4px !important;
-  }
-
-  .delete-exercise:hover, .delete-series:hover {
-    box-shadow: 0 2px 6px rgba(239, 68, 68, 0.3) !important;
-  }
-
-  .form-row-horizontal {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 10px;
-  }
-
-  .form-group-inline {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .form-group-inline label {
-    font-size: 0.85rem;
-    font-weight: 600;
-  }
-
-  .form-group-inline input {
-    font-size: 0.9rem;
-    padding: 6px 8px;
-  }
-
-  textarea[name*="ex_rem_"] {
-    font-size: 0.85rem !important;
-    min-height: 50px !important;
-    padding: 8px !important;
-  }
-
-  .add-exercise {
-    background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%) !important;
-    color: white !important;
-    padding: 8px 14px !important;
-    font-size: 0.9rem !important;
-    border-radius: 6px !important;
-    margin-top: 8px;
-  }
-
-  .add-exercise:hover {
-    box-shadow: 0 4px 12px rgba(11, 99, 214, 0.2) !important;
-  }
-
-  .series-number {
-    margin-bottom: 0 !important;
-  }
-
-  /* Loading popup styles */
   .loading-popup {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.5);
+    inset: 0;
+    background: rgba(0,0,0,0.5);
     display: none;
     justify-content: center;
     align-items: center;
     z-index: 9999;
   }
-
-  .loading-popup.show {
-    display: flex;
-  }
-
+  .loading-popup.show { display: flex; }
   .loading-popup-content {
     background: white;
     border-radius: 12px;
-    padding: 40px;
+    padding: 36px 40px;
     text-align: center;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-    min-width: 300px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
   }
-
   .loading-spinner {
-    width: 50px;
-    height: 50px;
-    border: 4px solid #e0e0e0;
-    border-top: 4px solid #0b63d6;
+    width: 46px;
+    height: 46px;
+    border: 4px solid #e2e8f0;
+    border-top-color: #0b63d6;
     border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin: 0 auto 20px;
+    animation: exspin 1s linear infinite;
+    margin: 0 auto 14px;
   }
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-
+  @keyframes exspin { to { transform: rotate(360deg); } }
   .loading-text {
-    font-size: 1.1rem;
-    color: #333;
+    font-size: 0.95rem;
     font-weight: 600;
+    color: #374151;
+    margin: 0;
   }
 </style>
 
-<div style="margin-bottom: 16px; display: flex; gap: 8px; align-items: center;">
-  <h2 style="margin: 0; font-size: 1.3rem;">{{ program.name }} <span style="font-size: 0.9rem; color: #666;">— {{ program.athlete.username }}</span></h2>
-  <div style="margin-left: auto; display: flex; gap: 8px;">
-    <button id="collapse-all-btn" type="button" style="background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%); color: white; padding: 8px 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.85rem;">− Tout réduire</button>
-    <button id="expand-all-btn" type="button" style="background: linear-gradient(135deg, #666 0%, #555 100%); color: white; padding: 8px 12px; border-radius: 6px; border: none; cursor: pointer; font-weight: 600; font-size: 0.85rem;">+ Tout agrandir</button>
+<div class="prog-page-header">
+  <h2>{{ program.name }} <span>— {{ program.athlete.username }}</span></h2>
+  <div class="prog-header-btns">
+    <button id="collapse-all-btn" type="button" class="btn-collapse-all">− Tout réduire</button>
+    <button id="expand-all-btn"   type="button" class="btn-expand-all">+ Tout agrandir</button>
   </div>
 </div>
 
-<div class="card programming-edit-root">
-  <!-- form id important pour soumission depuis les boutons flottants -->
-  <form id="program-form" method="post" action="{{ url_for('coach_programming_edit', program_id=program.id) }}">
-    {# Affichage vertical : chaque jour sur sa ligne #}
-    <div class="programming-edit" style="display:flex; flex-direction:column; gap:16px;">
-      {% for day in range(7) %}
-      <div class="card day-row">
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-          <h4 style="margin: 0; color: #0b63d6; font-size: 1rem;">{{ ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'][day] }}</h4>
-          <input type="text" name="session_name_{{ day }}" value="{{ sessions_by_day[day].session_name if sessions_by_day[day] else '' }}" placeholder="Nom séance" style="flex: 1; max-width: 200px; font-size: 0.9rem; padding: 6px 8px;">
-        </div>
-
+<form id="program-form" method="post" action="{{ url_for('coach_programming_edit', program_id=program.id) }}">
+  <div style="display:flex; flex-direction:column; gap:0;">
+    {% for day in range(7) %}
+    <div class="day-row">
+      <div class="day-header">
+        <span class="day-label">{{ ['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'][day] }}</span>
+        <input type="text"
+               name="session_name_{{ day }}"
+               value="{{ sessions_by_day[day].session_name if sessions_by_day[day] else '' }}"
+               placeholder="Nom de la séance...">
+      </div>
+      <div class="day-body">
         <div class="exercises-container" id="exercises_day_{{ day }}">
           {% if sessions_by_day[day] %}
             {% for ex in sessions_by_day[day].exercises %}
             <div class="exercise-block" data-exercise-id="{{ ex.id }}" data-day="{{ day }}" draggable="true">
-              <div class="drag-handle" title="Glisser pour réorganiser">≡</div>
-              
-              <div class="exercise-order-number"></div>
-              
-              <div class="exercise-header">
+              <div class="ex-card-header">
+                <div class="drag-handle" title="Glisser pour réorganiser">⋮⋮</div>
+                <div class="exercise-order-number"></div>
                 <div class="exercise-badge">{{ ex.series_count or 0 }}S</div>
                 <div class="exercise-info">
                   <div class="exercise-name">{{ ex.name or '—' }}</div>
                   <div class="exercise-meta">{{ ex.muscle or 'N/A' }}</div>
                 </div>
+                <div class="exercise-name-display">—</div>
+                <button type="button" class="toggle-collapse" title="Réduire / Agrandir">−</button>
               </div>
-              
-              <button type="button" class="toggle-collapse" title="Réduire/Agrandir">−</button>
-              
               <div class="exercise-details">
                 <div class="exercise-header-expanded">
-                  <div>
+                  <div class="ex-select-wrap">
                     <label>Exercice</label>
-                    <select name="ex_name_{{ day }}[]" class="exercise-select" data-value="{{ ex.name or '' }}" required><option>-- Sélectionner --</option></select>
+                    <select name="ex_name_{{ day }}[]" class="exercise-select"
+                            data-value="{{ ex.name or '' }}" required>
+                      <option value="">-- Sélectionner un exercice --</option>
+                    </select>
                   </div>
-                  <div>
+                  <div class="ex-muscle-wrap">
                     <label>Muscle</label>
-                    <div class="exercise-muscle" style="background:#f3f4f6;">{{ ex.muscle or '—' }}</div>
+                    <div class="exercise-muscle">{{ ex.muscle or '—' }}</div>
                   </div>
-                  <button type="button" class="delete-exercise btn-remove">Suppr.</button>
+                  <button type="button" class="delete-exercise btn-remove">🗑 Supprimer</button>
                 </div>
-
-                <!-- Séries pour cet exercice -->
                 <div class="series-list">
-                  <div>
-                    <label>Séries</label>
-                    <button type="button" class="add-series" data-exercise-id="{{ ex.id }}" data-day="{{ day }}">+ Ajouter</button>
+                  <div class="series-section-header">
+                    <span>Séries</span>
+                    <button type="button" class="add-series"
+                            data-exercise-id="{{ ex.id }}" data-day="{{ day }}">+ Ajouter</button>
                   </div>
-
                   <div class="series-items">
                     {% set series_list = ex.get_series_list() %}
                     {% if series_list %}
                       {% for s in series_list %}
-                      <div class="series-row" data-series-description="{{ s.description }}" data-series-number="{{ s.number }}" data-is-main="{{ s.is_main|lower }}">
+                      <div class="series-row"
+                           data-series-description="{{ s.description }}"
+                           data-series-number="{{ s.number }}"
+                           data-is-main="{{ s.is_main|lower }}">
                         <div><label class="series-number">S{{ s.number }}</label></div>
-                        <div><input type="text" placeholder="Reps" value=""></div>
-                        <div><input type="number" placeholder="Rest (min)" value="" step="0.1"></div>
-                        <div><input type="number" placeholder="RIR" value="" step="0.5"></div>
-                        <div style="display:flex; align-items:center; gap:3px; justify-content:flex-end;">
-                          <input type="checkbox" class="series-main-checkbox" {% if s.is_main %}checked{% endif %}>
-                          <label style="font-size:0.65rem; color:#0b63d6; cursor:pointer; user-select:none; font-weight:600; white-space:nowrap;">P*</label>
+                        <div><input type="text"   placeholder="Reps"      value=""></div>
+                        <div><input type="text" class="rest-input" placeholder="0:30" value="" maxlength="5"></div>
+                        <div><input type="number" placeholder="RIR"        value="" step="0.5"></div>
+                        <div>
+                          <input type="checkbox" class="series-main-checkbox"
+                                 {% if s.is_main %}checked{% endif %}>
+                          <label class="series-p-label">P*</label>
                           <button type="button" class="delete-series">✕</button>
                         </div>
                       </div>
@@ -562,55 +641,53 @@
                     {% endif %}
                   </div>
                 </div>
-
-                <!-- Remarque générale -->
-                <div>
-                  <label>Notes</label>
-                  <textarea name="ex_rem_{{ day }}[]" placeholder="Remarques...">{{ ex.remark }}</textarea>
+                <div class="notes-section">
+                  <span>Notes</span>
+                  <textarea name="ex_rem_{{ day }}[]"
+                            placeholder="Remarques...">{{ ex.remark }}</textarea>
                 </div>
               </div>
             </div>
             {% endfor %}
           {% endif %}
         </div>
-
-        <div style="margin-top:8px;">
-          <button type="button" class="add-exercise btn-add-exercise" data-day="{{ day }}" style="background: linear-gradient(135deg, #0b63d6 0%, #0952b8 100%); color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600; font-size:0.85rem;">+ Ajouter exercice</button>
-        </div>
+        <button type="button" class="add-exercise btn-add-exercise"
+                data-day="{{ day }}">+ Ajouter exercice</button>
       </div>
-      {% endfor %}
     </div>
-  </form>
-</div>
+    {% endfor %}
+  </div>
+</form>
 
-<!-- Floating actions (always visible left) -->
 <div class="floating-actions" aria-hidden="false">
-  <button id="save-float" class="save-program-btn" title="Enregistrer le programme" style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); box-shadow: 0 4px 12px rgba(34, 197, 94, 0.3);">✓ Enregistrer</button>
-  <button id="cancel-float" class="cancel-btn" data-return-url="{{ url_for('coach_programming') }}" title="Ne pas enregistrer" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);">✕ Annuler</button>
-  <button id="recap-float" class="secondary" title="Voir le récapitulatif" style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); color: white; box-shadow: 0 4px 12px rgba(139, 92, 246, 0.2);">📋 Recap</button>
+  <button id="save-float" class="save-program-btn"
+          style="background:linear-gradient(135deg,#22c55e,#16a34a); color:white; box-shadow:0 4px 12px rgba(34,197,94,0.3);">✓ Enregistrer</button>
+  <button id="cancel-float" class="cancel-btn"
+          data-return-url="{{ url_for('coach_programming') }}"
+          style="background:linear-gradient(135deg,#ef4444,#dc2626); color:white; box-shadow:0 4px 12px rgba(239,68,68,0.2);">✕ Annuler</button>
+  <button id="recap-float" class="secondary"
+          style="background:linear-gradient(135deg,#8b5cf6,#7c3aed); color:white; box-shadow:0 4px 12px rgba(139,92,246,0.2);">📋 Recap</button>
 </div>
 
-<!-- Confirmation modal (hidden by default) -->
 <div id="confirm-modal" class="confirm-modal" role="dialog" aria-modal="true" aria-hidden="true">
   <div class="confirm-modal-backdrop"></div>
-  <div class="confirm-modal-panel" role="document">
+  <div class="confirm-modal-panel">
     <div class="confirm-modal-body">
       <p id="confirm-message">Confirmez votre action</p>
     </div>
     <div class="confirm-modal-actions">
       <button id="confirm-yes" class="confirm-yes">Confirmer</button>
-      <button id="confirm-no" class="confirm-no">Annuler</button>
+      <button id="confirm-no"  class="confirm-no">Annuler</button>
     </div>
   </div>
 </div>
 
-<!-- Recap modal -->
 <div id="recap-modal" class="confirm-modal" role="dialog" aria-modal="true" aria-hidden="true">
   <div class="confirm-modal-backdrop"></div>
-  <div class="confirm-modal-panel" role="document" style="max-width: 600px; max-height: 80vh; overflow-y: auto;">
+  <div class="confirm-modal-panel" style="max-width:600px; max-height:80vh; overflow-y:auto;">
     <div class="confirm-modal-body">
-      <h3>Récapitulatif du programme</h3>
-      <div id="recap-content" style="margin-top: 16px;"></div>
+      <h3 style="margin:0 0 4px; color:#0f172a;">Récapitulatif du programme</h3>
+      <div id="recap-content" style="margin-top:16px;"></div>
     </div>
     <div class="confirm-modal-actions">
       <button id="recap-close" class="confirm-no">Fermer</button>
@@ -618,7 +695,6 @@
   </div>
 </div>
 
-<!-- Loading popup -->
 <div id="loading-popup" class="loading-popup">
   <div class="loading-popup-content">
     <div class="loading-spinner"></div>
@@ -626,82 +702,81 @@
   </div>
 </div>
 
-<!-- Row template hidden -->
 <table style="display:none;">
   <tbody id="row-template">
     <tr>
       <td><select name="__NAME__" class="exercise-select" data-value=""><option>-- Sélectionner --</option></select></td>
-      <td><input type="text" name="__MUSC__" value="" placeholder="Pecs" style="font-size:1rem; padding:8px;"></td>
-      <td><textarea name="__SERIES__" placeholder="S1: 8 reps 100kg&#10;S2: 6 reps 120kg&#10;S3: 4 reps 140kg" style="font-size:0.95rem; padding:8px; min-height:100px; resize:vertical; font-family:monospace;"></textarea></td>
-      <td><textarea name="__REM__" placeholder="Notes..." style="font-size:0.95rem; padding:8px; min-height:100px; resize:vertical;"></textarea></td>
+      <td><input type="text" name="__MUSC__" value="" placeholder="Pecs"></td>
+      <td><textarea name="__SERIES__" placeholder="S1: 8 reps..."></textarea></td>
+      <td><textarea name="__REM__" placeholder="Notes..."></textarea></td>
       <td><button type="button" class="remove-row btn-remove">✕</button></td>
     </tr>
   </tbody>
 </table>
 
-<!-- Exercise and series templates (hidden) -->
 <template id="exercise-template">
-  <div class="exercise-block" draggable="true" style="border:1px solid rgba(15,23,42,0.1); border-radius:10px; padding:14px; background:#f9fafb; display:flex; gap:12px;">
-    <div class="drag-handle" title="Glisser pour réorganiser">⋮⋮</div>
-    <div class="exercise-name-display">—</div>
-    <button type="button" class="toggle-collapse" title="Réduire/Agrandir">−</button>
-    
-    <div class="exercise-details" style="flex: 1;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-        <div style="flex:1;">
-          <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Exercice</label>
-          <select name="__EX_NAME__" class="exercise-select" style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem;" required><option>-- Sélectionner --</option></select>
+  <div class="exercise-block" draggable="true">
+    <div class="ex-card-header">
+      <div class="drag-handle" title="Glisser pour réorganiser">⋮⋮</div>
+      <div class="exercise-order-number"></div>
+      <div class="exercise-badge">0S</div>
+      <div class="exercise-info">
+        <div class="exercise-name">—</div>
+        <div class="exercise-meta">—</div>
+      </div>
+      <div class="exercise-name-display">—</div>
+      <button type="button" class="toggle-collapse">−</button>
+    </div>
+    <div class="exercise-details">
+      <div class="exercise-header-expanded">
+        <div class="ex-select-wrap">
+          <label>Exercice</label>
+          <select name="__EX_NAME__" class="exercise-select" required>
+            <option value="">-- Sélectionner un exercice --</option>
+          </select>
         </div>
-        <div style="margin-left:12px;">
-          <label style="font-size:0.95rem; font-weight:600; color:#0b63d6;">Muscle</label>
-          <div class="exercise-muscle" style="padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.95rem; background:#f3f4f6; min-width:100px; text-align:center;">—</div>
+        <div class="ex-muscle-wrap">
+          <label>Muscle</label>
+          <div class="exercise-muscle">—</div>
         </div>
-        <button type="button" class="delete-exercise" style="margin-top:20px; background:#ef4444; color:white; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; font-weight:600;">Supprimer</button>
+        <button type="button" class="delete-exercise">🗑 Supprimer</button>
       </div>
-
-      <div class="series-list" style="margin-bottom:12px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-          <label style="font-weight:600; color:#374151; font-size:0.95rem;">Séries</label>
-          <button type="button" class="add-series" style="background:#0b63d6; color:white; padding:6px 12px; border-radius:6px; border:none; cursor:pointer; font-size:0.9rem; font-weight:600;">+ Ajouter série</button>
+      <div class="series-list">
+        <div class="series-section-header">
+          <span>Séries</span>
+          <button type="button" class="add-series">+ Ajouter</button>
+        </div>
+        <div class="series-items"></div>
       </div>
-        <div class="series-items" style="display:flex; flex-direction:column; gap:8px;"></div>
-      </div>
-
-      <div>
-        <label style="font-size:0.9rem; font-weight:600; color:#374151;">Remarque générale</label>
-        <textarea name="__EX_REM__" placeholder="Notes..." style="width:100%; padding:8px; border-radius:6px; border:1px solid rgba(15,23,42,0.1); font-size:0.9rem; min-height:60px; resize:vertical;"></textarea>
+      <div class="notes-section">
+        <span>Notes</span>
+        <textarea name="__EX_REM__" placeholder="Remarques..."></textarea>
       </div>
     </div>
   </div>
 </template>
 
 <template id="series-template">
-  <div class="series-row" style="display:grid; grid-template-columns: 60px 1fr 1fr 1fr 120px; gap:8px; align-items:center; padding:8px; background:#ffffff; border:1px solid rgba(15,23,42,0.1); border-radius:6px;">
-    <div><label style="font-size:0.85rem; color:#666; font-weight:600;" class="series-number">S1</label></div>
-    <div><input type="text" name="__SERIES_REPS__" placeholder="Reps" style="width:100%; padding:8px; font-size:0.95rem; border-radius:4px; border:1px solid rgba(15,23,42,0.15); font-weight:500;"></div>
-    <div><input type="number" name="__SERIES_REST__" placeholder="Rest (min)" step="0.1" style="width:100%; padding:8px; font-size:0.95rem; border-radius:4px; border:1px solid rgba(15,23,42,0.15); font-weight:500;"></div>
-    <div><input type="number" name="__SERIES_RIR__" placeholder="RIR" step="0.5" style="width:100%; padding:8px; font-size:0.95rem; border-radius:4px; border:1px solid rgba(15,23,42,0.15); font-weight:500;"></div>
-    <div style="display:flex; align-items:center; gap:6px; justify-content:flex-end;">
-      <input type="checkbox" class="series-main-checkbox" style="width:20px; height:20px; cursor:pointer;">
-      <label style="font-size:0.85rem; color:#0b63d6; cursor:pointer; user-select:none; font-weight:600; white-space:nowrap;">P*</label>
-      <button type="button" class="delete-series" style="background:#ef4444; color:white; padding:6px 10px; border-radius:4px; border:none; cursor:pointer; font-size:0.8rem; font-weight:600;">✕</button>
+  <div class="series-row">
+    <div><label class="series-number">S1</label></div>
+    <div><input type="text"   placeholder="Reps"></div>
+    <div><input type="text" class="rest-input" placeholder="0:30" maxlength="5"></div>
+    <div><input type="number" placeholder="RIR"        step="0.5"></div>
+    <div>
+      <input type="checkbox" class="series-main-checkbox">
+      <label class="series-p-label">P*</label>
+      <button type="button" class="delete-series">✕</button>
     </div>
   </div>
 </template>
 
-
 <script src="{{ url_for('static', filename='js/programming.js') }}"></script>
 <script>
-  // Collapse all exercises by default on page load
   document.addEventListener('DOMContentLoaded', function() {
-    // Initialize order numbers
     updateExerciseOrderNumbers();
-    
-    setTimeout(() => {
-      const collapseBtn = document.getElementById('collapse-all-btn');
-      if (collapseBtn) {
-        collapseBtn.click();
-      }
+    setTimeout(function() {
+      var collapseBtn = document.getElementById('collapse-all-btn');
+      if (collapseBtn) collapseBtn.click();
     }, 100);
   });
 </script>

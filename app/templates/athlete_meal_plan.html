@@ -164,6 +164,8 @@
         font-weight: 700;
         display: flex;
         align-items: center;
+        justify-content: space-between;
+        width: 100%;
     }
 
     .meal-body {
@@ -309,12 +311,30 @@
                 <div class="total-value">{{ '%.1f'|format(daily_totals.lipids) }}g</div>
                 <div class="total-label">Lipides</div>
             </div>
+            <div class="total-card" style="border-top-color:#adb5bd;">
+                <div class="total-value" style="font-size:1.4em; color:#6c757d;">{{ '%.1f'|format(daily_totals.saturated_fats) }}g</div>
+                <div class="total-label">dont Saturés</div>
+            </div>
+            <div class="total-card" style="border-top-color:#adb5bd;">
+                <div class="total-value" style="font-size:1.4em; color:#6c757d;">{{ '%.1f'|format(daily_totals.simple_sugars) }}g</div>
+                <div class="total-label">dont Sucres</div>
+            </div>
+            <div class="total-card" style="border-top-color:#adb5bd;">
+                <div class="total-value" style="font-size:1.4em; color:#6c757d;">{{ '%.1f'|format(daily_totals.fiber) }}g</div>
+                <div class="total-label">Fibres</div>
+            </div>
+            <div class="total-card" style="border-top-color:#adb5bd;">
+                <div class="total-value" style="font-size:1.4em; color:#6c757d;">{{ '%.2f'|format(daily_totals.salt) }}g</div>
+                <div class="total-label">Sel</div>
+            </div>
         </div>
 
         <!-- Repas -->
         <div class="meals-grid">
-            {% for meal_num in range(1, 7) %}
+            {% set meal_count = meal_plan.meal_count or 6 %}
+            {% for meal_num in range(1, meal_count + 1) %}
                 {% set meals = meal_plan.meals|selectattr('meal_number', 'equalto', meal_num)|list %}
+                {% set meal_time = meal_plan['meal_time_' ~ meal_num] %}
                 <div class="meal-card">
                     <div class="meal-header">
                         <div class="meal-title">
@@ -331,70 +351,89 @@
                             {% elif meal_num == 6 %}
                                 <span class="meal-icon">🥛</span>Collation 3
                             {% endif %}
+                            {% if meal_time %}
+                                <span style="margin-left:auto; font-size:0.85em; opacity:0.9; font-weight:500;">⏰ {{ meal_time }}</span>
+                            {% endif %}
                         </div>
+                        {% set meal_label = meal_plan['meal_label_' ~ meal_num] %}
+                        {% if meal_label %}
+                            <div style="font-size:0.85em; opacity:0.85; margin-top:4px; font-style:italic;">{{ meal_label }}</div>
+                        {% endif %}
                     </div>
 
                     <div class="meal-body">
                         {% if meals %}
+                            {% set mt = namespace(kcals=0, proteins=0, carbs=0, lipids=0, saturated=0, sugars=0, fiber=0, salt=0) %}
                             <div class="food-items-list">
                                 {% for meal_entry in meals %}
                                     {% if meal_entry.food %}
-                                        {% set quantity_factor = (meal_entry.quantity or 100) / 100.0 %}
-                                        {% set kcals = (meal_entry.food.kcal or 0) * quantity_factor %}
-                                        {% set proteins = (meal_entry.food.proteins or 0) * quantity_factor %}
-                                        {% set carbs = (meal_entry.food.carbs or 0) * quantity_factor %}
-                                        {% set lipids = (meal_entry.food.lipids or 0) * quantity_factor %}
-
+                                        {% set qf = (meal_entry.quantity or 100) / 100.0 %}
+                                        {% set kcals    = (meal_entry.food.kcal             or 0) * qf %}
+                                        {% set proteins = (meal_entry.food.proteins          or 0) * qf %}
+                                        {% set carbs    = (meal_entry.food.carbs             or 0) * qf %}
+                                        {% set lipids   = (meal_entry.food.lipids            or 0) * qf %}
+                                        {% set sat      = (meal_entry.food.saturated_fats    or 0) * qf %}
+                                        {% set sug      = (meal_entry.food.simple_sugars     or 0) * qf %}
+                                        {% set fib      = (meal_entry.food.fiber             or 0) * qf %}
+                                        {% set slt      = (meal_entry.food.salt              or 0) * qf %}
+                                        {% set mt.kcals     = mt.kcals     + kcals %}
+                                        {% set mt.proteins  = mt.proteins  + proteins %}
+                                        {% set mt.carbs     = mt.carbs     + carbs %}
+                                        {% set mt.lipids    = mt.lipids    + lipids %}
+                                        {% set mt.saturated = mt.saturated + sat %}
+                                        {% set mt.sugars    = mt.sugars    + sug %}
+                                        {% set mt.fiber     = mt.fiber     + fib %}
+                                        {% set mt.salt      = mt.salt      + slt %}
                                         <div class="food-item">
-                                            <div class="food-name">{{ meal_entry.food.name }}</div>
+                                            <div class="food-name">{{ meal_entry.food.name }}{% if meal_entry.food.brand %} <span style="font-weight:400; font-size:0.85em; color:#888;">— {{ meal_entry.food.brand }}</span>{% endif %}</div>
                                             <div class="food-quantity">{{ meal_entry.quantity|int }}g</div>
-                                            <div class="food-macros">
-                                                {{ '%.0f'|format(kcals) }}kcal • 
-                                                {{ '%.1f'|format(proteins) }}P • 
-                                                {{ '%.1f'|format(carbs) }}C • 
-                                                {{ '%.1f'|format(lipids) }}L
-                                            </div>
                                         </div>
-                                        <script>
-                                            window['meal_{{ meal_num }}_totals'] = window['meal_{{ meal_num }}_totals'] || {kcals: 0, proteins: 0, carbs: 0, lipids: 0};
-                                            window['meal_{{ meal_num }}_totals'].kcals += {{ kcals }};
-                                            window['meal_{{ meal_num }}_totals'].proteins += {{ proteins }};
-                                            window['meal_{{ meal_num }}_totals'].carbs += {{ carbs }};
-                                            window['meal_{{ meal_num }}_totals'].lipids += {{ lipids }};
-                                        </script>
                                     {% endif %}
                                 {% endfor %}
                             </div>
 
                             <div class="meal-totals">
-                                <div class="meal-total-row" style="border: none; padding: 0; margin: 0; font-weight: 700; font-size: 1.1em;">
+                                <div class="meal-total-row" style="border:none; padding:0; margin:0; font-weight:700; font-size:1.1em;">
                                     <span>Kcals</span>
-                                    <strong id="meal_{{ meal_num }}_kcals" style="color: #667eea; font-size: 1.2em;">0</strong>
+                                    <strong style="color:#667eea; font-size:1.2em;">{{ '%.0f'|format(mt.kcals) }}</strong>
                                 </div>
                                 <div class="meal-total-row">
                                     <span>Protéines</span>
-                                    <strong id="meal_{{ meal_num }}_proteins">0g</strong>
+                                    <strong>{{ '%.1f'|format(mt.proteins) }}g</strong>
                                 </div>
                                 <div class="meal-total-row">
                                     <span>Glucides</span>
-                                    <strong id="meal_{{ meal_num }}_carbs">0g</strong>
+                                    <strong>{{ '%.1f'|format(mt.carbs) }}g</strong>
                                 </div>
                                 <div class="meal-total-row">
                                     <span>Lipides</span>
-                                    <strong id="meal_{{ meal_num }}_lipids">0g</strong>
+                                    <strong>{{ '%.1f'|format(mt.lipids) }}g</strong>
                                 </div>
+                                {% if mt.saturated > 0 %}
+                                <div class="meal-total-row" style="font-size:0.85em; color:#999;">
+                                    <span>dont Saturés</span>
+                                    <span>{{ '%.1f'|format(mt.saturated) }}g</span>
+                                </div>
+                                {% endif %}
+                                {% if mt.sugars > 0 %}
+                                <div class="meal-total-row" style="font-size:0.85em; color:#999;">
+                                    <span>dont Sucres</span>
+                                    <span>{{ '%.1f'|format(mt.sugars) }}g</span>
+                                </div>
+                                {% endif %}
+                                {% if mt.fiber > 0 %}
+                                <div class="meal-total-row" style="font-size:0.85em; color:#999;">
+                                    <span>Fibres</span>
+                                    <span>{{ '%.1f'|format(mt.fiber) }}g</span>
+                                </div>
+                                {% endif %}
+                                {% if mt.salt > 0 %}
+                                <div class="meal-total-row" style="font-size:0.85em; color:#999;">
+                                    <span>Sel</span>
+                                    <span>{{ '%.2f'|format(mt.salt) }}g</span>
+                                </div>
+                                {% endif %}
                             </div>
-                            <script>
-                                window.addEventListener('load', function() {
-                                    if (window['meal_{{ meal_num }}_totals']) {
-                                        const t = window['meal_{{ meal_num }}_totals'];
-                                        document.getElementById('meal_{{ meal_num }}_kcals').textContent = Math.round(t.kcals);
-                                        document.getElementById('meal_{{ meal_num }}_proteins').textContent = t.proteins.toFixed(1) + 'g';
-                                        document.getElementById('meal_{{ meal_num }}_carbs').textContent = t.carbs.toFixed(1) + 'g';
-                                        document.getElementById('meal_{{ meal_num }}_lipids').textContent = t.lipids.toFixed(1) + 'g';
-                                    }
-                                });
-                            </script>
                         {% else %}
                             <div class="empty-meal">Pas d'aliments</div>
                         {% endif %}
