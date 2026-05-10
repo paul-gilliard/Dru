@@ -508,32 +508,44 @@
 
     let muscleDetailChart = null;
     let exerciseDetailChart = null;
+    const athleteQuickData = {};  // per-athlete cache: athleteId -> quick-data response
 
     async function loadAthletesSummary() {
-        for (const athleteId of athletes) {
-            try {
-                const response = await fetch(`/coach/stats/athlete/${athleteId}/summary-7days.json?week_offset=${weekOffset}`);
-                const data = await response.json();
-                renderSummary(athleteId, data);
-            } catch (error) {
-                console.error(`Erreur pour athlète ${athleteId}:`, error);
-                document.getElementById(`summary-${athleteId}`).innerHTML = '<div class="no-data">Erreur de chargement</div>';
-                document.getElementById(`loader-${athleteId}`).classList.add('hidden');
-                document.getElementById(`summary-${athleteId}`).style.display = 'block';
+        // Fetch ALL athletes in parallel — single request per athlete, no sequential waits
+        const results = await Promise.all(athletes.map(athleteId =>
+            fetch(`/coach/stats/athlete/${athleteId}/quick-data.json`)
+                .then(r => r.ok ? r.json() : null)
+                .catch(() => null)
+                .then(data => ({ athleteId, data }))
+        ));
+
+        for (const { athleteId, data } of results) {
+            if (!data) {
+                const loaderEl = document.getElementById(`loader-${athleteId}`);
+                const summaryEl = document.getElementById(`summary-${athleteId}`);
+                if (loaderEl) loaderEl.classList.add('hidden');
+                if (summaryEl) { summaryEl.innerHTML = '<div class="no-data">Erreur de chargement</div>'; summaryEl.style.display = 'block'; }
+                continue;
             }
+            // Cache per athlete for later use in muscle/series detail handlers
+            athleteQuickData[athleteId] = data;
+            // Render summary card + comparison cards — all from already-fetched data
+            renderSummary(athleteId, data);
         }
     }
 
-    function renderSummary(athleteId, data) {
+    function renderSummary(athleteId, qd) {
         const container = document.getElementById(`summary-${athleteId}`);
-        
-        // Show variation section if tonnage_diff data exists
-        if (data.summary_7days && data.summary_7days.tonnage_diff_by_muscle) {
-            const totalDiff = Object.values(data.summary_7days.tonnage_diff_by_muscle || {}).reduce((a, b) => a + b, 0);
+        // qd is the full quick-data.json response; use summary_7days for the weekly card
+        const data = qd.summary_7days || {};
+
+        // Variation badge (total tonnage diff)
+        if (data.tonnage_diff_by_muscle) {
+            const totalDiff = Object.values(data.tonnage_diff_by_muscle).reduce((a, b) => a + b, 0);
             const variationEl = document.getElementById(`variation-${athleteId}`);
             const variationTextEl = document.getElementById(`variation-text-${athleteId}`);
-            variationEl.style.display = 'block';
-            variationTextEl.innerHTML = diffBadge(totalDiff, 0, 'kg');
+            if (variationEl) variationEl.style.display = 'block';
+            if (variationTextEl) variationTextEl.innerHTML = diffBadge(totalDiff, 0, 'kg');
         }
         
         let html = '<table class="summary-table"><tbody>';
@@ -675,9 +687,12 @@
                 card.style.display = 'none';
             });
         });
-        
-        // Load comparisons for this athlete
-        loadComparisonForAthlete(athleteId);
+
+        // Populate comparison cards directly from already-fetched data (no second fetch)
+        if (qd.summary_7days)  displayComparisonInCard(athleteId, 1, qd.summary_7days);
+        if (qd.summary_14days) displayComparisonInCard(athleteId, 2, qd.summary_14days);
+        if (qd.summary_21days) displayComparisonInCard(athleteId, 3, qd.summary_21days);
+        if (qd.summary_28days) displayComparisonInCard(athleteId, 4, qd.summary_28days);
     }
 
 
@@ -775,23 +790,6 @@
         const diffTime = expireDate - now;
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         return Math.max(0, diffDays);
-    }
-
-    // Load and display comparisons for an athlete
-    async function loadComparisonForAthlete(athleteId) {
-        try {
-            const res = await fetch(`/coach/stats/athlete/${athleteId}/quick-data.json`);
-            if (!res.ok) return;
-            
-            const data = await res.json();
-            
-            if (data.summary_7days) displayComparisonInCard(athleteId, 1, data.summary_7days);
-            if (data.summary_14days) displayComparisonInCard(athleteId, 2, data.summary_14days);
-            if (data.summary_21days) displayComparisonInCard(athleteId, 3, data.summary_21days);
-            if (data.summary_28days) displayComparisonInCard(athleteId, 4, data.summary_28days);
-        } catch (err) {
-            console.error('Error loading comparisons for athlete', athleteId, err);
-        }
     }
 
     // Display comparison in athlete card
@@ -958,20 +956,24 @@
             </div>`;
         document.getElementById('muscle-detail-modal').style.display = 'flex';
 
-        fetch(`/coach/stats/athlete/${athleteId}/quick-data.json`)
-            .then(res => res.json())
-            .then(data => {
-                seriesByExerciseCache = data.series_by_exercise || {};
-                currentComparisonContext = { summary: summaryShort, label1, label2 };
+        // Use pre-fetched cache — no extra HTTP request
+        const data = athleteQuickData[athleteId];
+        if (!data) {
+            document.getElementById('muscle-detail-content').innerHTML = '<p style="color:#ef4444;">Données non disponibles</p>';
+            return;
+        }
+        {
+            seriesByExerciseCache = data.series_by_exercise || {};
+            currentComparisonContext = { summary: summaryShort, label1, label2 };
 
-                const summary = data[summaryKey];
-                if (!summary || !summary.exercise_details_by_muscle || !summary.exercise_details_by_muscle[muscle]) {
-                    document.getElementById('muscle-detail-content').innerHTML = '<p style="color:#ef4444;">Données non disponibles</p>';
-                    return;
-                }
+            const summary = data[summaryKey];
+            if (!summary || !summary.exercise_details_by_muscle || !summary.exercise_details_by_muscle[muscle]) {
+                document.getElementById('muscle-detail-content').innerHTML = '<p style="color:#ef4444;">Données non disponibles</p>';
+                return;
+            }
 
-                const exByMuscle = summary.exercise_details_by_muscle[muscle];
-                const exercises  = Object.keys(exByMuscle).sort();
+            const exByMuscle = summary.exercise_details_by_muscle[muscle];
+            const exercises  = Object.keys(exByMuscle).sort();
 
                 setTimeout(() => {
                     const currentTons  = exercises.map(ex => (exByMuscle[ex].current  || 0) / 1000);
@@ -1043,11 +1045,7 @@
                         }
                     });
                 }, 50);
-            })
-            .catch(err => {
-                console.error('Error loading exercise details:', err);
-                document.getElementById('muscle-detail-content').innerHTML = '<p style="color:#ef4444;">Erreur de chargement</p>';
-            });
+        }
     });
 
     // Event delegation for exercise series detail buttons
