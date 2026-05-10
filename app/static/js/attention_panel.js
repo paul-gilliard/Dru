@@ -49,9 +49,9 @@
         const unpairedCur  = [...allNums].filter(n => curBy[n]  && !prevBy[n]).map(n => curBy[n]);
         const unpairedPrev = [...allNums].filter(n => prevBy[n] && !curBy[n]).map(n => prevBy[n]);
 
-        let allEqual     = true;
-        let hasRegression = false;
         const rows = [];
+        let countProgress = 0, countRegression = 0, countSame = 0;
+        let curTonnage = 0, prevTonnage = 0;
 
         for (const num of paired) {
             const c = curBy[num];
@@ -65,26 +65,48 @@
             if (cLoad != null && pLoad != null && cReps != null && pReps != null) {
                 const sameLoad = cLoad === pLoad;
                 const sameReps = cReps === pReps;
+                curTonnage  += cLoad * cReps;
+                prevTonnage += pLoad * pReps;
                 if (cLoad < pLoad || (sameLoad && cReps < pReps)) {
                     rowVerdict = 'regression';
-                    hasRegression = true;
-                    allEqual = false;
+                    countRegression++;
                 } else if (sameLoad && sameReps) {
                     rowVerdict = 'same';
+                    countSame++;
                 } else {
                     rowVerdict = 'progress';
-                    allEqual = false;
+                    countProgress++;
                 }
             }
 
             rows.push({ num: Number(num), cLoad, cReps, pLoad, pReps, rowVerdict });
         }
 
-        let verdict = 'progress';
-        if (hasRegression)               verdict = 'regression';
-        else if (allEqual && rows.length) verdict = 'stagnation';
+        const tonnageDiff = curTonnage - prevTonnage;
+        const totalCounted = countProgress + countRegression + countSame;
 
-        return { verdict, curDate, prevDate, rows, unpaired: { cur: unpairedCur, prev: unpairedPrev } };
+        let verdict = 'progress';
+        if (totalCounted === 0) {
+            verdict = 'progress';
+        } else if (countProgress === 0 && countRegression === 0) {
+            // All paired non-incomplete rows are identical
+            verdict = 'stagnation';
+        } else if (countProgress > countRegression) {
+            verdict = tonnageDiff < 0 ? 'review' : 'progress';
+        } else if (countRegression > countProgress) {
+            verdict = tonnageDiff > 0 ? 'review' : 'regression';
+        } else {
+            // Tie: tonnage tranche
+            if (tonnageDiff > 0)      verdict = 'progress';
+            else if (tonnageDiff < 0) verdict = 'regression';
+            else                       verdict = 'stagnation';
+        }
+
+        return {
+            verdict, curDate, prevDate, rows,
+            unpaired: { cur: unpairedCur, prev: unpairedPrev },
+            stats: { countProgress, countRegression, countSame, curTonnage, prevTonnage, tonnageDiff }
+        };
     }
 
     function analyse(quickData, period) {
@@ -92,7 +114,7 @@
         const cur  = getWeekBounds(period.curOffset);
         const prev = getWeekBounds(period.prevOffset);
 
-        const buckets = { regression: [], stagnation: [], progress: [], new: [], abandoned: [] };
+        const buckets = { regression: [], review: [], stagnation: [], progress: [], new: [], abandoned: [] };
 
         for (const [exName, seriesByDate] of Object.entries(seriesByEx)) {
             const curDate  = getLastSessionDate(seriesByDate, cur.start,  cur.end);
@@ -129,7 +151,7 @@
 
     function buildDetailHtml(detail, curLabel, prevLabel) {
         if (!detail) return '';
-        const { rows, curDate, prevDate, unpaired } = detail;
+        const { rows, curDate, prevDate, unpaired, stats } = detail;
 
         const fmt = v => v != null ? v : '—';
 
@@ -164,6 +186,23 @@
             unpairedHtml += `<div style="margin-top:4px;font-size:0.72rem;color:#64748b;">🚫 Séries abandonnées: ${pills}</div>`;
         }
 
+        let tonnageHtml = '';
+        if (stats && (stats.countProgress + stats.countRegression + stats.countSame) > 0) {
+            const td = stats.tonnageDiff;
+            const tdColor = td > 0 ? '#15803d' : (td < 0 ? '#b91c1c' : '#475569');
+            const tdSign  = td > 0 ? '+' : '';
+            tonnageHtml = `<div style="margin-top:8px;padding-top:6px;border-top:1px dashed #e5e7eb;display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;font-size:0.72rem;">
+                <span style="color:#475569;">
+                    🟢 ${stats.countProgress} progrès &middot;
+                    🔴 ${stats.countRegression} régression(s) &middot;
+                    → ${stats.countSame} identique(s)
+                </span>
+                <span style="color:${tdColor};font-weight:700;">
+                    Tonnage: ${stats.curTonnage} vs ${stats.prevTonnage} kg (${tdSign}${td})
+                </span>
+            </div>`;
+        }
+
         return `<div style="background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:10px;margin-top:6px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap;">
                 <span style="font-size:0.72rem;font-weight:700;color:#1e293b;">${curLabel} : <span style="color:#667eea;">${curDate}</span></span>
@@ -181,6 +220,7 @@
                 </thead>
                 <tbody>${bodyRows}</tbody>
             </table>
+            ${tonnageHtml}
             ${unpairedHtml}
         </div>`;
     }
@@ -214,7 +254,8 @@
         const rows = [
             { icon: '⚖️', label: 'Poids corporel',                             bg: '#eff6ff', border: '#3b82f6', content: bwBadge(bw) },
             { icon: '🔴', label: `Régressions (${ex.regression.length})`,      bg: '#fef2f2', border: '#ef4444', content: buildExoList(ex.regression,  '#ef4444', curLabel, prevLabel) },
-            { icon: '🟠', label: `Stagnations (${ex.stagnation.length})`,      bg: '#fffbeb', border: '#f59e0b', content: buildExoList(ex.stagnation,  '#f59e0b', curLabel, prevLabel) },
+            { icon: '�', label: `Vue du coach (${ex.review.length})`,         bg: '#fdf4ff', border: '#a855f7', content: buildExoList(ex.review,      '#a855f7', curLabel, prevLabel) },
+            { icon: '�🟠', label: `Stagnations (${ex.stagnation.length})`,      bg: '#fffbeb', border: '#f59e0b', content: buildExoList(ex.stagnation,  '#f59e0b', curLabel, prevLabel) },
             { icon: '🟢', label: `Progrès (${ex.progress.length})`,            bg: '#f0fdf4', border: '#10b981', content: buildExoList(ex.progress,    '#10b981', curLabel, prevLabel) },
         ];
         if (ex.new.length)
@@ -248,12 +289,13 @@
         });
     }
 
-    function render(container, quickData) {
+    function render(container, quickData, options) {
         if (!container) return;
         if (!quickData || !quickData.series_by_exercise) {
             container.innerHTML = '<div style="color:#94a3b8;font-size:0.85rem;">Données non disponibles</div>';
             return;
         }
+        const onPeriodChange = options && typeof options.onPeriodChange === 'function' ? options.onPeriodChange : null;
 
         const uid = 'ap_' + Math.random().toString(36).slice(2, 9);
 
@@ -286,7 +328,11 @@
                 btn.style.color      = active ? '#fff'    : '#475569';
             });
             const period = PERIODS.find(p => p.key === periodKey) || PERIODS[0];
+            const periodIndex = PERIODS.findIndex(p => p.key === periodKey);
             renderPanelContent(contentEl, quickData, period);
+            if (onPeriodChange) {
+                try { onPeriodChange(period.key, periodIndex + 1); } catch (e) { console.error(e); }
+            }
         }
 
         tabBtns.forEach(btn => btn.addEventListener('click', () => activate(btn.dataset.period)));

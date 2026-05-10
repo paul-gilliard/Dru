@@ -492,7 +492,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="{{ url_for('static', filename='js/attention_panel.js') }}?v=20260510c"></script>
+<script src="{{ url_for('static', filename='js/attention_panel.js') }}?v=20260510d"></script>
 <script>
     const weekOffset = {{ week_offset }};
     const athletes = {{ athletes | map(attribute='id') | list | tojson }};
@@ -551,11 +551,7 @@
             if (variationTextEl) variationTextEl.innerHTML = diffBadge(totalDiff, 0, 'kg');
         }
 
-        // Attention panel (coach insights)
-        const attentionEl = document.getElementById(`attention-${athleteId}`);
-        if (attentionEl && window.AttentionPanel) {
-            window.AttentionPanel.render(attentionEl, qd);
-        }
+        // Attention panel rendered later, after comparison cards exist in DOM (see below)
         
         let html = '<table class="summary-table"><tbody>';
 
@@ -702,6 +698,20 @@
         if (qd.summary_14days) displayComparisonInCard(athleteId, 2, qd.summary_14days);
         if (qd.summary_21days) displayComparisonInCard(athleteId, 3, qd.summary_21days);
         if (qd.summary_28days) displayComparisonInCard(athleteId, 4, qd.summary_28days);
+
+        // Attention panel (coach insights) — drives which weekly comparison card is visible
+        const attentionEl = document.getElementById(`attention-${athleteId}`);
+        if (attentionEl && window.AttentionPanel) {
+            window.AttentionPanel.render(attentionEl, qd, {
+                onPeriodChange: (periodKey, periodIndex) => {
+                    const cards = document.querySelectorAll(`.comparison-card[data-table^="${athleteId}-"]`);
+                    cards.forEach(card => {
+                        const idx = parseInt(card.dataset.table.split('-')[1], 10);
+                        card.style.display = (idx === periodIndex) ? '' : 'none';
+                    });
+                }
+            });
+        }
     }
 
 
