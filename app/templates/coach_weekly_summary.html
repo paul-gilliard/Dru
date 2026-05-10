@@ -606,6 +606,7 @@
         const initData = (qd.summary_7days && Object.keys(qd.summary_7days).length > 0)
             ? qd.summary_7days
             : window.WeeklyCompare ? window.WeeklyCompare.computeComparison(qd, 0, 1) : {};
+        currentComputedData[athleteId] = initData;
         renderHealthMetrics(athleteId, initData);
         renderVariationBadge(athleteId, initData, 0, 1);
         displayComparisonInCard(athleteId, 1, initData);
@@ -623,6 +624,7 @@
                     const compLbl = document.getElementById(`comparison-${athleteId}-label`);
                     if (compLbl) compLbl.textContent = `(${aL} vs ${bL})`;
                     const computed = window.WeeklyCompare.computeComparison(qd, aOff, bOff);
+                    currentComputedData[athleteId] = computed;
                     renderHealthMetrics(athleteId, computed);
                     renderVariationBadge(athleteId, computed, aOff, bOff);
                     displayComparisonInCard(athleteId, 1, computed);
@@ -864,6 +866,8 @@
     let exerciseDetailsCache = {};
     let seriesByExerciseCache = {};
     let currentComparisonContext = {};
+    // Stores the last WeeklyCompare result per athlete, used by muscle detail drill-down
+    const currentComputedData = {};
 
     // Event delegation for muscle detail buttons
     document.addEventListener('click', function(e) {
@@ -873,16 +877,10 @@
         const athleteId = e.target.getAttribute('data-athlete');
         const tableNum  = parseInt(e.target.getAttribute('data-table'));
 
-        const summaryKeys  = ['summary_7days','summary_14days','summary_21days','summary_28days'];
-        const summaryKey   = summaryKeys[tableNum - 1] || 'summary_7days';
-        const summaryShort = ['7days','14days','21days','28days'][tableNum - 1] || '7days';
-        const labelsMap    = {
-            1: ['Semaine courante', 'Semaine -1'],
-            2: ['Semaine courante', 'Semaine -2'],
-            3: ['Semaine -1',       'Semaine -2'],
-            4: ['Semaine -1',       'Semaine -3'],
-        };
-        const [label1, label2] = labelsMap[tableNum] || ['Période courante', 'Période précédente'];
+        // Use the last computed A/B comparison for this athlete (not fixed summary_*days)
+        const computedSnap = currentComputedData[athleteId] || {};
+        const label1 = computedSnap.label1 || 'Sem. A';
+        const label2 = computedSnap.label2 || 'Sem. B';
 
         document.getElementById('muscle-detail-title').textContent = `${muscle} — ${label1} vs ${label2}`;
         document.getElementById('muscle-detail-content').innerHTML = `
@@ -900,16 +898,15 @@
         }
         {
             seriesByExerciseCache = data.series_by_exercise || {};
-            currentComparisonContext = { summary: summaryShort, label1, label2 };
+            currentComparisonContext = { label1, label2 };
 
-            const summary = data[summaryKey];
-            if (!summary || !summary.exercise_details_by_muscle || !summary.exercise_details_by_muscle[muscle]) {
-                document.getElementById('muscle-detail-content').innerHTML = '<p style="color:#ef4444;">Données non disponibles</p>';
+            const exByMuscle = computedSnap.exercise_details_by_muscle && computedSnap.exercise_details_by_muscle[muscle];
+            if (!exByMuscle) {
+                document.getElementById('muscle-detail-content').innerHTML = '<p style="color:#ef4444;">Données non disponibles pour ce groupe musculaire</p>';
                 return;
             }
 
-            const exByMuscle = summary.exercise_details_by_muscle[muscle];
-            const exercises  = Object.keys(exByMuscle).sort();
+            const exercises = Object.keys(exByMuscle).sort();
 
                 setTimeout(() => {
                     const currentTons  = exercises.map(ex => (exByMuscle[ex].current  || 0) / 1000);
