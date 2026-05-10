@@ -97,6 +97,18 @@ document.addEventListener('DOMContentLoaded', function(){
     return stats;
   }
 
+  // Returns a colored pill badge for a diff value
+  function diffBadge(diff, dec, unit) {
+    if (diff === null || diff === undefined) return '<span style="color:#94a3b8;">—</span>';
+    const n = Number(diff);
+    const abs = Math.abs(n);
+    const sign = n > 0 ? '+' : '';
+    const label = sign + n.toFixed(dec) + (unit ? '\u00a0' + unit : '');
+    if (abs < 0.1) return `<span style="display:inline-flex;align-items:center;gap:3px;background:#f1f5f9;color:#64748b;border-radius:20px;padding:2px 9px;font-size:0.77rem;font-weight:600;">→ stable</span>`;
+    if (n > 0) return `<span style="display:inline-flex;align-items:center;gap:3px;background:#dcfce7;color:#166534;border-radius:20px;padding:2px 9px;font-size:0.77rem;font-weight:600;">↑ ${label}</span>`;
+    return `<span style="display:inline-flex;align-items:center;gap:3px;background:#fee2e2;color:#991b1b;border-radius:20px;padding:2px 9px;font-size:0.77rem;font-weight:600;">↓ ${label}</span>`;
+  }
+
   function populateSanteWeekSelects() {
     const selA = document.getElementById('sante-week-a');
     const selB = document.getElementById('sante-week-b');
@@ -126,10 +138,6 @@ document.addEventListener('DOMContentLoaded', function(){
       if (!el) return;
       const fmt = v => v !== null ? Number(v).toFixed(dec) : '—';
       const diff = (aVal !== null && bVal !== null) ? aVal - bVal : null;
-      const dSign = diff !== null && diff > 0 ? '+' : '';
-      const dFmt = diff !== null ? dSign + diff.toFixed(dec) + ' ' + unit : '—';
-      const dColor = diff === null ? '#94a3b8' : Math.abs(diff) < 0.05 ? '#64748b' : diff > 0 ? '#10b981' : '#ef4444';
-      const arrow = diff === null ? '' : Math.abs(diff) < 0.05 ? '→' : diff > 0 ? '▲' : '▼';
       el.innerHTML = `
         <div style="background:#f8fafc; border-radius:8px; padding:14px; border-left:4px solid ${color};">
           <div style="font-size:0.78rem; color:#64748b; margin-bottom:10px; font-weight:600;">${icon} ${title}</div>
@@ -143,7 +151,7 @@ document.addEventListener('DOMContentLoaded', function(){
               <div style="font-size:1.25rem; font-weight:700; color:#64748b;">${fmt(bVal)}${bVal !== null ? ' '+unit : ''}</div>
             </div>
           </div>
-          <div style="font-size:0.88rem; font-weight:600; color:${dColor}; border-top:1px solid #e5e7eb; padding-top:8px;">${arrow} ${dFmt}</div>
+          <div style="border-top:1px solid #e5e7eb; padding-top:8px; text-align:right;">${diffBadge(diff, dec, unit)}</div>
         </div>`;
     };
     card('sante-card-weight', 'Poids moyen',   '⚖️', '#0b63d6', a.weight,      b.weight,      'kg',   1);
@@ -590,22 +598,9 @@ document.addEventListener('DOMContentLoaded', function(){
   async function displayComparison(tableNum, data) {
     if (!data) return;
     
-    const getArrow = (diff) => {
-      if (diff === null || diff === undefined) return '—';
-      if (Math.abs(diff) < 0.1) return '→';
-      return diff > 0 ? '📈' : '📉';
-    };
-    
     const formatValue = (val, decimals = 1) => {
       if (val === null || val === undefined) return '—';
       return Number(val).toFixed(decimals);
-    };
-    
-    const formatDiff = (val, decimals = 1) => {
-      if (val === null || val === undefined) return '—';
-      const num = Number(val).toFixed(decimals);
-      const sign = parseFloat(num) > 0 ? '+' : '';
-      return sign + num;
     };
     
     const loader = document.getElementById(`comparison-${tableNum}-loader`);
@@ -629,60 +624,52 @@ document.addEventListener('DOMContentLoaded', function(){
     // Poids
     let poidsTr = document.createElement('tr');
     poidsTr.style.borderBottom = '1px solid #e5e7eb';
-    const poidsArrow = getArrow(data.weight_diff);
     const poidsCurrent = formatValue(data.weight_current, 2);
     const poidsPrevious = formatValue(data.weight_previous, 2);
-    const poidsDiff = formatDiff(data.weight_diff, 2);
     poidsTr.innerHTML = `
       <td style="padding:8px; font-weight:600;">Poids (kg)</td>
       <td style="padding:8px; text-align:center;">${poidsCurrent}</td>
       <td style="padding:8px; text-align:center;">${poidsPrevious}</td>
-      <td style="padding:8px; text-align:center;">${poidsDiff} ${poidsArrow}</td>
+      <td style="padding:8px; text-align:center;">${diffBadge(data.weight_diff, 2, 'kg')}</td>
     `;
     tbody.appendChild(poidsTr);
     
     // Kcals
     let kcalsTr = document.createElement('tr');
     kcalsTr.style.borderBottom = '1px solid #e5e7eb';
-    const kcalsArrow = getArrow(data.kcals_diff);
     const kcalsCurrent = formatValue(data.kcals_current, 0);
     const kcalsPrevious = formatValue(data.kcals_previous, 0);
-    const kcalsDiff = formatDiff(data.kcals_diff, 0);
     kcalsTr.innerHTML = `
       <td style="padding:8px; font-weight:600;">Kcals</td>
       <td style="padding:8px; text-align:center;">${kcalsCurrent}</td>
       <td style="padding:8px; text-align:center;">${kcalsPrevious}</td>
-      <td style="padding:8px; text-align:center;">${kcalsDiff} ${kcalsArrow}</td>
+      <td style="padding:8px; text-align:center;">${diffBadge(data.kcals_diff, 0, 'kcal')}</td>
     `;
     tbody.appendChild(kcalsTr);
     
     // Eau
     let eauTr = document.createElement('tr');
     eauTr.style.borderBottom = '1px solid #e5e7eb';
-    const eauArrow = getArrow(data.water_diff);
     const eauCurrent = formatValue(data.water_current, 0);
     const eauPrevious = formatValue(data.water_previous, 0);
-    const eauDiff = formatDiff(data.water_diff, 0);
     eauTr.innerHTML = `
       <td style="padding:8px; font-weight:600;">Eau (ml)</td>
       <td style="padding:8px; text-align:center;">${eauCurrent}</td>
       <td style="padding:8px; text-align:center;">${eauPrevious}</td>
-      <td style="padding:8px; text-align:center;">${eauDiff} ${eauArrow}</td>
+      <td style="padding:8px; text-align:center;">${diffBadge(data.water_diff, 0, 'ml')}</td>
     `;
     tbody.appendChild(eauTr);
     
     // Sommeil
     let sommeilTr = document.createElement('tr');
     sommeilTr.style.borderBottom = '1px solid #e5e7eb';
-    const sommeilArrow = getArrow(data.sleep_diff);
     const sommeilCurrent = formatValue(data.sleep_current, 1);
     const sommeilPrevious = formatValue(data.sleep_previous, 1);
-    const sommeilDiff = formatDiff(data.sleep_diff, 1);
     sommeilTr.innerHTML = `
       <td style="padding:8px; font-weight:600;">Sommeil (h)</td>
       <td style="padding:8px; text-align:center;">${sommeilCurrent}</td>
       <td style="padding:8px; text-align:center;">${sommeilPrevious}</td>
-      <td style="padding:8px; text-align:center;">${sommeilDiff} ${sommeilArrow}</td>
+      <td style="padding:8px; text-align:center;">${diffBadge(data.sleep_diff, 1, 'h')}</td>
     `;
     tbody.appendChild(sommeilTr);
     
@@ -692,8 +679,6 @@ document.addEventListener('DOMContentLoaded', function(){
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid #e5e7eb';
         const diff = data.tonnage_diff_by_muscle[muscle];
-        const arrow = getArrow(diff);
-        const diffStr = formatDiff(diff, 0);
         
         // Map tableNum to period name for muscle detail cache
         let period = '7days';
@@ -705,7 +690,7 @@ document.addEventListener('DOMContentLoaded', function(){
           <td style="padding:8px; font-weight:600;">${muscle}</td>
           <td style="padding:8px; text-align:center; text-decoration:underline; cursor:pointer;" class="show-muscle-detail" data-muscle="${muscle}" data-summary="${period}" data-label1="${data.label1}" data-label2="${data.label2}">Détails</td>
           <td style="padding:8px; text-align:center;"></td>
-          <td style="padding:8px; text-align:center;">${diffStr} ${arrow}</td>
+          <td style="padding:8px; text-align:center;">${diffBadge(diff, 0, 'kg')}</td>
         `;
         tbody.appendChild(tr);
       });
@@ -725,44 +710,18 @@ document.addEventListener('DOMContentLoaded', function(){
         return;
       }
       
-      // Get arrow function based on change
-      const getArrow = (diff) => {
-        if (diff === null || diff === undefined) return '—';
-        if (Math.abs(diff) < 0.1) return '→';
-        return diff > 0 ? '📈' : '📉';
-      };
-      
-      const formatDiff = (val, decimals = 1) => {
-        if (val === null || val === undefined) return '—';
-        const num = Number(val).toFixed(decimals);
-        const sign = parseFloat(num) > 0 ? '+' : '';
-        return sign + num;
-      };
-      
       // Update summary values with differences
-      const weightArrow = getArrow(data.weight_diff);
-      const weightValue = data.weight_diff !== null ? 
-        `${formatDiff(data.weight_diff, 2)} kg ${weightArrow}` : '—';
       const wEl = document.getElementById('summary-weight');
-      if (wEl) wEl.textContent = weightValue;
+      if (wEl) wEl.innerHTML = diffBadge(data.weight_diff, 2, 'kg');
       
-      const kcalsArrow = getArrow(data.kcals_diff);
-      const kcalsValue = data.kcals_diff !== null ? 
-        `${formatDiff(data.kcals_diff, 0)} cal ${kcalsArrow}` : '—';
       const kEl = document.getElementById('summary-kcals');
-      if (kEl) kEl.textContent = kcalsValue;
+      if (kEl) kEl.innerHTML = diffBadge(data.kcals_diff, 0, 'kcal');
       
-      const waterArrow = getArrow(data.water_diff);
-      const waterValue = data.water_diff !== null ? 
-        `${formatDiff(data.water_diff, 0)} ml ${waterArrow}` : '—';
       const wtrEl = document.getElementById('summary-water');
-      if (wtrEl) wtrEl.textContent = waterValue;
+      if (wtrEl) wtrEl.innerHTML = diffBadge(data.water_diff, 0, 'ml');
       
-      const sleepArrow = getArrow(data.sleep_diff);
-      const sleepValue = data.sleep_diff !== null ? 
-        `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
       const slEl = document.getElementById('summary-sleep');
-      if (slEl) slEl.textContent = sleepValue;
+      if (slEl) slEl.innerHTML = diffBadge(data.sleep_diff, 1, 'h');
       
       // Fill tonnage rows with detail buttons
       const tonnageBody = document.getElementById('summary-tonnage-body');
@@ -773,11 +732,9 @@ document.addEventListener('DOMContentLoaded', function(){
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid #e5e7eb';
         const diff = data.tonnage_diff_by_muscle[muscle];
-        const arrow = getArrow(diff);
-        const diffStr = formatDiff(diff, 0);
         tr.innerHTML = `
           <td style="padding:12px; font-weight:600;">${muscle}</td>
-          <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
+          <td style="padding:12px; text-align:center;">${diffBadge(diff, 0, 'kg')}</td>
           <td style="padding:12px; text-align:center;">
             <button class="show-muscle-detail secondary" data-muscle="${muscle}" data-summary="7days" style="font-size:0.8rem; padding:4px 8px; cursor:pointer;">Détails</button>
           </td>
@@ -803,40 +760,11 @@ document.addEventListener('DOMContentLoaded', function(){
         return;
       }
       
-      // Get arrow function based on change
-      const getArrow = (diff) => {
-        if (diff === null || diff === undefined) return '—';
-        if (Math.abs(diff) < 0.1) return '→';
-        return diff > 0 ? '📈' : '📉';
-      };
-      
-      const formatDiff = (val, decimals = 1) => {
-        if (val === null || val === undefined) return '—';
-        const num = Number(val).toFixed(decimals);
-        const sign = parseFloat(num) > 0 ? '+' : '';
-        return sign + num;
-      };
-      
       // Update summary values with differences
-      const weightArrow = getArrow(data.weight_diff);
-      const weightValue = data.weight_diff !== null ? 
-        `${formatDiff(data.weight_diff, 2)} kg ${weightArrow}` : '—';
-      document.getElementById('summary-14days-weight').textContent = weightValue;
-      
-      const kcalsArrow = getArrow(data.kcals_diff);
-      const kcalsValue = data.kcals_diff !== null ? 
-        `${formatDiff(data.kcals_diff, 0)} cal ${kcalsArrow}` : '—';
-      document.getElementById('summary-14days-kcals').textContent = kcalsValue;
-      
-      const waterArrow = getArrow(data.water_diff);
-      const waterValue = data.water_diff !== null ? 
-        `${formatDiff(data.water_diff, 0)} ml ${waterArrow}` : '—';
-      document.getElementById('summary-14days-water').textContent = waterValue;
-      
-      const sleepArrow = getArrow(data.sleep_diff);
-      const sleepValue = data.sleep_diff !== null ? 
-        `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
-      document.getElementById('summary-14days-sleep').textContent = sleepValue;
+      document.getElementById('summary-14days-weight').innerHTML = diffBadge(data.weight_diff, 2, 'kg');
+      document.getElementById('summary-14days-kcals').innerHTML = diffBadge(data.kcals_diff, 0, 'kcal');
+      document.getElementById('summary-14days-water').innerHTML = diffBadge(data.water_diff, 0, 'ml');
+      document.getElementById('summary-14days-sleep').innerHTML = diffBadge(data.sleep_diff, 1, 'h');
       
       // Fill tonnage rows with detail buttons
       const tonnageBody = document.getElementById('summary-14days-tonnage-body');
@@ -846,11 +774,9 @@ document.addEventListener('DOMContentLoaded', function(){
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid #e5e7eb';
         const diff = data.tonnage_diff_by_muscle[muscle];
-        const arrow = getArrow(diff);
-        const diffStr = formatDiff(diff, 0);
         tr.innerHTML = `
           <td style="padding:12px; font-weight:600;">${muscle}</td>
-          <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
+          <td style="padding:12px; text-align:center;">${diffBadge(diff, 0, 'kg')}</td>
           <td style="padding:12px; text-align:center;">
             <button class="show-muscle-detail secondary" data-muscle="${muscle}" data-summary="14days" style="font-size:0.8rem; padding:4px 8px; cursor:pointer;">Détails</button>
           </td>
@@ -876,40 +802,11 @@ document.addEventListener('DOMContentLoaded', function(){
         return;
       }
       
-      // Get arrow function based on change
-      const getArrow = (diff) => {
-        if (diff === null || diff === undefined) return '—';
-        if (Math.abs(diff) < 0.1) return '→';
-        return diff > 0 ? '📈' : '📉';
-      };
-      
-      const formatDiff = (val, decimals = 1) => {
-        if (val === null || val === undefined) return '—';
-        const num = Number(val).toFixed(decimals);
-        const sign = parseFloat(num) > 0 ? '+' : '';
-        return sign + num;
-      };
-      
       // Update summary values with differences
-      const weightArrow = getArrow(data.weight_diff);
-      const weightValue = data.weight_diff !== null ? 
-        `${formatDiff(data.weight_diff, 2)} kg ${weightArrow}` : '—';
-      document.getElementById('summary-28days-weight').textContent = weightValue;
-      
-      const kcalsArrow = getArrow(data.kcals_diff);
-      const kcalsValue = data.kcals_diff !== null ? 
-        `${formatDiff(data.kcals_diff, 0)} cal ${kcalsArrow}` : '—';
-      document.getElementById('summary-28days-kcals').textContent = kcalsValue;
-      
-      const waterArrow = getArrow(data.water_diff);
-      const waterValue = data.water_diff !== null ? 
-        `${formatDiff(data.water_diff, 0)} ml ${waterArrow}` : '—';
-      document.getElementById('summary-28days-water').textContent = waterValue;
-      
-      const sleepArrow = getArrow(data.sleep_diff);
-      const sleepValue = data.sleep_diff !== null ? 
-        `${formatDiff(data.sleep_diff, 1)} h ${sleepArrow}` : '—';
-      document.getElementById('summary-28days-sleep').textContent = sleepValue;
+      document.getElementById('summary-28days-weight').innerHTML = diffBadge(data.weight_diff, 2, 'kg');
+      document.getElementById('summary-28days-kcals').innerHTML = diffBadge(data.kcals_diff, 0, 'kcal');
+      document.getElementById('summary-28days-water').innerHTML = diffBadge(data.water_diff, 0, 'ml');
+      document.getElementById('summary-28days-sleep').innerHTML = diffBadge(data.sleep_diff, 1, 'h');
       
       // Fill tonnage rows with detail buttons
       const tonnageBody = document.getElementById('summary-28days-tonnage-body');
@@ -918,11 +815,9 @@ document.addEventListener('DOMContentLoaded', function(){
         const tr = document.createElement('tr');
         tr.style.borderBottom = '1px solid #e5e7eb';
         const diff = data.tonnage_diff_by_muscle[muscle];
-        const arrow = getArrow(diff);
-        const diffStr = formatDiff(diff, 0);
         tr.innerHTML = `
           <td style="padding:12px; font-weight:600;">${muscle}</td>
-          <td style="padding:12px; text-align:center;">${diffStr} ${arrow}</td>
+          <td style="padding:12px; text-align:center;">${diffBadge(diff, 0, 'kg')}</td>
           <td style="padding:12px; text-align:center;">
             <button class="show-muscle-detail secondary" data-muscle="${muscle}" data-summary="28days" style="font-size:0.8rem; padding:4px 8px; cursor:pointer;">Détails</button>
           </td>
