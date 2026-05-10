@@ -333,6 +333,8 @@ document.addEventListener('DOMContentLoaded', function(){
   
   let seriesCache = {}; // Cache for exercise series data - preloaded
   let currentComparisonContext = {}; // Store current comparison context for series display
+  let muscleDetailChart = null;   // Chart.js instance for muscle detail modal
+  let exerciseDetailChart = null; // Chart.js instance for exercise detail modal
   
   // Global cache for summary data by athlete
   let summaryCache = {
@@ -1530,246 +1532,317 @@ document.addEventListener('DOMContentLoaded', function(){
 
   // Event delegation for muscle detail buttons - data is preloaded in cache
   document.addEventListener('click', function(e) {
-    if (e.target.matches('.show-muscle-detail')) {
-      const muscle = e.target.getAttribute('data-muscle');
-      const summary = e.target.getAttribute('data-summary');
-      const label1 = e.target.getAttribute('data-label1');
-      const label2 = e.target.getAttribute('data-label2');
-      
-      // Store context for series display
-      currentComparisonContext = {
-        summary: summary,
-        label1: label1,
-        label2: label2
-      };
-      
-      // Show modal with spinner
-      document.getElementById('muscle-detail-modal').style.display = 'flex';
-      document.getElementById('muscle-detail-title').textContent = `Détail par exercice - ${muscle}`;
-      document.getElementById('muscle-detail-content').innerHTML = `
-        <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
-          <div class="spinner"></div>
-          <span style="color:#94a3b8; font-size:0.9rem;">Chargement des détails...</span>
-        </div>
-      `;
-      
-      // Get data from cache (preloaded on athlete selection)
-      if (!muscleDetailCache[summary] || !muscleDetailCache[summary][muscle]) {
-        document.getElementById('muscle-detail-content').innerHTML = '<p style="color:#ef4444;">Données non disponibles</p>';
-        return;
-      }
+    if (!e.target.matches('.show-muscle-detail')) return;
 
-      const exercisesByMuscle = muscleDetailCache[summary][muscle];
-      
-      // Simulate small delay for UX feedback
-      setTimeout(() => {
-        // Build detail HTML
-        let html = `<h4 style="margin-top:0;">${muscle}</h4>`;
-        html += '<table style="width:100%; border-collapse:collapse; margin-top:12px;">';
-        html += `<tr style="background:#f3f4f6; border-bottom:2px solid #d1d5db;">
-          <th style="padding:8px; text-align:left; font-weight:600;">Exercice</th>
-          <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Période courante</th>
-          <th style="padding:8px; text-align:center; font-weight:600; width:100px;">Période précédente</th>
-          <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Évolution</th>
-          <th style="padding:8px; text-align:center; font-weight:600; width:80px;">Détail</th>
-        </tr>`;
-        
-        // exercisesByMuscle is { exercise_name: { current, previous, diff } }
-        Object.keys(exercisesByMuscle || {}).sort().forEach(exercise => {
-          const exerciseData = exercisesByMuscle[exercise] || {};
-          const current = exerciseData.current || 0;
-          const previous = exerciseData.previous || 0;
-          const diff = exerciseData.diff || 0;
-          const arrow = diff > 0 ? '📈' : (diff < 0 ? '📉' : '→');
-          const diffStr = diff >= 0 ? `+${diff.toFixed(0)}` : `${diff.toFixed(0)}`;
-          
-          html += `<tr style="border-bottom:1px solid #e5e7eb;">
-            <td style="padding:8px;">${exercise}</td>
-            <td style="padding:8px; text-align:center;">${current.toFixed(0)}</td>
-            <td style="padding:8px; text-align:center;">${previous.toFixed(0)}</td>
-            <td style="padding:8px; text-align:center;">${diffStr} ${arrow}</td>
-            <td style="padding:8px; text-align:center;">
-              <button class="show-exercise-series secondary" data-exercise="${exercise}" style="font-size:0.75rem; padding:4px 8px; cursor:pointer;">Détail</button>
-            </td>
-          </tr>`;
-        });
-        
-        html += '</table>';
-        
-        document.getElementById('muscle-detail-content').innerHTML = html;
-      }, 200); // Small delay for visual feedback
+    const muscle  = e.target.getAttribute('data-muscle');
+    const summary = e.target.getAttribute('data-summary');
+    const label1  = e.target.getAttribute('data-label1') || 'Période courante';
+    const label2  = e.target.getAttribute('data-label2') || 'Période précédente';
+
+    currentComparisonContext = { summary, label1, label2 };
+
+    document.getElementById('muscle-detail-title').textContent = `${muscle} — ${label1} vs ${label2}`;
+    document.getElementById('muscle-detail-content').innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+        <div class="spinner"></div>
+        <span style="color:#94a3b8;font-size:0.9rem;">Chargement...</span>
+      </div>`;
+    document.getElementById('muscle-detail-modal').style.display = 'flex';
+
+    if (!muscleDetailCache[summary] || !muscleDetailCache[summary][muscle]) {
+      document.getElementById('muscle-detail-content').innerHTML = '<p style="color:#ef4444;">Données non disponibles</p>';
+      return;
     }
+
+    const exByMuscle = muscleDetailCache[summary][muscle];
+    const exercises  = Object.keys(exByMuscle).sort();
+
+    setTimeout(() => {
+      // ── Bar chart datasets ────────────────────────────────────────────────
+      const currentTons  = exercises.map(ex => (exByMuscle[ex].current  || 0) / 1000);
+      const previousTons = exercises.map(ex => (exByMuscle[ex].previous || 0) / 1000);
+      const barColors    = exercises.map(ex => (exByMuscle[ex].diff || 0) >= 0
+        ? 'rgba(16,185,129,0.8)' : 'rgba(239,68,68,0.8)');
+
+      // ── Table rows ────────────────────────────────────────────────────────
+      const tableRows = exercises.map(ex => {
+        const cur  = exByMuscle[ex].current  || 0;
+        const prev = exByMuscle[ex].previous || 0;
+        const diff = exByMuscle[ex].diff     || 0;
+        const pct  = prev > 0 ? Math.round(diff / prev * 100) : null;
+        const color  = diff > 0.5 ? '#10b981' : diff < -0.5 ? '#ef4444' : '#9ca3af';
+        const arrow  = diff > 0.5 ? '▲' : diff < -0.5 ? '▼' : '→';
+        const pctStr = pct !== null ? ` (${pct > 0 ? '+' : ''}${pct}%)` : '';
+        return `<tr style="border-bottom:1px solid #e5e7eb;">
+          <td style="padding:8px 6px;font-weight:500;">${ex}</td>
+          <td style="padding:8px 6px;text-align:center;font-weight:600;">${(cur/1000).toFixed(1)}&nbsp;T</td>
+          <td style="padding:8px 6px;text-align:center;color:#64748b;">${(prev/1000).toFixed(1)}&nbsp;T</td>
+          <td style="padding:8px 6px;text-align:center;font-weight:700;color:${color};">${arrow}${pctStr}</td>
+          <td style="padding:8px 6px;text-align:center;">
+            <button class="show-exercise-series secondary" data-exercise="${ex}"
+              style="font-size:0.75rem;padding:3px 10px;cursor:pointer;">Voir ▸</button>
+          </td>
+        </tr>`;
+      }).join('');
+
+      const chartH = Math.max(130, exercises.length * 34);
+      document.getElementById('muscle-detail-content').innerHTML = `
+        <div style="position:relative;height:${chartH}px;margin-bottom:18px;">
+          <canvas id="muscle-detail-chart"></canvas>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+          <thead>
+            <tr style="background:#f3f4f6;border-bottom:2px solid #d1d5db;">
+              <th style="padding:8px 6px;text-align:left;">Exercice</th>
+              <th style="padding:8px 6px;text-align:center;">${label1}</th>
+              <th style="padding:8px 6px;text-align:center;">${label2}</th>
+              <th style="padding:8px 6px;text-align:center;">Évolution</th>
+              <th style="padding:8px 6px;text-align:center;">Détail</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>`;
+
+      // ── Create bar chart ──────────────────────────────────────────────────
+      if (muscleDetailChart) { muscleDetailChart.destroy(); muscleDetailChart = null; }
+      const mdCtx = document.getElementById('muscle-detail-chart').getContext('2d');
+      muscleDetailChart = new Chart(mdCtx, {
+        type: 'bar',
+        data: {
+          labels: exercises,
+          datasets: [
+            {
+              label: label1,
+              data: currentTons,
+              backgroundColor: barColors,
+              borderRadius: 4,
+              order: 1,
+            },
+            {
+              label: label2,
+              data: previousTons,
+              backgroundColor: 'rgba(148,163,184,0.4)',
+              borderRadius: 4,
+              order: 2,
+            }
+          ]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 14 } },
+            tooltip: { callbacks: { label: c => ` ${c.parsed.x.toFixed(2)} T` } }
+          },
+          scales: {
+            x: { beginAtZero: true, title: { display: true, text: 'Tonnage (T)' }, grid: { color: 'rgba(0,0,0,0.05)' } },
+            y: { ticks: { font: { size: 11 } } }
+          }
+        }
+      });
+    }, 50);
   });
 
   // Event delegation for exercise series detail buttons
   document.addEventListener('click', function(e) {
-    if (e.target.matches('.show-exercise-series')) {
-      const exercise = e.target.getAttribute('data-exercise');
-      
-      // Show modal with spinner
-      document.getElementById('series-detail-modal').style.display = 'flex';
-      document.getElementById('series-detail-title').textContent = `Détail des séries - ${exercise}`;
+    if (!e.target.matches('.show-exercise-series')) return;
+
+    const exercise = e.target.getAttribute('data-exercise');
+
+    document.getElementById('series-detail-title').textContent = exercise;
+    document.getElementById('series-detail-content').innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:12px;">
+        <div class="spinner"></div>
+        <span style="color:#94a3b8;font-size:0.9rem;">Chargement...</span>
+      </div>`;
+    document.getElementById('series-detail-modal').style.display = 'flex';
+
+    setTimeout(() => {
+      // ── 1. Build time-series points (one per session date) ─────────────────
+      const rawData = seriesCache[exercise] || {};
+      const dates   = Object.keys(rawData).sort();
+
+      const datePoints = dates.map(d => {
+        const ss    = rawData[d];
+        const loads = ss.map(s => s.load).filter(v => v != null);
+        const repsA = ss.map(s => s.reps).filter(v => v != null);
+        return {
+          date:    d,
+          maxLoad: loads.length ? Math.max(...loads)                                   : null,
+          avgLoad: loads.length ? loads.reduce((a,b)=>a+b,0)/loads.length             : null,
+          avgReps: repsA.length ? repsA.reduce((a,b)=>a+b,0)/repsA.length            : null,
+          series:  ss,
+        };
+      });
+
+      // ── 2. Trend badge (compare last 3 sessions vs 3 before that) ──────────
+      let trendHtml = '';
+      const loadPts = datePoints.filter(p => p.maxLoad !== null);
+      if (loadPts.length >= 4) {
+        const half    = Math.min(3, Math.floor(loadPts.length / 2));
+        const last    = loadPts.slice(-half).map(p => p.maxLoad);
+        const before  = loadPts.slice(-half * 2, -half).map(p => p.maxLoad);
+        const avgLast = last.reduce((a,b)=>a+b,0) / last.length;
+        const avgBef  = before.reduce((a,b)=>a+b,0) / before.length;
+        const delta   = avgLast - avgBef;
+        const pct     = avgBef > 0 ? (delta / avgBef * 100).toFixed(1) : null;
+        const pctStr  = pct !== null ? ` — ${pct > 0 ? '+' : ''}${pct}% vs séances précédentes` : '';
+        if (delta > 0.5) {
+          trendHtml = `<div style="display:inline-flex;align-items:center;gap:8px;background:#ecfdf5;border:2px solid #10b981;border-radius:20px;padding:7px 18px;margin-bottom:16px;font-weight:700;color:#065f46;font-size:0.95rem;">
+            ▲ En progression<span style="font-weight:400;font-size:0.82rem;">${pctStr}</span></div>`;
+        } else if (delta < -0.5) {
+          trendHtml = `<div style="display:inline-flex;align-items:center;gap:8px;background:#fef2f2;border:2px solid #ef4444;border-radius:20px;padding:7px 18px;margin-bottom:16px;font-weight:700;color:#991b1b;font-size:0.95rem;">
+            ▼ En baisse<span style="font-weight:400;font-size:0.82rem;">${pctStr}</span></div>`;
+        } else {
+          trendHtml = `<div style="display:inline-flex;align-items:center;gap:8px;background:#f8fafc;border:2px solid #94a3b8;border-radius:20px;padding:7px 18px;margin-bottom:16px;font-weight:700;color:#475569;font-size:0.95rem;">→ Stable</div>`;
+        }
+      }
+
+      // ── 3. Line color based on trend ───────────────────────────────────────
+      let lineColor  = '#0b63d6';
+      let fillColor  = 'rgba(11,99,214,0.08)';
+      if (loadPts.length >= 4) {
+        const half   = Math.min(3, Math.floor(loadPts.length / 2));
+        const avgL   = loadPts.slice(-half).map(p=>p.maxLoad).reduce((a,b)=>a+b,0)/half;
+        const avgP   = loadPts.slice(-half*2,-half).map(p=>p.maxLoad).reduce((a,b)=>a+b,0)/half;
+        if (avgL > avgP + 0.5)      { lineColor = '#10b981'; fillColor = 'rgba(16,185,129,0.08)'; }
+        else if (avgL < avgP - 0.5) { lineColor = '#ef4444'; fillColor = 'rgba(239,68,68,0.08)'; }
+      }
+
+      // ── 4. Week boundaries for comparison columns ──────────────────────────
+      const summary = currentComparisonContext.summary || '7days';
+      const label1  = currentComparisonContext.label1  || 'Période courante';
+      const label2  = currentComparisonContext.label2  || 'Période précédente';
+
+      function getMonday(d) {
+        const day = d.getDay(), diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        return new Date(new Date(d).setDate(diff));
+      }
+      function addDays(d, n) { return new Date(new Date(d).setDate(d.getDate() + n)); }
+      function iso(d) { return d.toISOString().split('T')[0]; }
+
+      const mon = getMonday(new Date());
+      const wb  = {
+        S:  { s: iso(mon),              e: iso(addDays(mon,  6)) },
+        S1: { s: iso(addDays(mon, -7)), e: iso(addDays(mon, -1)) },
+        S2: { s: iso(addDays(mon,-14)), e: iso(addDays(mon, -8)) },
+        S3: { s: iso(addDays(mon,-21)), e: iso(addDays(mon,-15)) },
+      };
+      const periodKey = { '7days':['S','S1'], '14days':['S','S2'], '21days':['S1','S2'], '28days':['S1','S3'] };
+      const [curKey, prevKey] = periodKey[summary] || ['S','S1'];
+      const inRange = (d, b) => d >= b.s && d <= b.e;
+      const curDates  = dates.filter(d => inRange(d, wb[curKey]));
+      const prevDates = dates.filter(d => inRange(d, wb[prevKey]));
+
+      // ── 5. Session card builder ────────────────────────────────────────────
+      const buildCard = d => {
+        const ss = (rawData[d] || []).slice().sort((a,b)=>(a.series_number||0)-(b.series_number||0));
+        const rows = ss.map(s => {
+          const reps = s.reps != null ? s.reps : '—';
+          const load = s.load != null ? `${s.load} kg` : '—';
+          const rpe  = s.rpe  != null ? `RPE ${s.rpe}` : '—';
+          return `<tr style="border-bottom:1px solid #f1f5f9;">
+            <td style="padding:3px 6px;text-align:center;color:#94a3b8;font-size:0.78rem;">S${s.series_number||'?'}</td>
+            <td style="padding:3px 6px;text-align:center;font-weight:700;color:#0b63d6;">${reps}</td>
+            <td style="padding:3px 6px;text-align:center;font-weight:700;color:#374151;">${load}</td>
+            <td style="padding:3px 6px;text-align:center;color:#94a3b8;font-size:0.78rem;">${rpe}</td>
+          </tr>`;
+        }).join('');
+        return `<div style="border:1px solid #e2e8f0;border-radius:8px;padding:10px;margin-bottom:8px;background:#fff;">
+          <div style="font-size:0.8rem;font-weight:600;color:#475569;margin-bottom:6px;">${d}</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+            <thead><tr style="border-bottom:1px solid #e5e7eb;">
+              <th style="padding:3px 6px;color:#94a3b8;font-weight:500;">#</th>
+              <th style="padding:3px 6px;color:#94a3b8;font-weight:500;">Reps</th>
+              <th style="padding:3px 6px;color:#94a3b8;font-weight:500;">Poids</th>
+              <th style="padding:3px 6px;color:#94a3b8;font-weight:500;">RPE</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+      };
+
+      const buildCol = (periodDates, periodLabel, isCurrent) => {
+        const bg  = isCurrent ? '#f0fdf4' : '#f8fafc';
+        const bdr = isCurrent ? '#bbf7d0' : '#e2e8f0';
+        const content = periodDates.length
+          ? periodDates.map(buildCard).join('')
+          : `<div style="color:#94a3b8;text-align:center;padding:20px;font-size:0.85rem;">Aucune séance</div>`;
+        return `<div style="border:1px solid ${bdr};border-radius:8px;padding:12px;background:${bg};">
+          <div style="font-weight:700;font-size:0.85rem;color:#374151;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid ${bdr};">${periodLabel}</div>
+          ${content}
+        </div>`;
+      };
+
+      // ── 6. Assemble HTML ───────────────────────────────────────────────────
+      const hasChart = datePoints.length > 0;
       document.getElementById('series-detail-content').innerHTML = `
-        <div style="display:flex; flex-direction:column; align-items:center; gap:12px;">
-          <div class="spinner"></div>
-          <span style="color:#94a3b8; font-size:0.9rem;">Chargement des séries...</span>
-        </div>
-      `;
-      
-      // Use preloaded series data
-      setTimeout(() => {
-        const data = seriesCache[exercise];
-        
-        if (!data || Object.keys(data).length === 0) {
-          let html = `<h4 style="margin-top:0;">${exercise}</h4>`;
-          html += '<p style="color:#94a3b8;">Aucune série enregistrée</p>';
-          document.getElementById('series-detail-content').innerHTML = html;
-          return;
-        }
-        
-        let html = `<h4 style="margin-top:0;">${exercise}</h4>`;
-        
-        // Get comparison context
-        const summary = currentComparisonContext.summary || '7days';
-        const label1 = currentComparisonContext.label1 || 'Semaine courante';
-        const label2 = currentComparisonContext.label2 || 'Semaine précédente';
-        
-        // Map summary to week boundaries
-        const today = new Date();
-        let currentWeekStart, currentWeekEnd, prevWeekStart, prevWeekEnd;
-        
-        if (summary === '7days') {
-          // S vs S-1
-          currentWeekStart = new Date(today);
-          currentWeekStart.setDate(today.getDate() - today.getDay());
-          currentWeekEnd = new Date(currentWeekStart);
-          currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
-          
-          prevWeekStart = new Date(currentWeekStart);
-          prevWeekStart.setDate(currentWeekStart.getDate() - 7);
-          prevWeekEnd = new Date(prevWeekStart);
-          prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
-        } else if (summary === '14days') {
-          // S vs S-2
-          const currentWeekStart_temp = new Date(today);
-          currentWeekStart_temp.setDate(today.getDate() - today.getDay());
-          currentWeekStart = currentWeekStart_temp;
-          currentWeekEnd = new Date(currentWeekStart);
-          currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
-          
-          prevWeekStart = new Date(currentWeekStart);
-          prevWeekStart.setDate(currentWeekStart.getDate() - 14);
-          prevWeekEnd = new Date(prevWeekStart);
-          prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
-        } else if (summary === '21days') {
-          // S-1 vs S-2
-          const currentWeekStart_temp = new Date(today);
-          currentWeekStart_temp.setDate(today.getDate() - today.getDay());
-          currentWeekStart = new Date(currentWeekStart_temp);
-          currentWeekStart.setDate(currentWeekStart_temp.getDate() - 7);
-          currentWeekEnd = new Date(currentWeekStart);
-          currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
-          
-          prevWeekStart = new Date(currentWeekStart);
-          prevWeekStart.setDate(currentWeekStart.getDate() - 7);
-          prevWeekEnd = new Date(prevWeekStart);
-          prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
-        } else if (summary === '28days') {
-          // S-1 vs S-3
-          const currentWeekStart_temp = new Date(today);
-          currentWeekStart_temp.setDate(today.getDate() - today.getDay());
-          currentWeekStart = new Date(currentWeekStart_temp);
-          currentWeekStart.setDate(currentWeekStart_temp.getDate() - 7);
-          currentWeekEnd = new Date(currentWeekStart);
-          currentWeekEnd.setDate(currentWeekStart.getDate() + 6);
-          
-          prevWeekStart = new Date(currentWeekStart);
-          prevWeekStart.setDate(currentWeekStart.getDate() - 14);
-          prevWeekEnd = new Date(prevWeekStart);
-          prevWeekEnd.setDate(prevWeekStart.getDate() + 6);
-        }
-        
-        // Function to check if date is in week range
-        const isInWeek = (dateStr, weekStart, weekEnd) => {
-          const d = new Date(dateStr);
-          return d >= weekStart && d <= weekEnd;
-        };
-        
-        // Sort dates
-        const sortedDates = Object.keys(data).sort().reverse();
-        
-        // Separate dates by week
-        const currentWeekDates = sortedDates.filter(d => isInWeek(d, currentWeekStart, currentWeekEnd));
-        const prevWeekDates = sortedDates.filter(d => isInWeek(d, prevWeekStart, prevWeekEnd));
-        const otherDates = sortedDates.filter(d => !isInWeek(d, currentWeekStart, currentWeekEnd) && !isInWeek(d, prevWeekStart, prevWeekEnd));
-        
-        // Helper to build table for a set of dates
-        const buildWeekTable = (dates, weekLabel) => {
-          if (dates.length === 0) {
-            return `<div style="color:#94a3b8; text-align:center; padding:12px;">Aucune donnée</div>`;
+        ${trendHtml}
+        ${hasChart ? `<div style="position:relative;height:210px;margin-bottom:20px;"><canvas id="exercise-detail-chart"></canvas></div>` : ''}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          ${buildCol(curDates,  label1, true)}
+          ${buildCol(prevDates, label2, false)}
+        </div>`;
+
+      // ── 7. Create dual-axis line chart ─────────────────────────────────────
+      if (exerciseDetailChart) { exerciseDetailChart.destroy(); exerciseDetailChart = null; }
+      if (hasChart) {
+        const ctx = document.getElementById('exercise-detail-chart').getContext('2d');
+        const ptR = datePoints.length > 25 ? 2 : 4;
+        exerciseDetailChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: datePoints.map(p => p.date),
+            datasets: [
+              {
+                label: 'Poids max (kg)',
+                data: datePoints.map(p => p.maxLoad),
+                borderColor: lineColor,
+                backgroundColor: fillColor,
+                fill: true,
+                tension: 0.35,
+                yAxisID: 'y_load',
+                pointRadius: ptR,
+                pointHoverRadius: 6,
+                borderWidth: 2.5,
+              },
+              {
+                label: 'Reps moy.',
+                data: datePoints.map(p => p.avgReps),
+                borderColor: '#f59e0b',
+                backgroundColor: 'transparent',
+                borderDash: [5, 3],
+                tension: 0.35,
+                yAxisID: 'y_reps',
+                pointRadius: ptR,
+                pointHoverRadius: 6,
+                borderWidth: 2,
+              }
+            ]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 14 } },
+              tooltip: {
+                callbacks: {
+                  label: c => c.dataset.yAxisID === 'y_load'
+                    ? ` ${c.parsed.y?.toFixed(1)} kg`
+                    : ` ${c.parsed.y?.toFixed(1)} reps`
+                }
+              }
+            },
+            scales: {
+              y_load: { type:'linear', position:'left',  title:{ display:true, text:'Poids (kg)' }, grid:{ color:'rgba(0,0,0,0.05)' } },
+              y_reps: { type:'linear', position:'right', title:{ display:true, text:'Reps' },       grid:{ drawOnChartArea:false } }
+            }
           }
-          
-          let table = `<div style="margin-bottom:12px;">`;
-          table += `<h5 style="margin:0 0 8px 0; color:#0b63d6; font-size:0.9rem;">${weekLabel}</h5>`;
-          
-          dates.forEach(date => {
-            const series = data[date];
-            table += `<div style="margin-bottom:8px; border:1px solid #d1d5db; border-radius:4px; padding:8px; background:#fff;">`;
-            table += `<div style="font-weight:600; font-size:0.85rem; color:#333; margin-bottom:6px;">${date}</div>`;
-            table += '<table style="width:100%; border-collapse:collapse; font-size:0.8rem;">';
-            table += `<tr style="background:#f9fafb; border-bottom:1px solid #e5e7eb;">
-              <th style="padding:4px; text-align:center; font-weight:600;">S</th>
-              <th style="padding:4px; text-align:center; font-weight:600;">Reps</th>
-              <th style="padding:4px; text-align:center; font-weight:600;">Poids</th>
-              <th style="padding:4px; text-align:center; font-weight:600;">RPE</th>
-            </tr>`;
-            
-            // Sort series by series_number
-            series.sort((a, b) => (a.series_number || 0) - (b.series_number || 0));
-            
-            series.forEach(s => {
-              const seriesNum = s.series_number || '—';
-              const reps = s.reps !== null && s.reps !== undefined ? s.reps.toFixed(1) : '—';
-              const load = s.load !== null && s.load !== undefined ? s.load.toFixed(1) : '—';
-              const rpe = s.rpe !== null && s.rpe !== undefined ? s.rpe : '—';
-              
-              table += `<tr style="border-bottom:1px solid #e5e7eb;">
-                <td style="padding:4px; text-align:center;">${seriesNum}</td>
-                <td style="padding:4px; text-align:center;">${reps}</td>
-                <td style="padding:4px; text-align:center;">${load}</td>
-                <td style="padding:4px; text-align:center;">${rpe}</td>
-              </tr>`;
-            });
-            
-            table += '</table>';
-            table += '</div>';
-          });
-          
-          table += '</div>';
-          return table;
-        };
-        
-        // Build 2-column layout for current and previous week with actual labels
-        html += '<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:12px;">';
-        html += `<div style="border:1px solid #e5e7eb; border-radius:6px; padding:12px; background:#f9fafb;">`;
-        html += buildWeekTable(currentWeekDates, label1);
-        html += '</div>';
-        html += `<div style="border:1px solid #e5e7eb; border-radius:6px; padding:12px; background:#f9fafb;">`;
-        html += buildWeekTable(prevWeekDates, label2);
-        html += '</div>';
-        html += '</div>';
-        
-        // Add other dates below if any
-        if (otherDates.length > 0) {
-          html += '<div style="margin-top:12px; border-top:2px solid #e5e7eb; padding-top:12px;">';
-          html += '<h5 style="margin:0 0 8px 0; color:#64748b; font-size:0.9rem;">Autres dates</h5>';
-          html += buildWeekTable(otherDates, '');
-          html += '</div>';
-        }
-        
-        document.getElementById('series-detail-content').innerHTML = html;
-      }, 100);
-    }
+        });
+      }
+    }, 50);
   });
 
   // Tab switching
