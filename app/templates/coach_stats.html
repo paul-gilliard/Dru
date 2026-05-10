@@ -115,6 +115,13 @@
       <button id="apply-date-filter" type="button" class="secondary">Appliquer</button>
     </div>
   </div>
+
+  <!-- Right column: Attention panel -->
+  <div id="attention-panel-container">
+    <div style="background:#fff;border:1px dashed #cbd5e1;border-radius:8px;padding:24px;text-align:center;color:#94a3b8;font-size:0.9rem;">
+      🎯 Sélectionnez un athlète pour voir les points d'attention
+    </div>
+  </div>
 </div>
 
 <!-- Tab navigation -->
@@ -466,5 +473,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='js/attention_panel.js') }}"></script>
 <script src="{{ url_for('static', filename='js/coach_stats.js') }}"></script>
 {% endblock %}

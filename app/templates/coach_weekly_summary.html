@@ -407,6 +407,7 @@
                 <div id="variation-{{ athlete.id }}" style="background: #f0f4ff; border-left: 3px solid #667eea; padding: 10px 12px; margin-bottom: 12px; border-radius: 4px; font-size: 0.9em; color: #333; display:none;">
                     <strong>Variation S vs S-1:</strong> <span id="variation-text-{{ athlete.id }}"></span>
                 </div>
+                <div id="attention-{{ athlete.id }}" style="margin-bottom: 12px;"></div>
                 <div id="loader-{{ athlete.id }}" class="summary-loader">
                     <div class="spinner-small"></div>
                     <span>Chargement des stats...</span>
@@ -491,6 +492,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="{{ url_for('static', filename='js/attention_panel.js') }}"></script>
 <script>
     const weekOffset = {{ week_offset }};
     const athletes = {{ athletes | map(attribute='id') | list | tojson }};
@@ -547,6 +549,12 @@
             const variationTextEl = document.getElementById(`variation-text-${athleteId}`);
             if (variationEl) variationEl.style.display = 'block';
             if (variationTextEl) variationTextEl.innerHTML = diffBadge(totalDiff, 0, 'kg');
+        }
+
+        // Attention panel (coach insights)
+        const attentionEl = document.getElementById(`attention-${athleteId}`);
+        if (attentionEl && window.AttentionPanel) {
+            window.AttentionPanel.render(attentionEl, qd);
         }
         
         let html = '<table class="summary-table"><tbody>';

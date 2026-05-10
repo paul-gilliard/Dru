@@ -588,7 +588,13 @@ document.addEventListener('DOMContentLoaded', function(){
         seriesCache = data.series_by_exercise;
         console.log(`Preloaded ${Object.keys(seriesCache).length} exercises with series data`);
       }
-      
+
+      // Render coach attention panel (top-right of page)
+      const attentionContainer = document.getElementById('attention-panel-container');
+      if (attentionContainer && window.AttentionPanel) {
+        window.AttentionPanel.render(attentionContainer, data);
+      }
+
     } catch (err) {
       console.error('Error loading quick-data:', err);
     }
@@ -1321,6 +1327,11 @@ document.addEventListener('DOMContentLoaded', function(){
       // Hide loaders when no athlete selected
       const remarksLoader = document.getElementById('remarks-loader');
       if (remarksLoader) remarksLoader.classList.remove('show');
+      // Reset attention panel placeholder
+      const attentionContainer = document.getElementById('attention-panel-container');
+      if (attentionContainer) {
+        attentionContainer.innerHTML = `<div style="background:#fff;border:1px dashed #cbd5e1;border-radius:8px;padding:24px;text-align:center;color:#94a3b8;font-size:0.9rem;">🎯 Sélectionnez un athlète pour voir les points d'attention</div>`;
+      }
       return;
     }
     
