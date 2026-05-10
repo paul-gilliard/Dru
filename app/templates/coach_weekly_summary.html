@@ -492,7 +492,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="{{ url_for('static', filename='js/attention_panel.js') }}?v=20260510d"></script>
+<script src="{{ url_for('static', filename='js/weekly_compare.js') }}?v=20260510e"></script>
+<script src="{{ url_for('static', filename='js/attention_panel.js') }}?v=20260510e"></script>
 <script>
     const weekOffset = {{ week_offset }};
     const athletes = {{ athletes | map(attribute='id') | list | tojson }};
@@ -601,77 +602,19 @@
 
         html += '</tbody></table>';
 
-        // Add 4 comparison tables section
+        // Add single dynamic comparison section (driven by AttentionPanel A/B selects)
         html += `
             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
-                <h4 style="color: #333; font-size: 0.95em; margin: 0 0 12px 0;">Comparaisons hebdomadaires</h4>
-                <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 10px;">
-                    <!-- Comparison 1: S vs S-1 -->
-                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #667eea; overflow: hidden; min-width: 280px; flex-shrink: 0;" class="comparison-card" data-table="${athleteId}-1">
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f3f4f6;">
-                            <h5 style="margin: 0; color: #667eea; font-size: 0.85em; font-weight: 600;">S vs S-1</h5>
-                            <button style="background: none; border: none; color: #667eea; cursor: pointer; font-size: 1.2em; padding: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;" class="close-comparison">✕</button>
-                        </div>
-                        <div id="comparison-${athleteId}-1-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                            <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                            <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
-                        </div>
-                        <div id="comparison-${athleteId}-1-container" style="display: none; padding: 0 12px 12px 12px; max-height: 600px; overflow-y: auto;">
-                            <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
-                                <tbody id="comparison-${athleteId}-1-body"></tbody>
-                            </table>
-                        </div>
+                <h4 style="color: #333; font-size: 0.95em; margin: 0 0 12px 0;">Comparaison hebdomadaire <span id="comparison-${athleteId}-label" style="color:#94a3b8;font-weight:400;font-size:0.85em;"></span></h4>
+                <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #667eea; overflow: hidden;" class="comparison-card" data-table="${athleteId}-1">
+                    <div id="comparison-${athleteId}-1-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                        <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
                     </div>
-
-                    <!-- Comparison 2: S vs S-2 -->
-                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #764ba2; overflow: hidden; min-width: 280px; flex-shrink: 0;" class="comparison-card" data-table="${athleteId}-2">
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f3f4f6;">
-                            <h5 style="margin: 0; color: #764ba2; font-size: 0.85em; font-weight: 600;">S vs S-2</h5>
-                            <button style="background: none; border: none; color: #764ba2; cursor: pointer; font-size: 1.2em; padding: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;" class="close-comparison">✕</button>
-                        </div>
-                        <div id="comparison-${athleteId}-2-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                            <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #764ba2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                            <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
-                        </div>
-                        <div id="comparison-${athleteId}-2-container" style="display: none; padding: 0 12px 12px 12px; max-height: 600px; overflow-y: auto;">
-                            <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
-                                <tbody id="comparison-${athleteId}-2-body"></tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Comparison 3: S-1 vs S-2 -->
-                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #667eea; overflow: hidden; min-width: 280px; flex-shrink: 0;" class="comparison-card" data-table="${athleteId}-3">
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f3f4f6;">
-                            <h5 style="margin: 0; color: #667eea; font-size: 0.85em; font-weight: 600;">S-1 vs S-2</h5>
-                            <button style="background: none; border: none; color: #667eea; cursor: pointer; font-size: 1.2em; padding: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;" class="close-comparison">✕</button>
-                        </div>
-                        <div id="comparison-${athleteId}-3-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                            <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                            <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
-                        </div>
-                        <div id="comparison-${athleteId}-3-container" style="display: none; padding: 0 12px 12px 12px; max-height: 600px; overflow-y: auto;">
-                            <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
-                                <tbody id="comparison-${athleteId}-3-body"></tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <!-- Comparison 4: S-1 vs S-3 -->
-                    <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #764ba2; overflow: hidden; min-width: 280px; flex-shrink: 0;" class="comparison-card" data-table="${athleteId}-4">
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f3f4f6;">
-                            <h5 style="margin: 0; color: #764ba2; font-size: 0.85em; font-weight: 600;">S-1 vs S-3</h5>
-                            <button style="background: none; border: none; color: #764ba2; cursor: pointer; font-size: 1.2em; padding: 0; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center;" class="close-comparison">✕</button>
-                        </div>
-                        <div id="comparison-${athleteId}-4-loader" style="text-align: center; padding: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                            <div style="width: 14px; height: 14px; border: 2px solid #e5e7eb; border-top-color: #764ba2; border-radius: 50%; animation: spin 1s linear infinite;"></div>
-                            <span style="color: #64748b; font-size: 0.8em;">Chargement...</span>
-                        </div>
-                        <div id="comparison-${athleteId}-4-container" style="display: none; padding: 0 12px 12px 12px; max-height: 600px; overflow-y: auto;">
-                            <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
-                                <tbody id="comparison-${athleteId}-4-body"></tbody>
-                            </table>
-                        </div>
+                    <div id="comparison-${athleteId}-1-container" style="display: none; padding: 0 12px 12px 12px; max-height: 600px; overflow-y: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.75rem;">
+                            <tbody id="comparison-${athleteId}-1-body"></tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -682,33 +625,21 @@
         // Hide loader and show content
         document.getElementById(`loader-${athleteId}`).classList.add('hidden');
         container.style.display = 'block';
-        
-        // Add close button handlers
-        const closeButtons = container.querySelectorAll('.close-comparison');
-        closeButtons.forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                e.stopPropagation();
-                const card = this.closest('.comparison-card');
-                card.style.display = 'none';
-            });
-        });
 
-        // Populate comparison cards directly from already-fetched data (no second fetch)
-        if (qd.summary_7days)  displayComparisonInCard(athleteId, 1, qd.summary_7days);
-        if (qd.summary_14days) displayComparisonInCard(athleteId, 2, qd.summary_14days);
-        if (qd.summary_21days) displayComparisonInCard(athleteId, 3, qd.summary_21days);
-        if (qd.summary_28days) displayComparisonInCard(athleteId, 4, qd.summary_28days);
-
-        // Attention panel (coach insights) — drives which weekly comparison card is visible
+        // Attention panel + dynamic weekly comparison driven by A/B selects
         const attentionEl = document.getElementById(`attention-${athleteId}`);
-        if (attentionEl && window.AttentionPanel) {
+        if (attentionEl && window.AttentionPanel && window.WeeklyCompare) {
             window.AttentionPanel.render(attentionEl, qd, {
-                onPeriodChange: (periodKey, periodIndex) => {
-                    const cards = document.querySelectorAll(`.comparison-card[data-table^="${athleteId}-"]`);
-                    cards.forEach(card => {
-                        const idx = parseInt(card.dataset.table.split('-')[1], 10);
-                        card.style.display = (idx === periodIndex) ? '' : 'none';
-                    });
+                weeksBack: 13, defaultA: 0, defaultB: 1,
+                onChange: (aOff, bOff) => {
+                    const labelEl = document.getElementById(`comparison-${athleteId}-label`);
+                    if (labelEl) {
+                        const aL = aOff === 0 ? 'Cette sem.' : ('S-' + aOff);
+                        const bL = bOff === 0 ? 'Cette sem.' : ('S-' + bOff);
+                        labelEl.textContent = `(${aL} vs ${bL})`;
+                    }
+                    const data = window.WeeklyCompare.computeComparison(qd, aOff, bOff);
+                    displayComparisonInCard(athleteId, 1, data);
                 }
             });
         }

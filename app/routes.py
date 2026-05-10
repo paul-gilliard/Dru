@@ -2054,6 +2054,7 @@ def register_routes(app):
             return jsonify({
                 'journal': journal_data,
                 'muscle_groups': muscle_groups,
+                'exercise_muscle_map': {ex.name: ex.muscle_group for ex in all_exercises if ex.muscle_group},
                 'summary_7days': summary_7,
                 'summary_14days': summary_14,
                 'summary_21days': summary_21,

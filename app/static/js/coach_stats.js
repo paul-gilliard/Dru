@@ -553,34 +553,30 @@ document.addEventListener('DOMContentLoaded', function(){
       const endTime = performance.now();
       console.log(`Quick-data loaded in ${(endTime - startTime).toFixed(2)}ms`);
 
-      // Cache the summary data and exercise details
+      // Cache the summary data (still keep 7days for legacy code paths)
       if (data.summary_7days) {
         summaryCache['7days'][athleteId] = data.summary_7days;
         if (data.summary_7days.exercise_details_by_muscle) {
           muscleDetailCache['7days'] = data.summary_7days.exercise_details_by_muscle;
         }
-        await displayComparison(1, data.summary_7days);
       }
       if (data.summary_14days) {
         summaryCache['14days'][athleteId] = data.summary_14days;
         if (data.summary_14days.exercise_details_by_muscle) {
           muscleDetailCache['14days'] = data.summary_14days.exercise_details_by_muscle;
         }
-        await displayComparison(2, data.summary_14days);
       }
       if (data.summary_21days) {
         summaryCache['21days'] = data.summary_21days;
         if (data.summary_21days.exercise_details_by_muscle) {
           muscleDetailCache['21days'] = data.summary_21days.exercise_details_by_muscle;
         }
-        await displayComparison(3, data.summary_21days);
       }
       if (data.summary_28days) {
         summaryCache['28days'][athleteId] = data.summary_28days;
         if (data.summary_28days.exercise_details_by_muscle) {
           muscleDetailCache['28days'] = data.summary_28days.exercise_details_by_muscle;
         }
-        await displayComparison(4, data.summary_28days);
       }
       
       // Cache series data (preloaded)
@@ -589,10 +585,26 @@ document.addEventListener('DOMContentLoaded', function(){
         console.log(`Preloaded ${Object.keys(seriesCache).length} exercises with series data`);
       }
 
-      // Render coach attention panel (top-right of page)
+      // Render coach attention panel (top-right of page) — also drives the dynamic comparison card
       const attentionContainer = document.getElementById('attention-panel-container');
-      if (attentionContainer && window.AttentionPanel) {
-        window.AttentionPanel.render(attentionContainer, data);
+      if (attentionContainer && window.AttentionPanel && window.WeeklyCompare) {
+        window.AttentionPanel.render(attentionContainer, data, {
+          weeksBack: 13, defaultA: 0, defaultB: 1,
+          onChange: (aOff, bOff) => {
+            const labelEl = document.getElementById('comparison-1-label');
+            if (labelEl) {
+              const aL = aOff === 0 ? 'Cette sem.' : ('S-' + aOff);
+              const bL = bOff === 0 ? 'Cette sem.' : ('S-' + bOff);
+              labelEl.textContent = `(${aL} vs ${bL})`;
+            }
+            const compData = window.WeeklyCompare.computeComparison(data, aOff, bOff);
+            // Cache for muscle-detail drill-downs (key by 'custom')
+            if (compData.exercise_details_by_muscle) {
+              muscleDetailCache['custom'] = compData.exercise_details_by_muscle;
+            }
+            displayComparison(1, compData);
+          }
+        });
       }
 
     } catch (err) {

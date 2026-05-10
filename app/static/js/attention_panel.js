@@ -1,20 +1,26 @@
 /**
- * Attention Panel — Coach insights for a single athlete based on quick-data.json
+ * Attention Panel — Coach insights with custom A/B week selection.
  *
- * Clickable exercise pills show a series-by-series comparison detail explaining
- * exactly why the exercise was classified regression / stagnation / progress.
+ * Public API:
+ *   AttentionPanel.render(container, quickData, options)
+ *     options = {
+ *       weeksBack: 13,                                  // weeks offered in selects
+ *       defaultA: 0, defaultB: 1,
+ *       onChange: (aOffset, bOffset) => { ... }         // fires when selection changes (and on init)
+ *     }
+ *
+ * Classification rules (paired series only, incomplete ignored):
+ *   - All paired non-incomplete identical -> Stagnation
+ *   - countProgress > countRegression && tonnageΔ ≥ 0 -> Progrès
+ *   - countProgress > countRegression && tonnageΔ < 0 -> Vue du coach (review)
+ *   - countRegression > countProgress && tonnageΔ ≤ 0 -> Régression
+ *   - countRegression > countProgress && tonnageΔ > 0 -> Vue du coach
+ *   - Tie: tonnage tranche (>0 progrès, <0 régression, =0 stagnation)
  */
 (function (global) {
     'use strict';
 
-    const PERIODS = [
-        { key: 'S_S1',  label: 'S vs S-1',  curOffset: 0, prevOffset: 1 },
-        { key: 'S_S2',  label: 'S vs S-2',  curOffset: 0, prevOffset: 2 },
-        { key: 'S1_S2', label: 'S-1 vs S-2', curOffset: 1, prevOffset: 2 },
-        { key: 'S1_S3', label: 'S-1 vs S-3', curOffset: 1, prevOffset: 3 },
-    ];
-
-    // --- Date helpers ---
+    // --- Date helpers (kept local; mirror WeeklyCompare to avoid hard dep) ---
     function getMonday(d) {
         const dd = new Date(d);
         const day = dd.getDay();
@@ -23,19 +29,30 @@
     }
     function addDays(d, n) { return new Date(new Date(d).setDate(d.getDate() + n)); }
     function iso(d) { return d.toISOString().split('T')[0]; }
-
     function getWeekBounds(weekOffset) {
         const monday = getMonday(new Date());
         const start = addDays(monday, -7 * weekOffset);
         const end   = addDays(start, 6);
         return { start: iso(start), end: iso(end) };
     }
+    function weekLabel(o) { return o === 0 ? 'Cette sem.' : ('S-' + o); }
 
     function getLastSessionDate(seriesByDate, weekStart, weekEnd) {
         const dates = Object.keys(seriesByDate)
             .filter(d => d >= weekStart && d <= weekEnd)
             .sort();
         return dates.length ? dates[dates.length - 1] : null;
+    }
+
+    function avg(values) {
+        const v = values.filter(x => x !== null && x !== undefined && !isNaN(x));
+        if (!v.length) return null;
+        return v.reduce((a, b) => a + Number(b), 0) / v.length;
+    }
+
+    function bodyWeightForRange(journal, start, end) {
+        const filtered = (journal || []).filter(e => e.date >= start && e.date <= end);
+        return avg(filtered.map(e => e.weight));
     }
 
     function classifyExercise(curSeries, prevSeries, curDate, prevDate) {
@@ -86,17 +103,11 @@
         const totalCounted = countProgress + countRegression + countSame;
 
         let verdict = 'progress';
-        if (totalCounted === 0) {
-            verdict = 'progress';
-        } else if (countProgress === 0 && countRegression === 0) {
-            // All paired non-incomplete rows are identical
-            verdict = 'stagnation';
-        } else if (countProgress > countRegression) {
-            verdict = tonnageDiff < 0 ? 'review' : 'progress';
-        } else if (countRegression > countProgress) {
-            verdict = tonnageDiff > 0 ? 'review' : 'regression';
-        } else {
-            // Tie: tonnage tranche
+        if (totalCounted === 0) verdict = 'progress';
+        else if (countProgress === 0 && countRegression === 0) verdict = 'stagnation';
+        else if (countProgress > countRegression) verdict = tonnageDiff < 0 ? 'review' : 'progress';
+        else if (countRegression > countProgress) verdict = tonnageDiff > 0 ? 'review' : 'regression';
+        else {
             if (tonnageDiff > 0)      verdict = 'progress';
             else if (tonnageDiff < 0) verdict = 'regression';
             else                       verdict = 'stagnation';
@@ -109,10 +120,10 @@
         };
     }
 
-    function analyse(quickData, period) {
+    function analyse(quickData, aOffset, bOffset) {
         const seriesByEx = quickData.series_by_exercise || {};
-        const cur  = getWeekBounds(period.curOffset);
-        const prev = getWeekBounds(period.prevOffset);
+        const cur  = getWeekBounds(aOffset);
+        const prev = getWeekBounds(bOffset);
 
         const buckets = { regression: [], review: [], stagnation: [], progress: [], new: [], abandoned: [] };
 
@@ -132,18 +143,14 @@
         return buckets;
     }
 
-    function bodyWeightAnalyse(quickData, period) {
-        const key = { 'S_S1':'summary_7days', 'S_S2':'summary_14days', 'S1_S2':'summary_21days', 'S1_S3':'summary_28days' }[period.key];
-        const summary = quickData[key] || {};
-        return { current: summary.weight_current, previous: summary.weight_previous, diff: summary.weight_diff };
-    }
-
-    function bwBadge(bw) {
-        if (bw.diff == null || bw.current == null)
+    function bwBadge(curW, prevW) {
+        if (curW == null && prevW == null)
             return `<span style="color:#94a3b8;">Pas de donnée poids corporel</span>`;
-        const diff = Number(bw.diff);
-        const cur  = Number(bw.current).toFixed(1);
-        const prev = bw.previous != null ? Number(bw.previous).toFixed(1) : '—';
+        const cur  = curW  != null ? Number(curW).toFixed(1)  : '—';
+        const prev = prevW != null ? Number(prevW).toFixed(1) : '—';
+        if (curW == null || prevW == null)
+            return `<span style="color:#475569;">Poids: ${cur} kg vs ${prev} kg</span>`;
+        const diff = Number(curW) - Number(prevW);
         if (diff > 0.1)  return `<span style="color:#0369a1;font-weight:700;">↑ +${diff.toFixed(2)} kg</span> <span style="color:#64748b;font-size:0.85em;">(${cur} kg vs ${prev} kg)</span>`;
         if (diff < -0.1) return `<span style="color:#b91c1c;font-weight:700;">↓ ${diff.toFixed(2)} kg</span> <span style="color:#64748b;font-size:0.85em;">(${cur} kg vs ${prev} kg)</span>`;
         return `<span style="color:#475569;font-weight:600;">→ Stable (${cur} kg)</span>`;
@@ -152,7 +159,6 @@
     function buildDetailHtml(detail, curLabel, prevLabel) {
         if (!detail) return '';
         const { rows, curDate, prevDate, unpaired, stats } = detail;
-
         const fmt = v => v != null ? v : '—';
 
         const verdictStyle = {
@@ -244,24 +250,28 @@
         }).join('');
     }
 
-    function renderPanelContent(container, quickData, period) {
-        const bw = bodyWeightAnalyse(quickData, period);
-        const ex = analyse(quickData, period);
+    function renderPanelContent(container, quickData, aOffset, bOffset) {
+        const a = getWeekBounds(aOffset);
+        const b = getWeekBounds(bOffset);
+        const aLabel = weekLabel(aOffset);
+        const bLabel = weekLabel(bOffset);
 
-        const curLabel  = (PERIODS.find(p => p.key === period.key)?.label.split(' vs ')[0]) || 'Courant';
-        const prevLabel = (PERIODS.find(p => p.key === period.key)?.label.split(' vs ')[1]) || 'Préc.';
+        const curW  = bodyWeightForRange(quickData.journal, a.start, a.end);
+        const prevW = bodyWeightForRange(quickData.journal, b.start, b.end);
+
+        const ex = analyse(quickData, aOffset, bOffset);
 
         const rows = [
-            { icon: '⚖️', label: 'Poids corporel',                             bg: '#eff6ff', border: '#3b82f6', content: bwBadge(bw) },
-            { icon: '🔴', label: `Régressions (${ex.regression.length})`,      bg: '#fef2f2', border: '#ef4444', content: buildExoList(ex.regression,  '#ef4444', curLabel, prevLabel) },
-            { icon: '�', label: `Vue du coach (${ex.review.length})`,         bg: '#fdf4ff', border: '#a855f7', content: buildExoList(ex.review,      '#a855f7', curLabel, prevLabel) },
-            { icon: '�🟠', label: `Stagnations (${ex.stagnation.length})`,      bg: '#fffbeb', border: '#f59e0b', content: buildExoList(ex.stagnation,  '#f59e0b', curLabel, prevLabel) },
-            { icon: '🟢', label: `Progrès (${ex.progress.length})`,            bg: '#f0fdf4', border: '#10b981', content: buildExoList(ex.progress,    '#10b981', curLabel, prevLabel) },
+            { icon: '⚖️', label: 'Poids corporel',                          bg: '#eff6ff', border: '#3b82f6', content: bwBadge(curW, prevW) },
+            { icon: '🔴', label: `Régressions (${ex.regression.length})`,   bg: '#fef2f2', border: '#ef4444', content: buildExoList(ex.regression,  '#ef4444', aLabel, bLabel) },
+            { icon: '👀', label: `Vue du coach (${ex.review.length})`,      bg: '#fdf4ff', border: '#a855f7', content: buildExoList(ex.review,      '#a855f7', aLabel, bLabel) },
+            { icon: '🟠', label: `Stagnations (${ex.stagnation.length})`,   bg: '#fffbeb', border: '#f59e0b', content: buildExoList(ex.stagnation,  '#f59e0b', aLabel, bLabel) },
+            { icon: '🟢', label: `Progrès (${ex.progress.length})`,         bg: '#f0fdf4', border: '#10b981', content: buildExoList(ex.progress,    '#10b981', aLabel, bLabel) },
         ];
         if (ex.new.length)
-            rows.push({ icon: '🆕', label: `Nouveaux (${ex.new.length})`,      bg: '#eef2ff', border: '#6366f1', content: buildExoList(ex.new,       '#6366f1', curLabel, prevLabel) });
+            rows.push({ icon: '🆕', label: `Nouveaux (${ex.new.length})`,      bg: '#eef2ff', border: '#6366f1', content: buildExoList(ex.new,       '#6366f1', aLabel, bLabel) });
         if (ex.abandoned.length)
-            rows.push({ icon: '🚫', label: `Abandonnés (${ex.abandoned.length})`, bg: '#f1f5f9', border: '#64748b', content: buildExoList(ex.abandoned, '#64748b', curLabel, prevLabel) });
+            rows.push({ icon: '🚫', label: `Abandonnés (${ex.abandoned.length})`, bg: '#f1f5f9', border: '#64748b', content: buildExoList(ex.abandoned, '#64748b', aLabel, bLabel) });
 
         container.innerHTML = rows.map(r => `
             <div style="background:${r.bg};border-left:3px solid ${r.border};border-radius:4px;padding:8px 10px;margin-bottom:6px;">
@@ -289,24 +299,30 @@
         });
     }
 
+    function buildWeekOptions(weeksBack) {
+        const N = weeksBack || 13;
+        let html = '';
+        for (let i = 0; i < N; i++) {
+            const { start } = getWeekBounds(i);
+            html += `<option value="${i}">${weekLabel(i)} (${start})</option>`;
+        }
+        return html;
+    }
+
     function render(container, quickData, options) {
         if (!container) return;
         if (!quickData || !quickData.series_by_exercise) {
             container.innerHTML = '<div style="color:#94a3b8;font-size:0.85rem;">Données non disponibles</div>';
             return;
         }
-        const onPeriodChange = options && typeof options.onPeriodChange === 'function' ? options.onPeriodChange : null;
+        const opts = options || {};
+        const weeksBack = opts.weeksBack || 13;
+        const onChange = typeof opts.onChange === 'function' ? opts.onChange : null;
+        const defaultA = opts.defaultA != null ? opts.defaultA : 0;
+        const defaultB = opts.defaultB != null ? opts.defaultB : 1;
 
         const uid = 'ap_' + Math.random().toString(36).slice(2, 9);
-
-        const tabsHtml = PERIODS.map((p, i) => `
-            <button type="button" data-period="${p.key}" class="${uid}-tab" style="
-                flex:1;padding:6px 4px;border:none;cursor:pointer;
-                background:${i === 0 ? '#667eea' : '#f1f5f9'};
-                color:${i === 0 ? '#fff' : '#475569'};
-                font-size:0.72rem;font-weight:700;border-radius:6px;transition:all 0.15s;">
-                ${p.label}
-            </button>`).join('');
+        const weekOpts = buildWeekOptions(weeksBack);
 
         container.innerHTML = `
             <div style="background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
@@ -314,29 +330,38 @@
                     <span style="font-size:1.1rem;">🎯</span>
                     <h4 style="margin:0;font-size:0.95rem;font-weight:700;color:#1e293b;">Points d'attention coach</h4>
                 </div>
-                <div style="display:flex;gap:4px;margin-bottom:10px;" id="${uid}-tabs">${tabsHtml}</div>
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap;font-size:0.78rem;">
+                    <label style="display:flex;align-items:center;gap:4px;color:#475569;font-weight:600;">
+                        Sem. A
+                        <select id="${uid}-a" style="padding:3px 6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.78rem;">${weekOpts}</select>
+                    </label>
+                    <span style="color:#94a3b8;">vs</span>
+                    <label style="display:flex;align-items:center;gap:4px;color:#475569;font-weight:600;">
+                        Sem. B
+                        <select id="${uid}-b" style="padding:3px 6px;border:1px solid #cbd5e1;border-radius:4px;font-size:0.78rem;">${weekOpts}</select>
+                    </label>
+                </div>
                 <div id="${uid}-content"></div>
             </div>`;
 
         const contentEl = container.querySelector(`#${uid}-content`);
-        const tabBtns   = container.querySelectorAll(`.${uid}-tab`);
+        const selA = container.querySelector(`#${uid}-a`);
+        const selB = container.querySelector(`#${uid}-b`);
+        selA.value = String(defaultA);
+        selB.value = String(defaultB);
 
-        function activate(periodKey) {
-            tabBtns.forEach(btn => {
-                const active = btn.dataset.period === periodKey;
-                btn.style.background = active ? '#667eea' : '#f1f5f9';
-                btn.style.color      = active ? '#fff'    : '#475569';
-            });
-            const period = PERIODS.find(p => p.key === periodKey) || PERIODS[0];
-            const periodIndex = PERIODS.findIndex(p => p.key === periodKey);
-            renderPanelContent(contentEl, quickData, period);
-            if (onPeriodChange) {
-                try { onPeriodChange(period.key, periodIndex + 1); } catch (e) { console.error(e); }
+        function refresh() {
+            const a = parseInt(selA.value, 10);
+            const b = parseInt(selB.value, 10);
+            renderPanelContent(contentEl, quickData, a, b);
+            if (onChange) {
+                try { onChange(a, b); } catch (e) { console.error(e); }
             }
         }
 
-        tabBtns.forEach(btn => btn.addEventListener('click', () => activate(btn.dataset.period)));
-        activate(PERIODS[0].key);
+        selA.addEventListener('change', refresh);
+        selB.addEventListener('change', refresh);
+        refresh();
     }
 
     global.AttentionPanel = { render };
