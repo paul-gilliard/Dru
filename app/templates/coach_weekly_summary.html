@@ -36,7 +36,7 @@
     /* Athletes grid */
     .athletes-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(500px, 1fr));
+        grid-template-columns: 1fr;
         gap: 25px;
         margin-bottom: 30px;
     }
@@ -405,7 +405,7 @@
 
             <div class="athlete-body">
                 <div id="variation-{{ athlete.id }}" style="background: #f0f4ff; border-left: 3px solid #667eea; padding: 10px 12px; margin-bottom: 12px; border-radius: 4px; font-size: 0.9em; color: #333; display:none;">
-                    <strong>Variation S vs S-1:</strong> <span id="variation-text-{{ athlete.id }}"></span>
+                    <strong>Variation <span id="variation-label-{{ athlete.id }}">S vs S-1</span> :</strong> <span id="variation-text-{{ athlete.id }}"></span>
                 </div>
                 <div id="attention-{{ athlete.id }}" style="margin-bottom: 12px;"></div>
                 <div id="loader-{{ athlete.id }}" class="summary-loader">
@@ -492,8 +492,8 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="{{ url_for('static', filename='js/weekly_compare.js') }}?v=20260510e"></script>
-<script src="{{ url_for('static', filename='js/attention_panel.js') }}?v=20260510e"></script>
+<script src="{{ url_for('static', filename='js/weekly_compare.js') }}?v=20260510f"></script>
+<script src="{{ url_for('static', filename='js/attention_panel.js') }}?v=20260510f"></script>
 <script>
     const weekOffset = {{ week_offset }};
     const athletes = {{ athletes | map(attribute='id') | list | tojson }};
@@ -538,72 +538,50 @@
         }
     }
 
+    // Render health metric rows (Poids/Kcals/Eau/Sommeil) into their fixed tbody
+    function renderHealthMetrics(athleteId, data) {
+        const tbody = document.getElementById(`health-body-${athleteId}`);
+        if (!tbody) return;
+        let rows = '';
+        if (data.weight_current !== null && data.weight_current !== undefined) {
+            rows += `<tr><td class="metric-name">Poids</td><td class="metric-value">${Number(data.weight_current).toFixed(1)} kg</td><td class="metric-diff">${diffBadge(data.weight_diff, 1, 'kg')}</td></tr>`;
+        }
+        if (data.kcals_current !== null && data.kcals_current !== undefined) {
+            rows += `<tr><td class="metric-name">Kcals</td><td class="metric-value">${Math.round(data.kcals_current)}</td><td class="metric-diff">${diffBadge(data.kcals_diff, 0, 'kcal')}</td></tr>`;
+        }
+        if (data.water_current !== null && data.water_current !== undefined) {
+            rows += `<tr><td class="metric-name">Eau</td><td class="metric-value">${Math.round(data.water_current)} ml</td><td class="metric-diff">${diffBadge(data.water_diff, 0, 'ml')}</td></tr>`;
+        }
+        if (data.sleep_current !== null && data.sleep_current !== undefined) {
+            rows += `<tr><td class="metric-name">Sommeil</td><td class="metric-value">${Number(data.sleep_current).toFixed(1)} h</td><td class="metric-diff">${diffBadge(data.sleep_diff, 1, 'h')}</td></tr>`;
+        }
+        tbody.innerHTML = rows;
+    }
+
+    // Update variation badge (tonnage) + its label to reflect current A/B selection
+    function renderVariationBadge(athleteId, data, aOff, bOff) {
+        const variationEl = document.getElementById(`variation-${athleteId}`);
+        const variationTextEl = document.getElementById(`variation-text-${athleteId}`);
+        const variationLabelEl = document.getElementById(`variation-label-${athleteId}`);
+        if (!variationEl) return;
+        if (data.tonnage_diff_by_muscle && Object.keys(data.tonnage_diff_by_muscle).length > 0) {
+            const totalDiff = Object.values(data.tonnage_diff_by_muscle).reduce((a, b) => a + b, 0);
+            const aL = aOff === 0 ? 'Cette sem.' : ('S-' + aOff);
+            const bL = bOff === 0 ? 'Cette sem.' : ('S-' + bOff);
+            if (variationLabelEl) variationLabelEl.textContent = `${aL} vs ${bL}`;
+            if (variationTextEl) variationTextEl.innerHTML = diffBadge(totalDiff, 0, 'kg');
+            variationEl.style.display = 'block';
+        } else {
+            variationEl.style.display = 'none';
+        }
+    }
+
     function renderSummary(athleteId, qd) {
         const container = document.getElementById(`summary-${athleteId}`);
-        // qd is the full quick-data.json response; use summary_7days for the weekly card
-        const data = qd.summary_7days || {};
 
-        // Variation badge (total tonnage diff)
-        if (data.tonnage_diff_by_muscle) {
-            const totalDiff = Object.values(data.tonnage_diff_by_muscle).reduce((a, b) => a + b, 0);
-            const variationEl = document.getElementById(`variation-${athleteId}`);
-            const variationTextEl = document.getElementById(`variation-text-${athleteId}`);
-            if (variationEl) variationEl.style.display = 'block';
-            if (variationTextEl) variationTextEl.innerHTML = diffBadge(totalDiff, 0, 'kg');
-        }
-
-        // Attention panel rendered later, after comparison cards exist in DOM (see below)
-        
-        let html = '<table class="summary-table"><tbody>';
-
-        // Poids
-        if (data.weight_current !== null) {
-            html += `
-                <tr>
-                    <td class="metric-name">Poids</td>
-                    <td class="metric-value">${data.weight_current.toFixed(1)} kg</td>
-                    <td class="metric-diff">${diffBadge(data.weight_diff, 1, 'kg')}</td>
-                </tr>
-            `;
-        }
-
-        // Kcals
-        if (data.kcals_current !== null) {
-            html += `
-                <tr>
-                    <td class="metric-name">Kcals</td>
-                    <td class="metric-value">${Math.round(data.kcals_current)}</td>
-                    <td class="metric-diff">${diffBadge(data.kcals_diff, 0, 'kcal')}</td>
-                </tr>
-            `;
-        }
-
-        // Eau
-        if (data.water_current !== null) {
-            html += `
-                <tr>
-                    <td class="metric-name">Eau</td>
-                    <td class="metric-value">${Math.round(data.water_current)} ml</td>
-                    <td class="metric-diff">${diffBadge(data.water_diff, 0, 'ml')}</td>
-                </tr>
-            `;
-        }
-
-        // Sommeil
-        if (data.sleep_current !== null) {
-            html += `
-                <tr>
-                    <td class="metric-name">Sommeil</td>
-                    <td class="metric-value">${data.sleep_current.toFixed(1)} h</td>
-                    <td class="metric-diff">${diffBadge(data.sleep_diff, 1, 'h')}</td>
-                </tr>
-            `;
-        }
-
-        html += '</tbody></table>';
-
-        // Add single dynamic comparison section (driven by AttentionPanel A/B selects)
-        html += `
+        // Build static skeleton; health metrics and variation will be filled reactively
+        const html = `
+            <table class="summary-table"><tbody id="health-body-${athleteId}"></tbody></table>
             <div style="margin-top: 20px; padding-top: 15px; border-top: 1px solid #e5e7eb;">
                 <h4 style="color: #333; font-size: 0.95em; margin: 0 0 12px 0;">Comparaison hebdomadaire <span id="comparison-${athleteId}-label" style="color:#94a3b8;font-weight:400;font-size:0.85em;"></span></h4>
                 <div style="background: #f9fafb; border-radius: 6px; padding: 0; border-left: 3px solid #667eea; overflow: hidden;" class="comparison-card" data-table="${athleteId}-1">
@@ -620,11 +598,19 @@
             </div>
         `;
 
-        container.innerHTML = html || '<div class="no-data">Pas de données disponibles</div>';
-        
-        // Hide loader and show content
+        container.innerHTML = html;
         document.getElementById(`loader-${athleteId}`).classList.add('hidden');
         container.style.display = 'block';
+
+        // Initial render with S vs S-1 (a=0, b=1)
+        const initData = (qd.summary_7days && Object.keys(qd.summary_7days).length > 0)
+            ? qd.summary_7days
+            : window.WeeklyCompare ? window.WeeklyCompare.computeComparison(qd, 0, 1) : {};
+        renderHealthMetrics(athleteId, initData);
+        renderVariationBadge(athleteId, initData, 0, 1);
+        displayComparisonInCard(athleteId, 1, initData);
+        const compLabelEl = document.getElementById(`comparison-${athleteId}-label`);
+        if (compLabelEl) compLabelEl.textContent = '(Cette sem. vs S-1)';
 
         // Attention panel + dynamic weekly comparison driven by A/B selects
         const attentionEl = document.getElementById(`attention-${athleteId}`);
@@ -632,14 +618,14 @@
             window.AttentionPanel.render(attentionEl, qd, {
                 weeksBack: 13, defaultA: 0, defaultB: 1,
                 onChange: (aOff, bOff) => {
-                    const labelEl = document.getElementById(`comparison-${athleteId}-label`);
-                    if (labelEl) {
-                        const aL = aOff === 0 ? 'Cette sem.' : ('S-' + aOff);
-                        const bL = bOff === 0 ? 'Cette sem.' : ('S-' + bOff);
-                        labelEl.textContent = `(${aL} vs ${bL})`;
-                    }
-                    const data = window.WeeklyCompare.computeComparison(qd, aOff, bOff);
-                    displayComparisonInCard(athleteId, 1, data);
+                    const aL = aOff === 0 ? 'Cette sem.' : ('S-' + aOff);
+                    const bL = bOff === 0 ? 'Cette sem.' : ('S-' + bOff);
+                    const compLbl = document.getElementById(`comparison-${athleteId}-label`);
+                    if (compLbl) compLbl.textContent = `(${aL} vs ${bL})`;
+                    const computed = window.WeeklyCompare.computeComparison(qd, aOff, bOff);
+                    renderHealthMetrics(athleteId, computed);
+                    renderVariationBadge(athleteId, computed, aOff, bOff);
+                    displayComparisonInCard(athleteId, 1, computed);
                 }
             });
         }
