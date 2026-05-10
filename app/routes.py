@@ -1861,8 +1861,15 @@ def register_routes(app):
                     'date': e.entry_date.isoformat(),
                     'weight': e.weight,
                     'kcals': e.kcals,
+                    'protein': e.protein,
+                    'carbs': e.carbs,
+                    'fats': e.fats,
                     'water_ml': e.water_ml,
-                    'sleep_hours': e.sleep_hours
+                    'steps': e.steps,
+                    'sleep_hours': e.sleep_hours,
+                    'energy': e.energy,
+                    'stress': e.stress,
+                    'hunger': e.hunger
                 })
             
             # === GET MUSCLE GROUPS ===

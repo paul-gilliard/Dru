@@ -131,6 +131,7 @@
     <button class="stats-tab" data-tab="sante">Santé &amp; Poids <span class="tab-spinner" id="tab-spinner-sante"></span></button>
     <button class="stats-tab" data-tab="exercices">Exercices <span class="tab-spinner" id="tab-spinner-exercices"></span></button>
     <button class="stats-tab" data-tab="analyse">Analyse avancée <span class="tab-spinner" id="tab-spinner-analyse"></span></button>
+    <button class="stats-tab" data-tab="croise">Analyse croisée <span class="tab-spinner" id="tab-spinner-croise"></span></button>
   </div>
   <div id="no-athlete-msg" style="padding:36px; text-align:center; color:#94a3b8; font-size:1rem; background:white; border:1px solid #e5e7eb; border-top:none; border-radius:0 0 8px 8px; margin-bottom:12px;">
     Sélectionnez un athlète ci-dessus pour afficher les statistiques.
@@ -399,6 +400,83 @@
 
 </div><!-- /tab-analyse -->
 
+<!-- Tab: Analyse croisée -->
+<div id="tab-croise" class="stats-tab-pane">
+  <div style="background:#fff; border:1px solid #e5e7eb; border-radius:10px; padding:22px; margin-bottom:16px;">
+
+    <!-- Section 1: Week selector -->
+    <div style="margin-bottom:24px;">
+      <h4 style="color:#0b63d6; font-size:0.92rem; font-weight:700; margin:0 0 10px; text-transform:uppercase; letter-spacing:0.04em;">
+        1. Sélectionner les semaines à afficher
+      </h4>
+      <div id="cross-week-selector-wrapper" style="position:relative; display:inline-block; margin-bottom:10px;">
+        <button id="cross-week-toggle-btn" style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:6px 14px; cursor:pointer; font-size:0.85rem; color:#374151; font-weight:600;">
+          Sélectionner des semaines ▼
+        </button>
+        <div id="cross-week-dropdown" style="display:none; position:absolute; top:calc(100% + 4px); left:0; background:#fff; border:1px solid #e5e7eb; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.12); z-index:200; max-height:280px; overflow-y:auto; min-width:240px;">
+          <!-- populated by cross_analysis.js -->
+        </div>
+      </div>
+      <div id="cross-week-chips" style="display:flex; flex-wrap:wrap; gap:4px; align-items:center; margin-top:6px;">
+        <span style="color:#94a3b8; font-size:0.85rem;">Aucune semaine sélectionnée</span>
+      </div>
+    </div>
+
+    <!-- Section 2: Add a metric -->
+    <div style="margin-bottom:24px;">
+      <h4 style="color:#0b63d6; font-size:0.92rem; font-weight:700; margin:0 0 10px; text-transform:uppercase; letter-spacing:0.04em;">
+        2. Ajouter une métrique au graphique
+      </h4>
+      <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+        <div>
+          <label style="display:block; font-size:0.78rem; font-weight:600; color:#64748b; margin-bottom:4px;">Catégorie :</label>
+          <select id="cross-category" style="border:1px solid #cbd5e1; border-radius:6px; padding:6px 10px; font-size:0.85rem; color:#374151;">
+            <option value="">— Catégorie —</option>
+            <option value="sante">🏥 Santé</option>
+            <option value="muscle">💪 Par groupe musculaire</option>
+            <option value="exercise">🏋️ Par exercice</option>
+          </select>
+        </div>
+        <div id="cross-sub1-wrapper" style="display:none;">
+          <label id="cross-sub1-label" style="display:block; font-size:0.78rem; font-weight:600; color:#64748b; margin-bottom:4px;">Sous-sélection :</label>
+          <select id="cross-sub1" style="border:1px solid #cbd5e1; border-radius:6px; padding:6px 10px; font-size:0.85rem; color:#374151; max-width:220px;">
+            <!-- populated by JS -->
+          </select>
+        </div>
+        <div id="cross-sub2-wrapper" style="display:none;">
+          <label id="cross-sub2-label" style="display:block; font-size:0.78rem; font-weight:600; color:#64748b; margin-bottom:4px;">Stat :</label>
+          <select id="cross-sub2" style="border:1px solid #cbd5e1; border-radius:6px; padding:6px 10px; font-size:0.85rem; color:#374151;">
+            <!-- populated by JS -->
+          </select>
+        </div>
+        <button id="cross-add-metric-btn" style="background:#0b63d6; color:#fff; border:none; border-radius:6px; padding:7px 16px; font-size:0.85rem; font-weight:700; cursor:pointer;">
+          + Ajouter
+        </button>
+      </div>
+    </div>
+
+    <!-- Section 3: Active metrics chips -->
+    <div style="margin-bottom:20px;">
+      <h4 style="color:#0b63d6; font-size:0.92rem; font-weight:700; margin:0 0 8px; text-transform:uppercase; letter-spacing:0.04em;">
+        Métriques actives
+      </h4>
+      <div id="cross-metric-chips" style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+        <span style="color:#94a3b8; font-size:0.85rem;">Aucune métrique ajoutée</span>
+      </div>
+    </div>
+
+    <!-- Section 4: Chart -->
+    <div style="position:relative; height:360px; background:#fafbfc; border:1px solid #e5e7eb; border-radius:8px; overflow:hidden;">
+      <div id="cross-chart-empty" style="display:flex; position:absolute; inset:0; align-items:center; justify-content:center; text-align:center; color:#94a3b8; flex-direction:column; gap:8px; font-size:0.9rem; pointer-events:none;">
+        <span style="font-size:2rem;">📊</span>
+        <span>Sélectionnez des semaines et ajoutez des métriques<br>pour afficher le graphique croisé</span>
+      </div>
+      <canvas id="chart-cross-analysis" style="display:none; padding:12px;"></canvas>
+    </div>
+
+  </div>
+</div><!-- /tab-croise -->
+
 </div><!-- /stats-panes-wrapper -->
 
 <!-- Modal for muscle detail -->
@@ -437,4 +515,5 @@
 <script src="{{ url_for('static', filename='js/weekly_compare.js') }}?v=20260510e"></script>
 <script src="{{ url_for('static', filename='js/attention_panel.js') }}?v=20260510e"></script>
 <script src="{{ url_for('static', filename='js/coach_stats.js') }}"></script>
+<script src="{{ url_for('static', filename='js/cross_analysis.js') }}"></script>
 {% endblock %}

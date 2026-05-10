@@ -326,6 +326,8 @@ document.addEventListener('DOMContentLoaded', function(){
       return;
     }
     journalData = await res.json();
+    window.statsJournalFull = journalData;
+    document.dispatchEvent(new CustomEvent('statsJournalReady', {}));
     santeDetailWeek = 0;
     renderSante();
   }
@@ -550,6 +552,7 @@ document.addEventListener('DOMContentLoaded', function(){
       }
       
       const data = await res.json();
+      window.statsQuickData = data;
       const endTime = performance.now();
       console.log(`Quick-data loaded in ${(endTime - startTime).toFixed(2)}ms`);
 
@@ -606,6 +609,8 @@ document.addEventListener('DOMContentLoaded', function(){
           }
         });
       }
+
+      document.dispatchEvent(new CustomEvent('statsDataReady', {}));
 
     } catch (err) {
       console.error('Error loading quick-data:', err);
