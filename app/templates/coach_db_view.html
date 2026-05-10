@@ -1,0 +1,414 @@
+{% extends 'base.html' %}
+{% block title %}Coach — Vue Base de Données{% endblock %}
+{% block content %}
+<style>
+  .dbv-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .dbv-header h1 {
+    margin: 0;
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: #1e293b;
+  }
+  .dbv-header .subtitle {
+    color: #64748b;
+    font-size: 0.92rem;
+    margin-top: 4px;
+  }
+
+  /* Global counters */
+  .dbv-counters {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(155px, 1fr));
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+  .counter-card {
+    background: white;
+    border-radius: 12px;
+    padding: 20px 18px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    border-top: 4px solid #667eea;
+    text-align: center;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .counter-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.12);
+  }
+  .counter-card.blue  { border-top-color: #0b63d6; }
+  .counter-card.green { border-top-color: #10b981; }
+  .counter-card.purple { border-top-color: #764ba2; }
+  .counter-card.orange { border-top-color: #f59e0b; }
+  .counter-card.red   { border-top-color: #ef4444; }
+  .counter-card.teal  { border-top-color: #06b6d4; }
+  .counter-card.indigo { border-top-color: #6366f1; }
+
+  .counter-num {
+    font-size: 2.4rem;
+    font-weight: 800;
+    color: #1e293b;
+    line-height: 1;
+    margin-bottom: 6px;
+  }
+  .counter-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .counter-icon {
+    font-size: 1.6rem;
+    margin-bottom: 8px;
+    display: block;
+  }
+
+  /* Section title */
+  .section-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1e293b;
+    margin: 0 0 14px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Per-athlete table */
+  .dbv-table-wrap {
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    overflow: hidden;
+    margin-bottom: 32px;
+  }
+  .dbv-table-head {
+    padding: 18px 22px 14px;
+    border-bottom: 1px solid #e5e7eb;
+  }
+  .dbv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+  }
+  .dbv-table thead tr {
+    background: #f8fafc;
+    border-bottom: 2px solid #e5e7eb;
+  }
+  .dbv-table th {
+    padding: 11px 14px;
+    text-align: left;
+    font-weight: 700;
+    color: #475569;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+  }
+  .dbv-table td {
+    padding: 11px 14px;
+    border-bottom: 1px solid #f1f5f9;
+    color: #334155;
+    vertical-align: middle;
+  }
+  .dbv-table tbody tr:hover {
+    background: #f8fafc;
+  }
+  .dbv-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  .athlete-name-cell {
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .athlete-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+  .count-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #f1f5f9;
+    color: #475569;
+    border-radius: 20px;
+    padding: 2px 10px;
+    font-weight: 700;
+    font-size: 0.83rem;
+    min-width: 36px;
+  }
+  .count-pill.green { background: #dcfce7; color: #166534; }
+  .count-pill.blue  { background: #dbeafe; color: #1d4ed8; }
+  .count-pill.zero  { background: #f1f5f9; color: #94a3b8; }
+  .date-cell {
+    color: #64748b;
+    font-size: 0.83rem;
+  }
+  .date-cell.recent {
+    color: #10b981;
+    font-weight: 600;
+  }
+  .date-cell.old {
+    color: #f59e0b;
+  }
+  .date-cell.very-old {
+    color: #ef4444;
+  }
+  .date-none {
+    color: #cbd5e1;
+    font-style: italic;
+    font-size: 0.8rem;
+  }
+
+  /* Muscle distribution */
+  .muscle-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 12px;
+    margin-bottom: 32px;
+  }
+  .muscle-card {
+    background: white;
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .muscle-name {
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: #374151;
+  }
+  .muscle-count {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #667eea;
+  }
+
+  /* Quick links row */
+  .quick-links {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+  .quick-link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+  .quick-link-btn.primary {
+    background: #667eea;
+    color: white;
+  }
+  .quick-link-btn.primary:hover { background: #5a67d8; }
+  .quick-link-btn.secondary {
+    background: #f1f5f9;
+    color: #475569;
+    border: 1px solid #e2e8f0;
+  }
+  .quick-link-btn.secondary:hover { background: #e2e8f0; }
+
+  @media (max-width: 768px) {
+    .dbv-counters { grid-template-columns: repeat(2, 1fr); }
+    .dbv-table { font-size: 0.78rem; }
+    .dbv-table th, .dbv-table td { padding: 8px 10px; }
+  }
+</style>
+
+<div class="dbv-header">
+  <div>
+    <h1>🗄️ Vue Base de Données</h1>
+    <div class="subtitle">Aperçu de toutes les données enregistrées dans Railway</div>
+  </div>
+  <div class="quick-links">
+    <a href="{{ url_for('coach_exercises') }}" class="quick-link-btn secondary">💪 Exercices</a>
+    <a href="{{ url_for('coach_foods') }}" class="quick-link-btn secondary">🍎 Aliments</a>
+    <a href="{{ url_for('coach_stats') }}" class="quick-link-btn primary">📊 Suivi</a>
+  </div>
+</div>
+
+<!-- Global counters -->
+<div class="dbv-counters">
+  <div class="counter-card blue">
+    <span class="counter-icon">👤</span>
+    <div class="counter-num">{{ total_athletes }}</div>
+    <div class="counter-label">Athlètes</div>
+  </div>
+  <div class="counter-card green">
+    <span class="counter-icon">📓</span>
+    <div class="counter-num">{{ total_journal }}</div>
+    <div class="counter-label">Entrées Journal</div>
+  </div>
+  <div class="counter-card purple">
+    <span class="counter-icon">🏋️</span>
+    <div class="counter-num">{{ total_perf }}</div>
+    <div class="counter-label">Séries Perfs</div>
+  </div>
+  <div class="counter-card orange">
+    <span class="counter-icon">💪</span>
+    <div class="counter-num">{{ total_exercises }}</div>
+    <div class="counter-label">Exercices</div>
+  </div>
+  <div class="counter-card teal">
+    <span class="counter-icon">🍎</span>
+    <div class="counter-num">{{ total_foods }}</div>
+    <div class="counter-label">Aliments</div>
+  </div>
+  <div class="counter-card indigo">
+    <span class="counter-icon">📋</span>
+    <div class="counter-num">{{ total_programs }}</div>
+    <div class="counter-label">Programmes</div>
+  </div>
+  <div class="counter-card red">
+    <span class="counter-icon">🍽️</span>
+    <div class="counter-num">{{ total_mealplans }}</div>
+    <div class="counter-label">Plans Alim.</div>
+  </div>
+</div>
+
+<!-- Per-athlete stats table -->
+<div class="dbv-table-wrap">
+  <div class="dbv-table-head">
+    <div class="section-title">👟 Données par athlète</div>
+  </div>
+  <table class="dbv-table">
+    <thead>
+      <tr>
+        <th>Athlète</th>
+        <th>Journal</th>
+        <th>Dernier journal</th>
+        <th>Séries perf</th>
+        <th>Dernière perf</th>
+        <th>Programmes</th>
+        <th>Plans alim.</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in athlete_stats %}
+      <tr>
+        <td>
+          <div class="athlete-name-cell">
+            <div class="athlete-avatar">{{ s.username[0].upper() }}</div>
+            {{ s.username }}
+          </div>
+        </td>
+
+        <!-- Journal count -->
+        <td>
+          <span class="count-pill {% if s.journal_count == 0 %}zero{% else %}green{% endif %}">
+            {{ s.journal_count }}
+          </span>
+        </td>
+
+        <!-- Last journal date -->
+        <td>
+          {% if s.journal_last %}
+            <span class="date-cell {% if s.journal_days_ago <= 7 %}recent{% elif s.journal_days_ago <= 21 %}old{% else %}very-old{% endif %}">
+              {{ s.journal_last.strftime('%d/%m/%Y') }}
+              <span style="font-size:0.75rem;opacity:0.7;">({{ s.journal_days_ago }}j)</span>
+            </span>
+          {% else %}
+            <span class="date-none">aucune</span>
+          {% endif %}
+        </td>
+
+        <!-- Perf count -->
+        <td>
+          <span class="count-pill {% if s.perf_count == 0 %}zero{% else %}blue{% endif %}">
+            {{ s.perf_count }}
+          </span>
+        </td>
+
+        <!-- Last perf date -->
+        <td>
+          {% if s.perf_last %}
+            <span class="date-cell {% if s.perf_days_ago <= 7 %}recent{% elif s.perf_days_ago <= 21 %}old{% else %}very-old{% endif %}">
+              {{ s.perf_last.strftime('%d/%m/%Y') }}
+              <span style="font-size:0.75rem;opacity:0.7;">({{ s.perf_days_ago }}j)</span>
+            </span>
+          {% else %}
+            <span class="date-none">aucune</span>
+          {% endif %}
+        </td>
+
+        <!-- Programs -->
+        <td>
+          <span class="count-pill {% if s.program_count == 0 %}zero{% endif %}">
+            {{ s.program_count }}
+          </span>
+        </td>
+
+        <!-- Meal plans -->
+        <td>
+          <span class="count-pill {% if s.mealplan_count == 0 %}zero{% endif %}">
+            {{ s.mealplan_count }}
+          </span>
+        </td>
+
+        <!-- Actions -->
+        <td>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <a href="{{ url_for('coach_stats') }}?athlete_id={{ s.id }}"
+               style="font-size:0.75rem;padding:3px 10px;background:#667eea;color:white;border-radius:5px;text-decoration:none;font-weight:600;white-space:nowrap;">
+              📊 Suivi
+            </a>
+            <a href="{{ url_for('coach_programming') }}"
+               style="font-size:0.75rem;padding:3px 10px;background:#10b981;color:white;border-radius:5px;text-decoration:none;font-weight:600;white-space:nowrap;">
+              📋 Prog.
+            </a>
+          </div>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:24px;">Aucun athlète</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Exercise distribution by muscle -->
+<div class="section-title">💪 Exercices par groupe musculaire</div>
+<div class="muscle-grid">
+  {% for muscle, count in muscle_dist %}
+  <div class="muscle-card">
+    <span class="muscle-name">{{ muscle }}</span>
+    <span class="muscle-count">{{ count }}</span>
+  </div>
+  {% endfor %}
+</div>
+
+<script>
+// Inject current date for Jinja-computed days_ago
+// (Already computed server-side via now variable)
+</script>
+{% endblock %}

@@ -407,6 +407,89 @@ def register_routes(app):
 
         return render_template('coach_availability.html', calendar=calendar, locations=locations, primary_location=primary_location)
 
+    @app.route('/coach/db-view')
+    def coach_db_view():
+        forbidden = _require_coach()
+        if forbidden:
+            return forbidden
+
+        from sqlalchemy import func
+
+        athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
+        coaches  = User.query.filter_by(role='coach').all()
+
+        # Global counts
+        total_journal    = JournalEntry.query.count()
+        total_perf       = PerformanceEntry.query.count()
+        total_exercises  = Exercise.query.count()
+        total_foods      = Food.query.count()
+        total_programs   = Program.query.count()
+        total_mealplans  = MealPlan.query.count()
+        total_athletes   = len(athletes)
+
+        # Per-athlete stats in 2 queries (aggregates)
+        journal_counts = dict(
+            db.session.query(JournalEntry.athlete_id, func.count(JournalEntry.id))
+            .group_by(JournalEntry.athlete_id).all()
+        )
+        journal_last = dict(
+            db.session.query(JournalEntry.athlete_id, func.max(JournalEntry.entry_date))
+            .group_by(JournalEntry.athlete_id).all()
+        )
+        perf_counts = dict(
+            db.session.query(PerformanceEntry.athlete_id, func.count(PerformanceEntry.id))
+            .group_by(PerformanceEntry.athlete_id).all()
+        )
+        perf_last = dict(
+            db.session.query(PerformanceEntry.athlete_id, func.max(PerformanceEntry.entry_date))
+            .group_by(PerformanceEntry.athlete_id).all()
+        )
+        program_counts = dict(
+            db.session.query(Program.athlete_id, func.count(Program.id))
+            .group_by(Program.athlete_id).all()
+        )
+        mealplan_counts = dict(
+            db.session.query(MealPlan.athlete_id, func.count(MealPlan.id))
+            .group_by(MealPlan.athlete_id).all()
+        )
+
+        athlete_stats = []
+        today_date = date.today()
+        for a in athletes:
+            jlast = journal_last.get(a.id)
+            plast = perf_last.get(a.id)
+            athlete_stats.append({
+                'id':              a.id,
+                'username':        a.username,
+                'journal_count':   journal_counts.get(a.id, 0),
+                'journal_last':    jlast,
+                'journal_days_ago': (today_date - jlast).days if jlast else None,
+                'perf_count':      perf_counts.get(a.id, 0),
+                'perf_last':       plast,
+                'perf_days_ago':   (today_date - plast).days if plast else None,
+                'program_count':   program_counts.get(a.id, 0),
+                'mealplan_count':  mealplan_counts.get(a.id, 0),
+            })
+
+        # Exercise distribution by muscle group
+        muscle_dist = db.session.query(Exercise.muscle_group, func.count(Exercise.id)) \
+            .group_by(Exercise.muscle_group).order_by(Exercise.muscle_group).all()
+
+        return render_template('coach_db_view.html',
+            athletes=athletes,
+            coaches=coaches,
+            total_journal=total_journal,
+            total_perf=total_perf,
+            total_exercises=total_exercises,
+            total_foods=total_foods,
+            total_programs=total_programs,
+            total_mealplans=total_mealplans,
+            total_athletes=total_athletes,
+            athlete_stats=athlete_stats,
+            muscle_dist=muscle_dist,
+            now=date.today(),
+        )
+
     @app.route('/coach/programming', methods=['GET', 'POST'])
     def coach_programming():
         forbidden = _require_coach()
