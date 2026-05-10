@@ -1,5 +1,6 @@
 from flask import render_template, request, redirect, url_for, flash, session, abort, jsonify
 from werkzeug.routing import BuildError
+from sqlalchemy.orm import joinedload, selectinload
 from app import db
 from app.models import User, JournalEntry, PerformanceEntry, ProgramSession, Availability, Program, ExerciseEntry, Exercise, Food, MealPlan, MealEntry, WeeklyBilanMarking, Objective, MUSCLE_GROUPS
 from datetime import date, datetime, timedelta
@@ -1538,31 +1539,45 @@ def register_routes(app):
         user = User.query.get(session['user_id'])
         if not user or user.role != 'coach':
             return jsonify({'error':'forbidden'}), 403
-        # gather performance entries for athlete, grouped by exercise and date
-        entries = PerformanceEntry.query.filter_by(athlete_id=athlete_id).order_by(PerformanceEntry.entry_date.asc()).all()
+
+        # Preload program_session + its exercises in a single query (no N+1)
+        entries = (PerformanceEntry.query
+                   .filter_by(athlete_id=athlete_id)
+                   .options(joinedload(PerformanceEntry.program_session)
+                            .selectinload(ProgramSession.exercises))
+                   .order_by(PerformanceEntry.entry_date.asc())
+                   .all())
+
+        # Preload all exercises once -> name -> muscle_group
+        muscle_by_name = {ex.name: ex.muscle_group for ex in Exercise.query.all()}
+
+        # Build (session_id, exercise_name) -> main_series_number lookup once
+        main_series_lookup = {}
+        seen_sessions = set()
+        for e in entries:
+            ps = e.program_session
+            if not ps or ps.id in seen_sessions:
+                continue
+            seen_sessions.add(ps.id)
+            for ex_entry in ps.exercises:
+                main_series_lookup[(ps.id, ex_entry.name)] = ex_entry.main_series
+
         payload = {}
         for e in entries:
             ex = e.exercise or 'Autre'
             d = e.entry_date.isoformat()
             if ex not in payload:
                 payload[ex] = {'main': {}, 'other': {}}
-            
-            # Determine if this is a main series entry
+
             is_main = False
             if e.program_session_id and e.series_number:
-                # Find the ExerciseEntry to check if this series_number is the main one
-                ps = e.program_session
-                if ps:
-                    ex_entries = [ex_entry for ex_entry in ps.exercises if ex_entry.name == ex]
-                    if ex_entries:
-                        ex_entry = ex_entries[0]
-                        is_main = (ex_entry.main_series == e.series_number)
-            
-            # Route to appropriate bucket
+                main_no = main_series_lookup.get((e.program_session_id, ex))
+                is_main = (main_no == e.series_number)
+
             bucket = 'main' if is_main else 'other'
             if d not in payload[ex][bucket]:
                 payload[ex][bucket][d] = []
-            
+
             payload[ex][bucket][d].append({
                 'reps': e.reps,
                 'load': e.load,
@@ -1570,37 +1585,25 @@ def register_routes(app):
                 'notes': e.notes,
                 'session_id': e.program_session_id
             })
-        
-        # convert to friendly structure
+
         out = {}
         for ex, data in payload.items():
-            # Get muscle group for this exercise
-            muscle_group = 'Autre'
-            if ex != 'Autre':
-                ex_record = Exercise.query.filter_by(name=ex).first()
-                if ex_record:
-                    muscle_group = ex_record.muscle_group
-            
             out[ex] = {
-                'muscle_group': muscle_group,
+                'muscle_group': muscle_by_name.get(ex, 'Autre'),
                 'main_series': [],
                 'other_series': []
             }
-            
-            # Process main series
             for d in sorted(data['main'].keys()):
                 items = data['main'][d]
-                # For main series, show exact values (not average, as there should be only one)
                 if items:
-                    item = items[0]  # Should be only one per day
+                    item = items[0]
                     out[ex]['main_series'].append({
                         'date': d,
                         'reps': item.get('reps'),
                         'load': item.get('load'),
-                        'count': len(items)
+                        'count': len(items),
+                        'notes': item.get('notes')
                     })
-            
-            # Process other series
             for d in sorted(data['other'].keys()):
                 items = data['other'][d]
                 avg_load = sum((it.get('load') or 0) for it in items) / (len(items) or 1)
@@ -1609,9 +1612,10 @@ def register_routes(app):
                     'date': d,
                     'avg_load': avg_load,
                     'avg_reps': avg_reps,
-                    'count': len(items)
+                    'count': len(items),
+                    'notes': next((it.get('notes') for it in items if it.get('notes')), None)
                 })
-        
+
         return jsonify(out)
 
     @app.route('/coach/stats/athlete/<int:athlete_id>/program/<int:program_id>/tonnage-by-muscle.json')
@@ -1880,106 +1884,71 @@ def register_routes(app):
                 PerformanceEntry.athlete_id==athlete_id,
                 PerformanceEntry.entry_date >= cutoff_180
             ).all()
-            
-            # Helper to calculate tonnage diff for a period
-            def calc_tonnage_diff(period_start, period_end, previous_start, previous_end):
-                current_perfs = [e for e in all_perfs if period_start <= e.entry_date <= period_end]
-                previous_perfs = [e for e in all_perfs if previous_start <= e.entry_date <= previous_end]
-                
-                current_tonnage = {}
-                for e in current_perfs:
-                    if not e.exercise or not e.reps or not e.load:
-                        continue
-                    ex = exercise_by_name.get(e.exercise)
-                    if not ex:
-                        continue
-                    muscle = ex.muscle_group
-                    if muscle not in current_tonnage:
-                        current_tonnage[muscle] = 0
-                    current_tonnage[muscle] += e.reps * e.load
-                
-                previous_tonnage = {}
-                for e in previous_perfs:
-                    if not e.exercise or not e.reps or not e.load:
-                        continue
-                    ex = exercise_by_name.get(e.exercise)
-                    if not ex:
-                        continue
-                    muscle = ex.muscle_group
-                    if muscle not in previous_tonnage:
-                        previous_tonnage[muscle] = 0
-                    previous_tonnage[muscle] += e.reps * e.load
-                
-                # Calculate diffs
-                all_muscles = set(current_tonnage.keys()) | set(previous_tonnage.keys())
-                tonnage_diff = {}
-                for muscle in all_muscles:
-                    current = current_tonnage.get(muscle, 0)
-                    previous = previous_tonnage.get(muscle, 0)
-                    tonnage_diff[muscle] = current - previous
-                
-                return tonnage_diff
-            
-            # Apply tonnage to all 4 summaries
-            summary_7['tonnage_diff_by_muscle'] = calc_tonnage_diff(s_start, s_end, s1_start, s1_end)
-            summary_14['tonnage_diff_by_muscle'] = calc_tonnage_diff(s_start, s_end, s2_start, s2_end)
-            summary_21['tonnage_diff_by_muscle'] = calc_tonnage_diff(s1_start, s1_end, s2_start, s2_end)
-            summary_28['tonnage_diff_by_muscle'] = calc_tonnage_diff(s1_start, s1_end, s3_start, s3_end)
-            
-            # === CALCULATE EXERCISE DETAILS BY MUSCLE FOR ALL 4 COMPARISONS ===
-            # Helper to calculate exercise details for a period
-            def calc_exercise_details(period_start, period_end, previous_start, previous_end):
-                current_perfs = [e for e in all_perfs if period_start <= e.entry_date <= period_end]
-                previous_perfs = [e for e in all_perfs if previous_start <= e.entry_date <= previous_end]
-                
-                exercise_details = {}
-                
-                # Process current period
-                for e in current_perfs:
-                    if not e.exercise or not e.reps or not e.load:
-                        continue
-                    ex = exercise_by_name.get(e.exercise)
-                    if not ex:
-                        continue
-                    muscle = ex.muscle_group
-                    
-                    if muscle not in exercise_details:
-                        exercise_details[muscle] = {}
-                    if e.exercise not in exercise_details[muscle]:
-                        exercise_details[muscle][e.exercise] = {'current': 0, 'previous': 0}
-                    
-                    exercise_details[muscle][e.exercise]['current'] += e.reps * e.load
-                
-                # Process previous period
-                for e in previous_perfs:
-                    if not e.exercise or not e.reps or not e.load:
-                        continue
-                    ex = exercise_by_name.get(e.exercise)
-                    if not ex:
-                        continue
-                    muscle = ex.muscle_group
-                    
-                    if muscle not in exercise_details:
-                        exercise_details[muscle] = {}
-                    if e.exercise not in exercise_details[muscle]:
-                        exercise_details[muscle][e.exercise] = {'current': 0, 'previous': 0}
-                    
-                    exercise_details[muscle][e.exercise]['previous'] += e.reps * e.load
-                
-                # Calculate diffs
-                for muscle in exercise_details:
-                    for exercise in exercise_details[muscle]:
-                        current = exercise_details[muscle][exercise]['current']
-                        previous = exercise_details[muscle][exercise]['previous']
-                        exercise_details[muscle][exercise]['diff'] = current - previous
-                
-                return exercise_details
-            
-            # Apply exercise details to all 4 summaries
-            summary_7['exercise_details_by_muscle'] = calc_exercise_details(s_start, s_end, s1_start, s1_end)
-            summary_14['exercise_details_by_muscle'] = calc_exercise_details(s_start, s_end, s2_start, s2_end)
-            summary_21['exercise_details_by_muscle'] = calc_exercise_details(s1_start, s1_end, s2_start, s2_end)
-            summary_28['exercise_details_by_muscle'] = calc_exercise_details(s1_start, s1_end, s3_start, s3_end)
+
+            # Single-pass bucketing: assign each entry to its week-bucket (S, S1, S2, S3 or None)
+            # then aggregate tonnage by (bucket, muscle) and exercise_details by (bucket, muscle, exercise)
+            # This replaces 8 full passes over all_perfs with ONE.
+            def _bucket_for(d):
+                if s_start <= d <= s_end:   return 'S'
+                if s1_start <= d <= s1_end: return 'S1'
+                if s2_start <= d <= s2_end: return 'S2'
+                if s3_start <= d <= s3_end: return 'S3'
+                return None
+
+            tonnage_bucket = {'S': {}, 'S1': {}, 'S2': {}, 'S3': {}}
+            details_bucket = {'S': {}, 'S1': {}, 'S2': {}, 'S3': {}}
+
+            for e in all_perfs:
+                if not e.exercise or not e.reps or not e.load:
+                    continue
+                b = _bucket_for(e.entry_date)
+                if b is None:
+                    continue
+                ex = exercise_by_name.get(e.exercise)
+                if not ex:
+                    continue
+                muscle = ex.muscle_group
+                ton = e.reps * e.load
+                tb = tonnage_bucket[b]
+                tb[muscle] = tb.get(muscle, 0) + ton
+                db_b = details_bucket[b]
+                if muscle not in db_b:
+                    db_b[muscle] = {}
+                if e.exercise not in db_b[muscle]:
+                    db_b[muscle][e.exercise] = 0
+                db_b[muscle][e.exercise] += ton
+
+            def _tonnage_diff(cur_key, prev_key):
+                cur = tonnage_bucket[cur_key]
+                prev = tonnage_bucket[prev_key]
+                muscles = set(cur) | set(prev)
+                return {m: cur.get(m, 0) - prev.get(m, 0) for m in muscles}
+
+            def _exercise_details(cur_key, prev_key):
+                cur = details_bucket[cur_key]
+                prev = details_bucket[prev_key]
+                muscles = set(cur) | set(prev)
+                out = {}
+                for m in muscles:
+                    cur_m = cur.get(m, {})
+                    prev_m = prev.get(m, {})
+                    exercises = set(cur_m) | set(prev_m)
+                    out[m] = {}
+                    for ex_name in exercises:
+                        c = cur_m.get(ex_name, 0)
+                        p = prev_m.get(ex_name, 0)
+                        out[m][ex_name] = {'current': c, 'previous': p, 'diff': c - p}
+                return out
+
+            summary_7['tonnage_diff_by_muscle']  = _tonnage_diff('S', 'S1')
+            summary_14['tonnage_diff_by_muscle'] = _tonnage_diff('S', 'S2')
+            summary_21['tonnage_diff_by_muscle'] = _tonnage_diff('S1', 'S2')
+            summary_28['tonnage_diff_by_muscle'] = _tonnage_diff('S1', 'S3')
+
+            summary_7['exercise_details_by_muscle']  = _exercise_details('S', 'S1')
+            summary_14['exercise_details_by_muscle'] = _exercise_details('S', 'S2')
+            summary_21['exercise_details_by_muscle'] = _exercise_details('S1', 'S2')
+            summary_28['exercise_details_by_muscle'] = _exercise_details('S1', 'S3')
             
             # === PRELOAD ALL EXERCISE SERIES DATA ===
             series_by_exercise = {}

@@ -138,6 +138,10 @@ class JournalEntry(db.Model):
 
     athlete = db.relationship('User', backref='journal_entries')
 
+    __table_args__ = (
+        db.Index('idx_journal_athlete_date', 'athlete_id', 'entry_date'),
+    )
+
     def __repr__(self):
         return f'<JournalEntry {self.athlete_id} {self.entry_date}>'
 
@@ -156,6 +160,11 @@ class PerformanceEntry(db.Model):
 
     athlete = db.relationship('User', backref='performance_entries')
     program_session = db.relationship('ProgramSession', backref='performance_entries', foreign_keys=[program_session_id])
+
+    __table_args__ = (
+        db.Index('idx_perf_athlete_date', 'athlete_id', 'entry_date'),
+        db.Index('idx_perf_athlete_exercise_date', 'athlete_id', 'exercise', 'entry_date'),
+    )
 
     def __repr__(self):
         return f'<PerformanceEntry {self.exercise} series {self.series_number} on {self.entry_date}>'

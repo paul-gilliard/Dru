@@ -342,23 +342,32 @@ document.addEventListener('DOMContentLoaded', function(){
   };
 
   // Muscle details are now preloaded via loadQuickData() - no separate function needed
+  // Shared in-flight cache: ensures /performance.json is fetched ONCE per athlete,
+  // then reused by populateExerciseSelect and loadPerformance.
+  let perfFetchPromise = null;
+  let perfFetchAthleteId = null;
+  function getPerformanceData(athleteId) {
+    if (perfFetchAthleteId === athleteId && perfFetchPromise) {
+      return perfFetchPromise;
+    }
+    perfFetchAthleteId = athleteId;
+    perfFetchPromise = fetch(`/coach/stats/athlete/${athleteId}/performance.json`)
+      .then(res => res.ok ? res.json() : Promise.reject(new Error('perf fetch failed: ' + res.status)));
+    return perfFetchPromise;
+  }
+
   // Load and populate all available exercises (do this only once per athlete)
   async function populateExerciseSelect(athleteId) {
     try {
       // Show the loader when starting to fetch exercises
       if (performanceLoader) performanceLoader.classList.add('show');
-      
-      const res = await fetch(`/coach/stats/athlete/${athleteId}/performance.json`);
-      if (!res.ok) {
-        if (performanceLoader) performanceLoader.classList.remove('show');
-        return;
-      }
-      const rawData = await res.json();
-      
+
+      const rawData = await getPerformanceData(athleteId);
+
       // Immediately populate perfCache with raw (unfiltered) data
       // So that renderExercise can display data while loadPerformance filters in background
       perfCache = rawData;
-      
+
       exSelect.innerHTML = '<option value="">— choisir un exercice —</option>';
       if (rawData) {
         Object.keys(rawData).sort().forEach(ex => {
@@ -381,9 +390,12 @@ document.addEventListener('DOMContentLoaded', function(){
   async function loadPerformance(athleteId){
     if (performanceLoader) performanceLoader.classList.add('show');
     try {
-      const res = await fetch(`/coach/stats/athlete/${athleteId}/performance.json`);
-      if (!res.ok) return;
-      let rawData = await res.json(); // Keep the raw data
+      let rawData;
+      try {
+        rawData = await getPerformanceData(athleteId);
+      } catch (e) {
+        return;
+      }
       
       // Now filter performance data by date range for display/cache only
       let data = rawData;
