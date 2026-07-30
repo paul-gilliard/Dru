@@ -369,7 +369,7 @@
 
         // Load unchecked bilan count on page load
         function loadBilanBadgeCount() {
-            fetch('/api/coach/bilan-hebdo/unchecked-count')
+            fetch('/api/web/coach/bilan-hebdo/unchecked-count')
                 .then(response => {
                     if (response.ok) return response.json();
                     throw new Error('Failed to fetch');

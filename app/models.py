@@ -6,14 +6,23 @@ from datetime import date, datetime
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
+    password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(16), nullable=False, default='athlete')  # 'coach' ou 'athlete'
+    display_name = db.Column(db.String(128), nullable=True)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'username': self.username,
+            'role': self.role,
+            'display_name': self.display_name or self.username,
+        }
 
     def __repr__(self):
         return f'<User {self.username} ({self.role})>'
@@ -57,6 +66,17 @@ class Program(db.Model):
     coach = db.relationship('User', foreign_keys=[coach_id], backref='programs_as_coach')
     sessions = db.relationship('ProgramSession', backref='program', cascade='all, delete-orphan', order_by='ProgramSession.day_of_week')
 
+    def to_dict(self, with_sessions=False):
+        data = {
+            'id': self.id,
+            'name': self.name,
+            'athlete_id': self.athlete_id,
+            'coach_id': self.coach_id,
+        }
+        if with_sessions:
+            data['sessions'] = [s.to_dict() for s in self.sessions]
+        return data
+
     def __repr__(self):
         return f'<Program {self.name} for {self.athlete_id}>'
 
@@ -70,6 +90,17 @@ class ProgramSession(db.Model):
     __table_args__ = (
         db.UniqueConstraint('program_id', 'day_of_week', name='uq_program_day'),
     )
+
+    def to_dict(self, with_exercises=True):
+        data = {
+            'id': self.id,
+            'program_id': self.program_id,
+            'day_of_week': self.day_of_week,
+            'session_name': self.session_name,
+        }
+        if with_exercises:
+            data['exercises'] = [e.to_dict() for e in self.exercises]
+        return data
 
     def __repr__(self):
         return f'<ProgramSession {self.program_id} day {self.day_of_week}>'
@@ -112,6 +143,24 @@ class ExerciseEntry(db.Model):
         """Return number of series"""
         return len(self.get_series_list())
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'session_id': self.session_id,
+            'position': self.position,
+            'name': self.name,
+            'sets': self.sets,
+            'reps': self.reps,
+            'rest': self.rest,
+            'rir': self.rir,
+            'intensification': self.intensification,
+            'muscle': self.muscle,
+            'remark': self.remark,
+            'series_description': self.series_description,
+            'main_series': self.main_series,
+            'series': self.get_series_list(),
+        }
+
 class JournalEntry(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -145,6 +194,27 @@ class JournalEntry(db.Model):
     def __repr__(self):
         return f'<JournalEntry {self.athlete_id} {self.entry_date}>'
 
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'athlete_id': self.athlete_id,
+            'entry_date': self.entry_date.isoformat(),
+            'weight': self.weight,
+            'protein': self.protein,
+            'carbs': self.carbs,
+            'fats': self.fats,
+            'kcals': self.kcals,
+            'water_ml': self.water_ml,
+            'steps': self.steps,
+            'sleep_hours': self.sleep_hours,
+            'digestion': self.digestion,
+            'energy': self.energy,
+            'stress': self.stress,
+            'hunger': self.hunger,
+            'food_quality': self.food_quality,
+            'menstrual_cycle': self.menstrual_cycle,
+        }
+
 class PerformanceEntry(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
@@ -168,6 +238,20 @@ class PerformanceEntry(db.Model):
 
     def __repr__(self):
         return f'<PerformanceEntry {self.exercise} series {self.series_number} on {self.entry_date}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'athlete_id': self.athlete_id,
+            'entry_date': self.entry_date.isoformat(),
+            'program_session_id': self.program_session_id,
+            'exercise': self.exercise,
+            'series_number': self.series_number,
+            'reps': self.reps,
+            'load': self.load,
+            'rpe': self.rpe,
+            'notes': self.notes,
+        }
 
 def create_default_admin():
     """
@@ -299,6 +383,30 @@ class MealPlan(db.Model):
         
         return totals
 
+    def to_dict(self, with_meals=True):
+        totals = self.get_daily_totals()
+        data = {
+            'id': self.id,
+            'name': self.name,
+            'athlete_id': self.athlete_id,
+            'coach_id': self.coach_id,
+            'meal_count': self.meal_count or 6,
+            'meal_times': [getattr(self, f'meal_time_{i}') for i in range(1, 7)],
+            'meal_labels': [getattr(self, f'meal_label_{i}') for i in range(1, 7)],
+            'totals': {
+                'kcals': totals['kcals'],
+                'proteins': totals['proteins'],
+                'lipids': totals['lipids'],
+                'carbs': totals['carbs'],
+            },
+        }
+        if with_meals:
+            meals_by_number = {}
+            for m in self.meals:
+                meals_by_number.setdefault(m.meal_number, []).append(m.to_dict())
+            data['meals_by_number'] = meals_by_number
+        return data
+
 
 class MealEntry(db.Model):
     """Entrée aliment dans un plan alimentaire"""
@@ -370,3 +478,33 @@ class Objective(db.Model):
     
     def __repr__(self):
         return f'<Objective {self.title} for athlete={self.athlete_id}>'
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'athlete_id': self.athlete_id,
+            'title': self.title,
+            'description': self.description,
+        }
+
+
+class MobileWeeklyBilanMarking(db.Model):
+    """Markings Easy Bilan Hebdo for the mobile app (separate table from web WeeklyBilanMarking)."""
+    __tablename__ = 'mobile_weekly_bilan_marking'
+    id = db.Column(db.Integer, primary_key=True)
+    athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    week_start = db.Column(db.Date, nullable=False, index=True)
+    done = db.Column(db.Boolean, nullable=False, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('athlete_id', 'week_start', name='uq_mobile_bilan_athlete_week'),
+        )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'athlete_id': self.athlete_id,
+            'week_start': self.week_start.isoformat(),
+            'done': bool(self.done),
+        }

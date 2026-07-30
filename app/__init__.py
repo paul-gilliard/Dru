@@ -2,6 +2,7 @@ import os
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
+from flask_cors import CORS
 from config import Config
 
 db = SQLAlchemy()
@@ -15,6 +16,7 @@ def create_app():
     
     db.init_app(app)
     migrate.init_app(app, db)
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
     
     # Créer les tables au démarrage si elles n'existent pas
     with app.app_context():
@@ -68,6 +70,21 @@ def create_app():
             db.session.commit()
         except Exception:
             db.session.rollback()
+
+        # Mobile API compat: display_name + password_hash width
+        try:
+            from sqlalchemy import inspect as sa_inspect3
+            inspector3 = sa_inspect3(db.engine)
+            user_columns = {col['name']: col for col in inspector3.get_columns('user')}
+            if 'display_name' not in user_columns:
+                db.session.execute(db.text("ALTER TABLE `user` ADD COLUMN display_name VARCHAR(128) NULL"))
+            # Widen password_hash if still VARCHAR(128) — werkzeug hashes can exceed 128 chars
+            db.session.execute(db.text("ALTER TABLE `user` MODIFY COLUMN password_hash VARCHAR(255) NOT NULL"))
+            db.session.commit()
+            print("✓ User table mobile-compat OK")
+        except Exception as e:
+            db.session.rollback()
+            print(f"⚠️ User mobile-compat alter skipped: {e}")
         
         # Créer l'utilisateur admin par défaut s'il n'existe pas
         from app.models import User
@@ -112,6 +129,14 @@ def create_app():
     from app import routes
     routes.register_routes(app)
 
+    # Mobile JWT API (Expo Android / iOS / Web)
+    from app.mobile_api import api_bp
+    app.register_blueprint(api_bp, url_prefix='/api')
+
+    @app.get('/health')
+    def health():
+        return {'status': 'ok', 'service': 'dru', 'mobile_api': True}
+
     # Jinja filter: formate "Rest: 0.5min" → "Repos: 0:30"
     import re, math
     def _dec_min_to_mmss(dec_str):
@@ -133,5 +158,3 @@ def create_app():
         return re.sub(r'Rest:\s*([\d.]+)\s*min', replacer, text, flags=re.IGNORECASE)
 
     return app
-
-

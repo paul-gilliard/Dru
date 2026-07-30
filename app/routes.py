@@ -3504,8 +3504,8 @@ def register_routes(app):
         db.session.commit()
         return jsonify({'success': True}), 200
 
-    # ============ BILAN HEBDO API ============
-    @app.route('/api/coach/bilan-hebdo/unchecked-count', methods=['GET'])
+    # ============ BILAN HEBDO API (web session — path distinct de l'API mobile JWT) ============
+    @app.route('/api/web/coach/bilan-hebdo/unchecked-count', methods=['GET'])
     def api_bilan_unchecked_count():
         """Get count of athletes with unchecked weekly bilan"""
         if 'user_id' not in session:
