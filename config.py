@@ -46,6 +46,8 @@ config = {
     'default': DevelopmentConfig
 }
 
-# Utiliser la config selon l'environnement (défaut: development)
-FLASK_ENV = os.environ.get('FLASK_ENV', 'development')
+# Prefer production whenever DATABASE_URL is provided (Railway, etc.)
+FLASK_ENV = os.environ.get('FLASK_ENV')
+if not FLASK_ENV:
+    FLASK_ENV = 'production' if os.environ.get('DATABASE_URL') else 'development'
 Config = config.get(FLASK_ENV, config['default'])
