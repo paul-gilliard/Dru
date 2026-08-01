@@ -636,7 +636,7 @@ def last_performance_for_exercise():
     entries = (PerformanceEntry.query
                .filter_by(athlete_id=athlete_id, exercise=exercise)
                .order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.series_number)
-               .limit(10).all())
+               .limit(40).all())
     return jsonify([e.to_dict() for e in entries])
 
 
