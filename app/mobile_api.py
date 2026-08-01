@@ -81,7 +81,14 @@ def dashboard():
             })
         return jsonify({'role': 'coach', 'athletes': summary})
 
-    program = Program.query.filter_by(athlete_id=user.id).order_by(Program.created_at.desc()).first()
+    program = (
+        Program.query.filter_by(athlete_id=user.id, is_active=True)
+        .order_by(Program.updated_at.desc(), Program.created_at.desc())
+        .first()
+        or Program.query.filter_by(athlete_id=user.id)
+        .order_by(Program.created_at.desc())
+        .first()
+    )
     today_session = None
     week_sessions = []
     if program:
@@ -308,7 +315,11 @@ def list_programs():
     athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
     if athlete_id is None:
         return jsonify({'error': 'athlete_id requis'}), 400
-    programs = Program.query.filter_by(athlete_id=athlete_id).order_by(Program.created_at.desc()).all()
+    programs = (
+        Program.query.filter_by(athlete_id=athlete_id)
+        .order_by(Program.is_active.desc(), Program.created_at.desc())
+        .all()
+    )
     return jsonify([p.to_dict() for p in programs])
 
 
@@ -329,7 +340,13 @@ def create_program():
     athlete_id = data.get('athlete_id')
     if not name or not athlete_id:
         return jsonify({'error': 'name et athlete_id requis'}), 400
-    program = Program(name=name, athlete_id=athlete_id, coach_id=request.current_user.id)
+    has_any = Program.query.filter_by(athlete_id=athlete_id).count() > 0
+    program = Program(
+        name=name,
+        athlete_id=athlete_id,
+        coach_id=request.current_user.id,
+        is_active=not has_any,
+    )
     db.session.add(program)
     db.session.commit()
     return jsonify(program.to_dict(with_sessions=True)), 201
@@ -339,7 +356,18 @@ def create_program():
 @coach_required
 def delete_program(program_id):
     program = Program.query.get_or_404(program_id)
+    athlete_id = program.athlete_id
+    was_active = bool(program.is_active)
     db.session.delete(program)
+    db.session.flush()
+    if was_active:
+        fallback = (
+            Program.query.filter_by(athlete_id=athlete_id)
+            .order_by(Program.created_at.desc())
+            .first()
+        )
+        if fallback:
+            fallback.is_active = True
     db.session.commit()
     return jsonify({'ok': True})
 
@@ -355,6 +383,22 @@ def rename_program(program_id):
     program.name = name
     db.session.commit()
     return jsonify(program.to_dict())
+
+
+@api_bp.post('/programs/<int:program_id>/activate')
+@login_required
+def activate_program(program_id):
+    """Mark a program as the athlete's current one (shown on home)."""
+    program = Program.query.get_or_404(program_id)
+    user = request.current_user
+    if user.role != 'coach' and program.athlete_id != user.id:
+        return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
+    Program.query.filter_by(athlete_id=program.athlete_id, is_active=True).update(
+        {'is_active': False}, synchronize_session=False,
+    )
+    program.is_active = True
+    db.session.commit()
+    return jsonify(program.to_dict(with_sessions=True))
 
 
 @api_bp.post('/programs/<int:program_id>/duplicate')

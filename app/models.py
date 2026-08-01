@@ -59,6 +59,7 @@ class Program(db.Model):
     name = db.Column(db.String(128), nullable=False)
     athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     coach_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
 
@@ -72,6 +73,7 @@ class Program(db.Model):
             'name': self.name,
             'athlete_id': self.athlete_id,
             'coach_id': self.coach_id,
+            'is_active': bool(self.is_active),
         }
         if with_sessions:
             data['sessions'] = [s.to_dict() for s in self.sessions]

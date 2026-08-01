@@ -85,6 +85,21 @@ def create_app():
         except Exception as e:
             db.session.rollback()
             print(f"⚠️ User mobile-compat alter skipped: {e}")
+
+        # Active program flag for athlete home / week view
+        try:
+            from sqlalchemy import inspect as sa_inspect4
+            inspector4 = sa_inspect4(db.engine)
+            program_columns = {col['name'] for col in inspector4.get_columns('program')}
+            if 'is_active' not in program_columns:
+                db.session.execute(db.text(
+                    "ALTER TABLE program ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 0"
+                ))
+                db.session.commit()
+                print("✓ program.is_active added")
+        except Exception as e:
+            db.session.rollback()
+            print(f"⚠️ program.is_active alter skipped: {e}")
         
         # Créer l'utilisateur admin par défaut s'il n'existe pas
         from app.models import User
