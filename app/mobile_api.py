@@ -1203,6 +1203,46 @@ def stats_exercise_history():
     return jsonify({'exercise': exercise, 'sessions': sessions})
 
 
+@api_bp.get('/stats/daily-activity')
+@login_required
+def stats_daily_activity():
+    """Activite jour par jour (seances + tonnage) pour la regularite / vues jour."""
+    athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
+    if athlete_id is None:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    days = max(1, min(int(request.args.get('days', 90)), 180))
+    cutoff = date.today() - timedelta(days=days - 1)
+    entries = (PerformanceEntry.query
+               .filter(PerformanceEntry.athlete_id == athlete_id,
+                       PerformanceEntry.entry_date >= cutoff)
+               .all())
+    by_date = {}
+    for e in entries:
+        d = e.entry_date.isoformat()
+        bucket = by_date.setdefault(d, {'series': 0, 'tonnage': 0.0, 'exercises': set()})
+        bucket['series'] += 1
+        if e.load is not None and e.reps is not None:
+            bucket['tonnage'] += e.load * e.reps
+        if e.exercise:
+            bucket['exercises'].add(e.exercise)
+
+    out = []
+    cur = cutoff
+    today = date.today()
+    while cur <= today:
+        key = cur.isoformat()
+        b = by_date.get(key)
+        out.append({
+            'date': key,
+            'trained': bool(b and b['series'] > 0),
+            'series_count': b['series'] if b else 0,
+            'exercise_count': len(b['exercises']) if b else 0,
+            'tonnage': round(b['tonnage'], 1) if b else 0,
+        })
+        cur += timedelta(days=1)
+    return jsonify(out)
+
+
 # -------------------------------------------------------------- FOOD BANK -
 
 @api_bp.get('/foods')
