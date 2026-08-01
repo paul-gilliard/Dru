@@ -1147,6 +1147,7 @@ def stats_exercises():
     athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
     if athlete_id is None:
         return jsonify({'error': 'athlete_id requis'}), 400
+    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
     rows = (db.session.query(
                 PerformanceEntry.exercise,
                 db.func.max(PerformanceEntry.entry_date),
@@ -1154,12 +1155,62 @@ def stats_exercises():
             .filter(PerformanceEntry.athlete_id == athlete_id)
             .group_by(PerformanceEntry.exercise)
             .order_by(db.func.max(PerformanceEntry.entry_date).desc())
-            .limit(80)
+            .limit(120)
             .all())
     return jsonify([
-        {'name': name, 'last_date': last.isoformat() if last else None, 'entries': count}
+        {
+            'name': name,
+            'muscle': muscle_by_name.get(name) or 'Autre',
+            'last_date': last.isoformat() if last else None,
+            'entries': count,
+        }
         for name, last, count in rows
     ])
+
+
+@api_bp.get('/stats/exercises-by-muscle')
+@login_required
+def stats_exercises_by_muscle():
+    """Exercices logges groupes par muscle (navigation Stats: muscle -> exercice)."""
+    athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
+    if athlete_id is None:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
+    rows = (db.session.query(
+                PerformanceEntry.exercise,
+                db.func.max(PerformanceEntry.entry_date),
+                db.func.count(PerformanceEntry.id))
+            .filter(PerformanceEntry.athlete_id == athlete_id)
+            .group_by(PerformanceEntry.exercise)
+            .all())
+    # Tonnage computed in Python to avoid NULL * load issues in SQL
+    tonnage_by_ex = {}
+    for e in PerformanceEntry.query.filter_by(athlete_id=athlete_id).all():
+        if e.load is not None and e.reps is not None:
+            tonnage_by_ex[e.exercise] = tonnage_by_ex.get(e.exercise, 0) + (e.load * e.reps)
+    by_muscle = {}
+    for name, last, count in rows:
+        muscle = muscle_by_name.get(name) or 'Autre'
+        bucket = by_muscle.setdefault(muscle, {
+            'muscle': muscle,
+            'tonnage': 0.0,
+            'exercises': [],
+        })
+        t = float(tonnage_by_ex.get(name, 0))
+        bucket['tonnage'] += t
+        bucket['exercises'].append({
+            'name': name,
+            'last_date': last.isoformat() if last else None,
+            'entries': count,
+            'tonnage': round(t, 1),
+        })
+    out = []
+    for muscle, data in by_muscle.items():
+        data['tonnage'] = round(data['tonnage'], 1)
+        data['exercises'].sort(key=lambda x: -(x['tonnage'] or 0))
+        out.append(data)
+    out.sort(key=lambda x: -x['tonnage'])
+    return jsonify(out)
 
 
 @api_bp.get('/stats/exercise-history')
@@ -1181,7 +1232,7 @@ def stats_exercise_history():
     by_date = {}
     for e in entries:
         d = e.entry_date.isoformat()
-        bucket = by_date.setdefault(d, {'loads': [], 'reps': [], 'tonnage': 0.0, 'series': 0})
+        bucket = by_date.setdefault(d, {'loads': [], 'reps': [], 'tonnage': 0.0, 'series': 0, 'rows': []})
         if e.load is not None:
             bucket['loads'].append(e.load)
         if e.reps is not None:
@@ -1189,6 +1240,12 @@ def stats_exercise_history():
         if e.load is not None and e.reps is not None:
             bucket['tonnage'] += e.load * e.reps
         bucket['series'] += 1
+        bucket['rows'].append({
+            'series_number': e.series_number,
+            'reps': e.reps,
+            'load': e.load,
+            'notes': e.notes,
+        })
 
     sessions = []
     for d, b in sorted(by_date.items()):
@@ -1199,8 +1256,107 @@ def stats_exercise_history():
             'avg_reps': round(sum(b['reps']) / len(b['reps']), 1) if b['reps'] else None,
             'tonnage': round(b['tonnage'], 1),
             'series_count': b['series'],
+            'series': b['rows'],
         })
     return jsonify({'exercise': exercise, 'sessions': sessions})
+
+
+@api_bp.get('/stats/series-breakdown')
+@login_required
+def stats_series_breakdown():
+    """Detail des series sur une periode, regroupees par jour/semaine/mois.
+    Filtrable par muscle ou exercice pour expliquer un tonnage qui monte/descend."""
+    athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
+    if athlete_id is None:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    start = _parse_date(request.args.get('start'))
+    end = _parse_date(request.args.get('end'))
+    if not start or not end:
+        return jsonify({'error': 'start et end requis (YYYY-MM-DD)'}), 400
+    if end < start:
+        start, end = end, start
+    group = (request.args.get('group') or 'day').strip().lower()
+    if group not in ('day', 'week', 'month'):
+        group = 'day'
+    muscle = (request.args.get('muscle') or '').strip() or None
+    exercise = (request.args.get('exercise') or '').strip() or None
+    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
+
+    entries = (PerformanceEntry.query
+               .filter(PerformanceEntry.athlete_id == athlete_id,
+                       PerformanceEntry.entry_date >= start,
+                       PerformanceEntry.entry_date <= end)
+               .order_by(PerformanceEntry.entry_date.asc(),
+                         PerformanceEntry.exercise.asc(),
+                         PerformanceEntry.series_number.asc())
+               .all())
+    if muscle:
+        entries = [e for e in entries if (muscle_by_name.get(e.exercise) or 'Autre') == muscle]
+    if exercise:
+        entries = [e for e in entries if e.exercise == exercise]
+
+    def bucket_key(d):
+        if group == 'month':
+            return d.strftime('%Y-%m')
+        if group == 'week':
+            monday = d - timedelta(days=d.weekday())
+            return monday.isoformat()
+        return d.isoformat()
+
+    def bucket_label(key):
+        if group == 'month':
+            y, m = key.split('-')
+            months = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+                      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre']
+            return f'{months[int(m) - 1]} {y}'
+        if group == 'week':
+            monday = date.fromisoformat(key)
+            sunday = monday + timedelta(days=6)
+            return f'{monday.strftime("%d/%m")} → {sunday.strftime("%d/%m/%Y")}'
+        d = date.fromisoformat(key)
+        days = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
+        return f'{days[d.weekday()]} {d.strftime("%d/%m/%Y")}'
+
+    buckets = {}
+    for e in entries:
+        key = bucket_key(e.entry_date)
+        b = buckets.setdefault(key, {
+            'key': key,
+            'label': bucket_label(key),
+            'tonnage': 0.0,
+            'series_count': 0,
+            'series': [],
+        })
+        tonnage = (e.load * e.reps) if (e.load is not None and e.reps is not None) else 0
+        b['tonnage'] += tonnage
+        b['series_count'] += 1
+        b['series'].append({
+            'date': e.entry_date.isoformat(),
+            'exercise': e.exercise,
+            'muscle': muscle_by_name.get(e.exercise) or 'Autre',
+            'series_number': e.series_number,
+            'reps': e.reps,
+            'load': e.load,
+            'notes': e.notes,
+            'tonnage': round(tonnage, 1) if tonnage else 0,
+        })
+
+    out = []
+    for key in sorted(buckets.keys()):
+        b = buckets[key]
+        b['tonnage'] = round(b['tonnage'], 1)
+        out.append(b)
+
+    return jsonify({
+        'start': start.isoformat(),
+        'end': end.isoformat(),
+        'group': group,
+        'muscle': muscle,
+        'exercise': exercise,
+        'buckets': out,
+        'total_tonnage': round(sum(b['tonnage'] for b in out), 1),
+        'total_series': sum(b['series_count'] for b in out),
+    })
 
 
 @api_bp.get('/stats/daily-activity')
