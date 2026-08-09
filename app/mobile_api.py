@@ -358,6 +358,12 @@ def delete_program(program_id):
     program = Program.query.get_or_404(program_id)
     athlete_id = program.athlete_id
     was_active = bool(program.is_active)
+    # Detach logged performances so cascade-deleting sessions does not hit FK errors
+    session_ids = [s.id for s in program.sessions]
+    if session_ids:
+        PerformanceEntry.query.filter(
+            PerformanceEntry.program_session_id.in_(session_ids)
+        ).update({PerformanceEntry.program_session_id: None}, synchronize_session=False)
     db.session.delete(program)
     db.session.flush()
     if was_active:
@@ -457,6 +463,9 @@ def create_session(program_id):
 @coach_required
 def delete_session(session_id):
     session_obj = ProgramSession.query.get_or_404(session_id)
+    PerformanceEntry.query.filter_by(program_session_id=session_id).update(
+        {PerformanceEntry.program_session_id: None}, synchronize_session=False
+    )
     db.session.delete(session_obj)
     db.session.commit()
     return jsonify({'ok': True})
