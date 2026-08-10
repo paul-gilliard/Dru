@@ -851,11 +851,7 @@ def _week_label(offset):
     return 'Cette sem.' if offset == 0 else f'S-{offset}'
 
 
-def _series_by_exercise(athlete_id, days=180):
-    cutoff = date.today() - timedelta(days=days)
-    entries = (PerformanceEntry.query
-               .filter(PerformanceEntry.athlete_id == athlete_id, PerformanceEntry.entry_date >= cutoff)
-               .all())
+def _series_by_exercise_from_rows(entries):
     result = {}
     for e in entries:
         by_date = result.setdefault(e.exercise, {})
@@ -863,6 +859,14 @@ def _series_by_exercise(athlete_id, days=180):
             'series_number': e.series_number, 'reps': e.reps, 'load': e.load, 'notes': e.notes,
         })
     return result
+
+
+def _series_by_exercise(athlete_id, days=180):
+    cutoff = date.today() - timedelta(days=days)
+    entries = (PerformanceEntry.query
+               .filter(PerformanceEntry.athlete_id == athlete_id, PerformanceEntry.entry_date >= cutoff)
+               .all())
+    return _series_by_exercise_from_rows(entries)
 
 
 def _last_session_date(series_by_date, start, end):
@@ -939,8 +943,7 @@ def _classify_exercise(cur_series, prev_series, cur_date, prev_date):
     }
 
 
-def _analyse_attention(athlete_id, week_a_offset, week_b_offset):
-    series_by_ex = _series_by_exercise(athlete_id)
+def _analyse_attention_from_series(series_by_ex, week_a_offset, week_b_offset):
     a_start, a_end = _week_bounds(week_a_offset)
     b_start, b_end = _week_bounds(week_b_offset)
 
@@ -962,6 +965,11 @@ def _analyse_attention(athlete_id, week_a_offset, week_b_offset):
     for key in buckets:
         buckets[key].sort(key=lambda item: item['name'])
     return buckets
+
+
+def _analyse_attention(athlete_id, week_a_offset, week_b_offset):
+    series_by_ex = _series_by_exercise(athlete_id)
+    return _analyse_attention_from_series(series_by_ex, week_a_offset, week_b_offset)
 
 
 @api_bp.get('/coach/attention-panel')
@@ -1002,11 +1010,7 @@ def _health_metrics_for_range(athlete_id, start, end):
     }
 
 
-def _muscle_tonnage_for_range(athlete_id, start, end, muscle_by_name):
-    perf = (PerformanceEntry.query
-            .filter(PerformanceEntry.athlete_id == athlete_id, PerformanceEntry.entry_date >= start,
-                    PerformanceEntry.entry_date <= end)
-            .all())
+def _muscle_tonnage_from_rows(perf, muscle_by_name):
     muscle_totals, exercise_totals = {}, {}
     for e in perf:
         if not e.reps or not e.load:
@@ -1017,6 +1021,14 @@ def _muscle_tonnage_for_range(athlete_id, start, end, muscle_by_name):
         exercise_totals.setdefault(muscle, {})
         exercise_totals[muscle][e.exercise] = exercise_totals[muscle].get(e.exercise, 0) + tonnage
     return muscle_totals, exercise_totals
+
+
+def _muscle_tonnage_for_range(athlete_id, start, end, muscle_by_name):
+    perf = (PerformanceEntry.query
+            .filter(PerformanceEntry.athlete_id == athlete_id, PerformanceEntry.entry_date >= start,
+                    PerformanceEntry.entry_date <= end)
+            .all())
+    return _muscle_tonnage_from_rows(perf, muscle_by_name)
 
 
 def _build_muscle_rows(muscle_a, ex_a, muscle_b, ex_b):
@@ -1636,18 +1648,7 @@ def _avg(values):
     return round(sum(values) / len(values), 1) if values else None
 
 
-def _weekly_metrics(athlete_id, week_start):
-    week_end = week_start + timedelta(days=6)
-
-    journal = (JournalEntry.query
-               .filter(JournalEntry.athlete_id == athlete_id,
-                       JournalEntry.entry_date >= week_start, JournalEntry.entry_date <= week_end)
-               .all())
-    perf = (PerformanceEntry.query
-            .filter(PerformanceEntry.athlete_id == athlete_id,
-                    PerformanceEntry.entry_date >= week_start, PerformanceEntry.entry_date <= week_end)
-            .all())
-
+def _weekly_metrics_from_rows(journal, perf):
     tonnage = sum((e.reps or 0) * (e.load or 0) for e in perf)
     sessions = len({e.entry_date for e in perf})
 
@@ -1661,6 +1662,21 @@ def _weekly_metrics(athlete_id, week_start):
         'sessions': sessions,
         'entries_logged': len(journal),
     }
+
+
+def _weekly_metrics(athlete_id, week_start):
+    week_end = week_start + timedelta(days=6)
+
+    journal = (JournalEntry.query
+               .filter(JournalEntry.athlete_id == athlete_id,
+                       JournalEntry.entry_date >= week_start, JournalEntry.entry_date <= week_end)
+               .all())
+    perf = (PerformanceEntry.query
+            .filter(PerformanceEntry.athlete_id == athlete_id,
+                    PerformanceEntry.entry_date >= week_start, PerformanceEntry.entry_date <= week_end)
+            .all())
+
+    return _weekly_metrics_from_rows(journal, perf)
 
 
 METRIC_LABELS = [
@@ -1681,29 +1697,80 @@ def weekly_bilan():
     today = date.today()
     current_start = _week_start(today)
     previous_start = current_start - timedelta(days=7)
-
-    athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
-    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
     current_end = current_start + timedelta(days=6)
     previous_end = previous_start + timedelta(days=6)
+    attention_cutoff = today - timedelta(days=180)
+
+    athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
+    if not athletes:
+        return jsonify([])
+    athlete_ids = [a.id for a in athletes]
+
+    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
+
+    # Requêtes groupées pour TOUS les athlètes en une fois (au lieu d'une
+    # boucle de ~9 requêtes par athlète) : évite les timeouts côté mobile
+    # quand l'équipe compte plusieurs athlètes.
+    journal_rows = (JournalEntry.query
+                     .filter(JournalEntry.athlete_id.in_(athlete_ids),
+                             JournalEntry.entry_date >= previous_start,
+                             JournalEntry.entry_date <= current_end)
+                     .all())
+    journal_by_athlete = {}
+    for j in journal_rows:
+        journal_by_athlete.setdefault(j.athlete_id, []).append(j)
+
+    perf_rows = (PerformanceEntry.query
+                 .filter(PerformanceEntry.athlete_id.in_(athlete_ids),
+                         PerformanceEntry.entry_date >= attention_cutoff)
+                 .all())
+    perf_by_athlete = {}
+    for p in perf_rows:
+        perf_by_athlete.setdefault(p.athlete_id, []).append(p)
+
+    markings = (MobileWeeklyBilanMarking.query
+                .filter(MobileWeeklyBilanMarking.athlete_id.in_(athlete_ids),
+                        MobileWeeklyBilanMarking.week_start == current_start)
+                .all())
+    marking_by_athlete = {m.athlete_id: m for m in markings}
+
+    objectives_rows = (Objective.query
+                        .filter(Objective.athlete_id.in_(athlete_ids))
+                        .order_by(Objective.athlete_id, Objective.created_at.desc())
+                        .all())
+    objectives_by_athlete = {}
+    for o in objectives_rows:
+        bucket = objectives_by_athlete.setdefault(o.athlete_id, [])
+        if len(bucket) < 5:
+            bucket.append(o)
 
     result = []
     for a in athletes:
-        current = _weekly_metrics(a.id, current_start)
-        previous = _weekly_metrics(a.id, previous_start)
+        perf_all = perf_by_athlete.get(a.id, [])
+        journal_all = journal_by_athlete.get(a.id, [])
+
+        cur_journal = [j for j in journal_all if current_start <= j.entry_date <= current_end]
+        prev_journal = [j for j in journal_all if previous_start <= j.entry_date <= previous_end]
+        cur_perf = [p for p in perf_all if current_start <= p.entry_date <= current_end]
+        prev_perf = [p for p in perf_all if previous_start <= p.entry_date <= previous_end]
+
+        current = _weekly_metrics_from_rows(cur_journal, cur_perf)
+        previous = _weekly_metrics_from_rows(prev_journal, prev_perf)
         metrics = []
         for key, label in METRIC_LABELS:
             cur_v, prev_v = current[key], previous[key]
             diff = round(cur_v - prev_v, 1) if cur_v is not None and prev_v is not None else None
             metrics.append({'key': key, 'label': label, 'current': cur_v, 'previous': prev_v, 'diff': diff})
 
-        marking = MobileWeeklyBilanMarking.query.filter_by(athlete_id=a.id, week_start=current_start).first()
-        objectives = Objective.query.filter_by(athlete_id=a.id).order_by(Objective.created_at.desc()).limit(5).all()
+        marking = marking_by_athlete.get(a.id)
+        objectives = objectives_by_athlete.get(a.id, [])
 
-        muscle_a, ex_a = _muscle_tonnage_for_range(a.id, current_start, current_end, muscle_by_name)
-        muscle_b, ex_b = _muscle_tonnage_for_range(a.id, previous_start, previous_end, muscle_by_name)
+        muscle_a, ex_a = _muscle_tonnage_from_rows(cur_perf, muscle_by_name)
+        muscle_b, ex_b = _muscle_tonnage_from_rows(prev_perf, muscle_by_name)
         muscle_rows = _build_muscle_rows(muscle_a, ex_a, muscle_b, ex_b)
-        attention = _analyse_attention(a.id, 0, 1)
+
+        series_by_ex = _series_by_exercise_from_rows(perf_all)
+        attention = _analyse_attention_from_series(series_by_ex, 0, 1)
 
         result.append({
             'athlete': a.to_dict(),
