@@ -100,6 +100,31 @@ def create_app():
         except Exception as e:
             db.session.rollback()
             print(f"⚠️ program.is_active alter skipped: {e}")
+
+        # Active meal plan flag (diet-compliance shortcut in mobile Journal)
+        try:
+            from sqlalchemy import inspect as sa_inspect5
+            inspector5 = sa_inspect5(db.engine)
+            mealplan_columns = {col['name'] for col in inspector5.get_columns('meal_plan')}
+            if 'is_active' not in mealplan_columns:
+                db.session.execute(db.text(
+                    "ALTER TABLE meal_plan ADD COLUMN is_active TINYINT(1) NOT NULL DEFAULT 0"
+                ))
+                db.session.commit()
+                print("✓ meal_plan.is_active added")
+            # Backfill: athletes with meal plans but none marked active -> activate the most recent one
+            from app.models import MealPlan
+            from sqlalchemy import distinct
+            athlete_ids_with_plans = [row[0] for row in db.session.query(distinct(MealPlan.athlete_id)).all()]
+            for aid in athlete_ids_with_plans:
+                if not MealPlan.query.filter_by(athlete_id=aid, is_active=True).first():
+                    latest = MealPlan.query.filter_by(athlete_id=aid).order_by(MealPlan.created_at.desc()).first()
+                    if latest:
+                        latest.is_active = True
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            print(f"⚠️ meal_plan.is_active alter skipped: {e}")
         
         # Créer l'utilisateur admin par défaut s'il n'existe pas
         from app.models import User

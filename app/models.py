@@ -340,6 +340,7 @@ class MealPlan(db.Model):
     name = db.Column(db.String(128), nullable=False)
     athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     coach_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    is_active = db.Column(db.Boolean, nullable=False, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -392,6 +393,7 @@ class MealPlan(db.Model):
             'name': self.name,
             'athlete_id': self.athlete_id,
             'coach_id': self.coach_id,
+            'is_active': bool(self.is_active),
             'meal_count': self.meal_count or 6,
             'meal_times': [getattr(self, f'meal_time_{i}') for i in range(1, 7)],
             'meal_labels': [getattr(self, f'meal_label_{i}') for i in range(1, 7)],

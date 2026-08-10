@@ -657,6 +657,106 @@ def delete_journal(entry_id):
     return jsonify({'ok': True})
 
 
+@api_bp.get('/journal/first-entry-date')
+@login_required
+def journal_first_entry_date():
+    """Premiere date de journal de l'athlete (borne de depart pour le
+    rattrapage Health Connect)."""
+    athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
+    if athlete_id is None:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    first = (JournalEntry.query.filter_by(athlete_id=athlete_id)
+             .order_by(JournalEntry.entry_date.asc()).first())
+    return jsonify({'first_date': first.entry_date.isoformat() if first else None})
+
+
+# Champs concernes par le rattrapage Health Connect / diete fixe : seuls ceux-la
+# sont exposes par fill-status et modifiables par bulk-import.
+BULK_IMPORT_FIELDS = ['steps', 'sleep_hours', 'weight', 'kcals', 'protein', 'carbs', 'fats']
+
+
+@api_bp.get('/journal/fill-status')
+@login_required
+def journal_fill_status():
+    """Pour chaque jour d'une plage, indique quels champs (parmi
+    BULK_IMPORT_FIELDS) sont deja renseignes, sans renvoyer les valeurs.
+    Permet au mobile de calculer le diff a importer sans retelecharger
+    tout le journal (l'endpoint /journal est plafonne a 60 lignes)."""
+    athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
+    if athlete_id is None:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    start = _parse_date(request.args.get('start'))
+    end = _parse_date(request.args.get('end'))
+    if not start or not end:
+        return jsonify({'error': 'start et end requis (YYYY-MM-DD)'}), 400
+    if end < start:
+        start, end = end, start
+
+    entries = (JournalEntry.query
+               .filter(JournalEntry.athlete_id == athlete_id,
+                       JournalEntry.entry_date >= start, JournalEntry.entry_date <= end)
+               .all())
+    by_date = {e.entry_date.isoformat(): e for e in entries}
+
+    out = []
+    cur = start
+    while cur <= end:
+        key = cur.isoformat()
+        e = by_date.get(key)
+        out.append({
+            'entry_date': key,
+            'has_steps': bool(e and e.steps is not None),
+            'has_sleep_hours': bool(e and e.sleep_hours is not None),
+            'has_weight': bool(e and e.weight is not None),
+            'has_kcals': bool(e and e.kcals is not None),
+            'has_protein': bool(e and e.protein is not None),
+            'has_carbs': bool(e and e.carbs is not None),
+            'has_fats': bool(e and e.fats is not None),
+        })
+        cur += timedelta(days=1)
+    return jsonify(out)
+
+
+@api_bp.post('/journal/bulk-import')
+@login_required
+def bulk_import_journal():
+    """Import en masse (rattrapage Health Connect ou diete fixe respectee).
+    Non destructif : pour chaque jour, un champ n'est ecrase que s'il est
+    actuellement None cote serveur, peu importe la source (Health Connect,
+    diete fixe, ou saisie manuelle plus tard)."""
+    data = request.get_json(silent=True) or {}
+    athlete_id = request.current_user.id if request.current_user.role == 'athlete' else data.get('athlete_id')
+    if not athlete_id:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    entries_in = data.get('entries') or []
+    if not isinstance(entries_in, list) or not entries_in:
+        return jsonify({'error': 'entries (liste non vide) requis'}), 400
+
+    imported_days = 0
+    imported_fields = 0
+    for item in entries_in:
+        if not isinstance(item, dict):
+            continue
+        entry_date = _parse_date(item.get('entry_date'))
+        if not entry_date:
+            continue
+        entry = JournalEntry.query.filter_by(athlete_id=athlete_id, entry_date=entry_date).first()
+        if not entry:
+            entry = JournalEntry(athlete_id=athlete_id, entry_date=entry_date)
+            db.session.add(entry)
+        day_touched = False
+        for field in BULK_IMPORT_FIELDS:
+            if field in item and item[field] is not None and getattr(entry, field) is None:
+                setattr(entry, field, item[field])
+                imported_fields += 1
+                day_touched = True
+        if day_touched:
+            imported_days += 1
+
+    db.session.commit()
+    return jsonify({'imported_days': imported_days, 'imported_fields': imported_fields})
+
+
 # ------------------------------------------------------------ PERFORMANCE -
 
 @api_bp.get('/performance')
@@ -1505,7 +1605,11 @@ def list_meal_plans():
     athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
     if athlete_id is None:
         return jsonify({'error': 'athlete_id requis'}), 400
-    plans = MealPlan.query.filter_by(athlete_id=athlete_id).order_by(MealPlan.created_at.desc()).all()
+    plans = (
+        MealPlan.query.filter_by(athlete_id=athlete_id)
+        .order_by(MealPlan.is_active.desc(), MealPlan.created_at.desc())
+        .all()
+    )
     return jsonify([p.to_dict(with_meals=False) for p in plans])
 
 
@@ -1526,8 +1630,9 @@ def create_meal_plan():
     athlete_id = data.get('athlete_id')
     if not name or not athlete_id:
         return jsonify({'error': 'name et athlete_id requis'}), 400
+    has_any = MealPlan.query.filter_by(athlete_id=athlete_id).count() > 0
     plan = MealPlan(name=name, athlete_id=athlete_id, coach_id=request.current_user.id,
-                     meal_count=data.get('meal_count', 6))
+                     meal_count=data.get('meal_count', 6), is_active=not has_any)
     db.session.add(plan)
     db.session.commit()
     return jsonify(plan.to_dict()), 201
@@ -1537,9 +1642,37 @@ def create_meal_plan():
 @coach_required
 def delete_meal_plan(plan_id):
     plan = MealPlan.query.get_or_404(plan_id)
+    athlete_id = plan.athlete_id
+    was_active = bool(plan.is_active)
     db.session.delete(plan)
+    db.session.flush()
+    if was_active:
+        fallback = (
+            MealPlan.query.filter_by(athlete_id=athlete_id)
+            .order_by(MealPlan.created_at.desc())
+            .first()
+        )
+        if fallback:
+            fallback.is_active = True
     db.session.commit()
     return jsonify({'ok': True})
+
+
+@api_bp.post('/meal-plans/<int:plan_id>/activate')
+@login_required
+def activate_meal_plan(plan_id):
+    """Mark a meal plan as the athlete's active diet (used by the Journal
+    'diète respectée' shortcut to know which macros to apply)."""
+    plan = MealPlan.query.get_or_404(plan_id)
+    user = request.current_user
+    if user.role != 'coach' and plan.athlete_id != user.id:
+        return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
+    MealPlan.query.filter_by(athlete_id=plan.athlete_id, is_active=True).update(
+        {'is_active': False}, synchronize_session=False,
+    )
+    plan.is_active = True
+    db.session.commit()
+    return jsonify(plan.to_dict())
 
 
 @api_bp.put('/meal-plans/<int:plan_id>')
