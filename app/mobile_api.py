@@ -2273,7 +2273,18 @@ def unmark_weekly_bilan():
 @coach_required
 def bilan_unchecked_count():
     current_start = _week_start(date.today())
-    total_athletes = User.query.filter_by(role='athlete').count()
-    marked = MobileWeeklyBilanMarking.query.filter_by(week_start=current_start, done=True).count()
+    if request.current_user.role == 'coach':
+        athletes = _coach_team_query(request.current_user.id).all()
+    else:
+        athletes = User.query.filter_by(role='athlete').all()
+    athlete_ids = [a.id for a in athletes]
+    total_athletes = len(athlete_ids)
+    marked = 0
+    if athlete_ids:
+        marked = MobileWeeklyBilanMarking.query.filter(
+            MobileWeeklyBilanMarking.athlete_id.in_(athlete_ids),
+            MobileWeeklyBilanMarking.week_start == current_start,
+            MobileWeeklyBilanMarking.done.is_(True),
+        ).count()
     return jsonify({'unchecked_count': max(total_athletes - marked, 0)})
 
