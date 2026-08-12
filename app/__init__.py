@@ -144,8 +144,25 @@ def create_app():
                 db.session.execute(db.text(
                     "ALTER TABLE `user` ADD COLUMN subscription_tier INT NOT NULL DEFAULT 0"
                 ))
+            if 'email' not in user_cols:
+                db.session.execute(db.text(
+                    "ALTER TABLE `user` ADD COLUMN email VARCHAR(255) NULL"
+                ))
+            # Username élargi pour stocker un email éventuel
+            try:
+                db.session.execute(db.text(
+                    "ALTER TABLE `user` MODIFY COLUMN username VARCHAR(255) NOT NULL"
+                ))
+            except Exception:
+                pass
+            try:
+                db.session.execute(db.text(
+                    "CREATE UNIQUE INDEX uq_user_email ON `user` (email)"
+                ))
+            except Exception:
+                pass
             db.session.commit()
-            print("✓ user coach_id / subscription_tier OK")
+            print("✓ user coach_id / subscription_tier / email OK")
         except Exception as e:
             db.session.rollback()
             print(f"⚠️ user association alter skipped: {e}")
@@ -185,17 +202,52 @@ def create_app():
             db.session.rollback()
             print(f"⚠️ athlete backfill skipped: {e}")
 
-        superadmin = User.query.filter_by(username='superadmin').first()
-        if not superadmin:
-            print("Creating platform admin 'superadmin'...")
-            superadmin = User(
-                username='superadmin', role='admin', display_name='Admin',
-                subscription_tier=0,
+        # Email Paul
+        try:
+            paul_email = 'paul.gilliard.8@gmail.com'
+            paul = (
+                User.query.filter(db.func.lower(User.email) == paul_email).first()
+                or User.query.filter(User.username.ilike('paul%')).first()
+                or User.query.filter(User.display_name.ilike('%paul%')).first()
             )
-            superadmin.set_password(os.environ.get('SUPERADMIN_PASSWORD', 'superadmin123'))
-            db.session.add(superadmin)
-            db.session.commit()
-            print("✓ superadmin created (change password in prod)")
+            if paul:
+                conflict = User.query.filter(
+                    db.func.lower(User.email) == paul_email, User.id != paul.id,
+                ).first()
+                if not conflict:
+                    paul.email = paul_email
+                    db.session.commit()
+                    print(f"✓ email Paul → {paul_email} (user #{paul.id})")
+        except Exception as e:
+            db.session.rollback()
+            print(f"⚠️ Paul email skipped: {e}")
+
+        # Compte admin plateforme : Superadmin
+        platform_admin_password = os.environ.get('SUPERADMIN_PASSWORD', '14785commePAUL!')
+        try:
+            platform_admin = (
+                User.query.filter_by(username='Superadmin').first()
+                or User.query.filter(db.func.lower(User.username) == 'superadmin').first()
+            )
+            if platform_admin:
+                platform_admin.username = 'Superadmin'
+                platform_admin.display_name = 'Superadmin'
+                platform_admin.role = 'admin'
+                platform_admin.set_password(platform_admin_password)
+                db.session.commit()
+                print("✓ Superadmin mis à jour")
+            else:
+                platform_admin = User(
+                    username='Superadmin', role='admin', display_name='Superadmin',
+                    subscription_tier=0,
+                )
+                platform_admin.set_password(platform_admin_password)
+                db.session.add(platform_admin)
+                db.session.commit()
+                print("✓ Superadmin créé")
+        except Exception as e:
+            db.session.rollback()
+            print(f"⚠️ Superadmin skipped: {e}")
         
         # Seed exercises and foods if tables are empty
         from app.models import Exercise, Food

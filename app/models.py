@@ -5,7 +5,10 @@ from datetime import date, datetime
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(64), unique=True, nullable=False)
+    # Pseudo / login legacy (peut être un email pour les nouveaux athlètes)
+    username = db.Column(db.String(255), unique=True, nullable=False)
+    # Email unique (nullable pour comptes legacy sans mail)
+    email = db.Column(db.String(255), unique=True, nullable=True, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     # 'athlete' | 'coach' | 'admin'
     role = db.Column(db.String(16), nullable=False, default='athlete')
@@ -34,6 +37,7 @@ class User(db.Model):
         data = {
             'id': self.id,
             'username': self.username,
+            'email': self.email,
             'role': self.role,
             'display_name': self.display_name or self.username,
             'coach_id': self.coach_id,

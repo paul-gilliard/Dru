@@ -1,4 +1,5 @@
 from datetime import datetime, date, timedelta
+import re
 
 from flask import Blueprint, request, jsonify
 
@@ -11,6 +12,32 @@ from app.models import (
 )
 
 api_bp = Blueprint('api', __name__)
+
+_EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+
+
+def _normalize_email(value):
+    return (value or '').strip().lower() or None
+
+
+def _is_valid_email(value):
+    return bool(value and _EMAIL_RE.match(value))
+
+
+def _find_user_by_login(login):
+    """Connexion par email ou username (insensible à la casse pour l'email)."""
+    raw = (login or '').strip()
+    if not raw:
+        return None
+    email = _normalize_email(raw)
+    user = None
+    if _is_valid_email(email):
+        user = User.query.filter(db.func.lower(User.email) == email).first()
+    if not user:
+        user = User.query.filter_by(username=raw).first()
+    if not user:
+        user = User.query.filter(db.func.lower(User.username) == raw.lower()).first()
+    return user
 
 
 def _parse_date(value, default=None):
@@ -133,13 +160,13 @@ def _enforce_coach_quota_or_trim(coach, prefer_keep_ids=None):
 @api_bp.post('/auth/login')
 def login():
     data = request.get_json(silent=True) or {}
-    username = (data.get('username') or '').strip()
+    login_id = (data.get('username') or data.get('email') or '').strip()
     password = data.get('password') or ''
 
-    user = User.query.filter_by(username=username).first()
+    user = _find_user_by_login(login_id)
     if not user or not (
         user.check_password(password)
-        or (username == 'admin' and password == 'azerty')
+        or (login_id.lower() in ('admin',) and password == 'azerty')
     ):
         return jsonify({'error': 'Identifiants incorrects'}), 401
 
@@ -149,18 +176,24 @@ def login():
 
 @api_bp.post('/auth/register')
 def register():
-    """Inscription autonome athlète."""
+    """Inscription autonome athlète — l'identifiant est l'email."""
     data = request.get_json(silent=True) or {}
-    username = (data.get('username') or '').strip()
+    email = _normalize_email(data.get('email') or data.get('username'))
     password = data.get('password') or ''
-    display_name = (data.get('display_name') or '').strip() or username
-    if not username or not password:
-        return jsonify({'error': 'username et password requis'}), 400
+    display_name = (data.get('display_name') or '').strip()
+    if not email or not password:
+        return jsonify({'error': 'email et password requis'}), 400
+    if not _is_valid_email(email):
+        return jsonify({'error': 'Adresse email invalide'}), 400
     if len(password) < 4:
         return jsonify({'error': 'Mot de passe trop court'}), 400
-    if User.query.filter_by(username=username).first():
-        return jsonify({'error': 'Ce nom d\'utilisateur existe déjà'}), 409
-    user = User(username=username, role='athlete', display_name=display_name)
+    if User.query.filter(db.func.lower(User.email) == email).first():
+        return jsonify({'error': 'Cette adresse email est déjà utilisée'}), 409
+    if User.query.filter(db.func.lower(User.username) == email).first():
+        return jsonify({'error': 'Cette adresse email est déjà utilisée'}), 409
+    if not display_name:
+        display_name = email.split('@')[0]
+    user = User(username=email, email=email, role='athlete', display_name=display_name)
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
@@ -263,7 +296,7 @@ def list_athletes():
 @api_bp.get('/coach/athletes/search')
 @coach_required
 def search_athletes():
-    """Recherche d'athlètes par nom (pour invitation). Exclut ceux déjà coachés."""
+    """Recherche d'athlètes par nom, username ou email. Exclut ceux déjà coachés."""
     q = (request.args.get('q') or '').strip()
     if len(q) < 2:
         return jsonify([])
@@ -272,7 +305,11 @@ def search_athletes():
         User.query.filter(
             User.role == 'athlete',
             User.coach_id.is_(None),
-            db.or_(User.display_name.ilike(like), User.username.ilike(like)),
+            db.or_(
+                User.display_name.ilike(like),
+                User.username.ilike(like),
+                User.email.ilike(like),
+            ),
         )
         .order_by(User.display_name, User.username)
         .limit(20)
@@ -435,20 +472,30 @@ def list_users():
 def create_user():
     data = request.get_json(silent=True) or {}
     username = (data.get('username') or '').strip()
+    email = _normalize_email(data.get('email'))
     password = data.get('password') or ''
     role = data.get('role') or 'athlete'
     display_name = (data.get('display_name') or '').strip() or username
     subscription_tier = int(data.get('subscription_tier') or 0)
 
+    # Athlète : l'identifiant est l'email
+    if role == 'athlete' and not email and _is_valid_email(_normalize_email(username)):
+        email = _normalize_email(username)
+        username = email
+
     if not username or not password:
         return jsonify({'error': 'username et password requis'}), 400
     if role not in ('athlete', 'coach', 'admin'):
         return jsonify({'error': 'role invalide'}), 400
-    if User.query.filter_by(username=username).first():
+    if email and not _is_valid_email(email):
+        return jsonify({'error': 'Adresse email invalide'}), 400
+    if email and User.query.filter(db.func.lower(User.email) == email).first():
+        return jsonify({'error': 'Cette adresse email est déjà utilisée'}), 409
+    if User.query.filter(db.func.lower(User.username) == username.lower()).first():
         return jsonify({'error': 'Ce nom d\'utilisateur existe déjà'}), 409
 
     user = User(
-        username=username, role=role, display_name=display_name,
+        username=username, email=email, role=role, display_name=display_name,
         subscription_tier=subscription_tier if role == 'coach' else 0,
     )
     user.set_password(password)
@@ -471,6 +518,17 @@ def update_user(user_id):
         user.display_name = (data.get('display_name') or '').strip() or user.username
     if 'password' in data and data['password']:
         user.set_password(data['password'])
+    if 'email' in data:
+        email = _normalize_email(data.get('email'))
+        if email and not _is_valid_email(email):
+            return jsonify({'error': 'Adresse email invalide'}), 400
+        if email:
+            conflict = User.query.filter(
+                db.func.lower(User.email) == email, User.id != user.id,
+            ).first()
+            if conflict:
+                return jsonify({'error': 'Cette adresse email est déjà utilisée'}), 409
+        user.email = email
     if 'role' in data and data['role'] in ('athlete', 'coach', 'admin'):
         user.role = data['role']
     if user.role == 'coach' and 'subscription_tier' in data:
