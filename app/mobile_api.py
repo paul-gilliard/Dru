@@ -3,11 +3,11 @@ from datetime import datetime, date, timedelta
 from flask import Blueprint, request, jsonify
 
 from app import db
-from app.mobile_auth import generate_token, login_required, coach_required
+from app.mobile_auth import generate_token, login_required, coach_required, admin_required
 from app.models import (
     User, Availability, Program, ProgramSession, ExerciseEntry,
     JournalEntry, PerformanceEntry, Exercise, Food, MealPlan, MealEntry,
-    Objective, MobileWeeklyBilanMarking, MUSCLE_GROUPS,
+    Objective, MobileWeeklyBilanMarking, CoachingInvitation, MUSCLE_GROUPS,
 )
 
 api_bp = Blueprint('api', __name__)
@@ -22,13 +22,110 @@ def _parse_date(value, default=None):
         return default
 
 
+def _is_staff(user=None):
+    u = user or request.current_user
+    return u.role in ('coach', 'admin')
+
+
 def _scope_athlete_id(requested_id=None):
-    """Un coach peut consulter n'importe quel athlete_id passÃ© en paramÃ¨tre.
-    Un athlÃ¨te est toujours restreint Ã  ses propres donnÃ©es."""
+    """Admin : n'importe quel athlete_id.
+    Coach : uniquement un athlète de son équipe.
+    Athlète : toujours soi-même."""
     user = request.current_user
-    if user.role == 'coach':
+    if user.role == 'admin':
         return int(requested_id) if requested_id else None
+    if user.role == 'coach':
+        if not requested_id:
+            return None
+        aid = int(requested_id)
+        owned = User.query.filter_by(id=aid, role='athlete', coach_id=user.id).first()
+        return aid if owned else None
     return user.id
+
+
+def _coach_team_query(coach_id):
+    return User.query.filter_by(role='athlete', coach_id=coach_id)
+
+
+def _purge_user_data(user_id):
+    """Supprime / détache toutes les données liées avant delete User (évite les FK)."""
+    CoachingInvitation.query.filter(
+        (CoachingInvitation.coach_id == user_id) | (CoachingInvitation.athlete_id == user_id)
+    ).delete(synchronize_session=False)
+    User.query.filter_by(coach_id=user_id).update(
+        {'coach_id': None, 'coach_associated_at': None}, synchronize_session=False,
+    )
+
+    programs = Program.query.filter_by(athlete_id=user_id).all()
+    for program in programs:
+        session_ids = [s.id for s in program.sessions]
+        if session_ids:
+            PerformanceEntry.query.filter(
+                PerformanceEntry.program_session_id.in_(session_ids)
+            ).update({PerformanceEntry.program_session_id: None}, synchronize_session=False)
+        db.session.delete(program)
+
+    Program.query.filter_by(coach_id=user_id).update({'coach_id': None}, synchronize_session=False)
+
+    plan_ids = [p.id for p in MealPlan.query.filter_by(athlete_id=user_id).all()]
+    if plan_ids:
+        MealEntry.query.filter(MealEntry.meal_plan_id.in_(plan_ids)).delete(synchronize_session=False)
+    MealPlan.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
+    MealPlan.query.filter_by(coach_id=user_id).update({'coach_id': None}, synchronize_session=False)
+
+    MobileWeeklyBilanMarking.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
+    JournalEntry.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
+    PerformanceEntry.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
+    Objective.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
+
+
+def _athlete_summary(athlete):
+    last_journal = (JournalEntry.query.filter_by(athlete_id=athlete.id)
+                    .order_by(JournalEntry.entry_date.desc()).first())
+    return {
+        'athlete': athlete.to_dict(),
+        'last_journal_date': last_journal.entry_date.isoformat() if last_journal else None,
+        'objectives_count': Objective.query.filter_by(athlete_id=athlete.id).count(),
+        'programs_count': Program.query.filter_by(athlete_id=athlete.id).count(),
+    }
+
+
+def _enforce_coach_quota_or_trim(coach, prefer_keep_ids=None):
+    """Si hors quota : garde prefer_keep_ids si fourni, sinon retire les plus récents."""
+    limit = coach.athlete_limit()
+    if limit is None:
+        return []
+    athletes = (
+        _coach_team_query(coach.id)
+        .order_by(User.coach_associated_at.desc(), User.id.desc())
+        .all()
+    )
+    if len(athletes) <= limit:
+        return []
+    if prefer_keep_ids is not None:
+        keep = set(int(x) for x in prefer_keep_ids)
+        kept_ids = set()
+        for a in athletes:
+            if a.id in keep and len(kept_ids) < limit:
+                kept_ids.add(a.id)
+        for a in athletes:
+            if len(kept_ids) >= limit:
+                break
+            if a.id not in kept_ids:
+                kept_ids.add(a.id)
+        removed = []
+        for a in athletes:
+            if a.id not in kept_ids:
+                a.coach_id = None
+                a.coach_associated_at = None
+                removed.append(a.id)
+        return removed
+    removed = []
+    for a in athletes[limit:]:
+        a.coach_id = None
+        a.coach_associated_at = None
+        removed.append(a.id)
+    return removed
 
 
 # ---------------------------------------------------------------- AUTH -----
@@ -40,7 +137,6 @@ def login():
     password = data.get('password') or ''
 
     user = User.query.filter_by(username=username).first()
-    # Align with web login bypass used in production for the default coach
     if not user or not (
         user.check_password(password)
         or (username == 'admin' and password == 'azerty')
@@ -49,6 +145,27 @@ def login():
 
     token = generate_token(user)
     return jsonify({'token': token, 'user': user.to_dict()})
+
+
+@api_bp.post('/auth/register')
+def register():
+    """Inscription autonome athlète."""
+    data = request.get_json(silent=True) or {}
+    username = (data.get('username') or '').strip()
+    password = data.get('password') or ''
+    display_name = (data.get('display_name') or '').strip() or username
+    if not username or not password:
+        return jsonify({'error': 'username et password requis'}), 400
+    if len(password) < 4:
+        return jsonify({'error': 'Mot de passe trop court'}), 400
+    if User.query.filter_by(username=username).first():
+        return jsonify({'error': 'Ce nom d\'utilisateur existe déjà'}), 409
+    user = User(username=username, role='athlete', display_name=display_name)
+    user.set_password(password)
+    db.session.add(user)
+    db.session.commit()
+    token = generate_token(user)
+    return jsonify({'token': token, 'user': user.to_dict()}), 201
 
 
 @api_bp.get('/auth/me')
@@ -65,21 +182,22 @@ def dashboard():
     user = request.current_user
     today = date.today()
 
-    if user.role == 'coach':
-        athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
-        summary = []
-        for a in athletes:
-            last_journal = (JournalEntry.query.filter_by(athlete_id=a.id)
-                             .order_by(JournalEntry.entry_date.desc()).first())
-            objectives_count = Objective.query.filter_by(athlete_id=a.id).count()
-            programs_count = Program.query.filter_by(athlete_id=a.id).count()
-            summary.append({
-                'athlete': a.to_dict(),
-                'last_journal_date': last_journal.entry_date.isoformat() if last_journal else None,
-                'objectives_count': objectives_count,
-                'programs_count': programs_count,
-            })
-        return jsonify({'role': 'coach', 'athletes': summary})
+    if user.role in ('coach', 'admin'):
+        if user.role == 'admin':
+            athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
+        else:
+            athletes = _coach_team_query(user.id).order_by(User.username).all()
+        summary = [_athlete_summary(a) for a in athletes]
+        limit = user.athlete_limit() if user.role == 'coach' else None
+        over_quota = bool(user.role == 'coach' and limit is not None and len(athletes) > limit)
+        return jsonify({
+            'role': user.role,
+            'athletes': summary,
+            'subscription_tier': int(user.subscription_tier or 0) if user.role == 'coach' else None,
+            'athlete_limit': limit,
+            'athlete_count': len(athletes),
+            'over_quota': over_quota,
+        })
 
     program = (
         Program.query.filter_by(athlete_id=user.id, is_active=True)
@@ -109,6 +227,10 @@ def dashboard():
     last_journal = (JournalEntry.query.filter_by(athlete_id=user.id)
                      .order_by(JournalEntry.entry_date.desc()).first())
     today_journal = JournalEntry.query.filter_by(athlete_id=user.id, entry_date=today).first()
+    pending_invites = (
+        CoachingInvitation.query.filter_by(athlete_id=user.id, status='pending')
+        .order_by(CoachingInvitation.created_at.desc()).all()
+    )
 
     return jsonify({
         'role': 'athlete',
@@ -119,6 +241,9 @@ def dashboard():
         'objectives': [o.to_dict() for o in objectives],
         'last_journal': last_journal.to_dict() if last_journal else None,
         'has_logged_today': today_journal is not None,
+        'pending_invitations': [i.to_dict() for i in pending_invites],
+        'coach_id': user.coach_id,
+        'coach_name': (user.coach.display_name or user.coach.username) if user.coach else None,
     })
 
 
@@ -127,97 +252,282 @@ def dashboard():
 @api_bp.get('/coach/athletes')
 @coach_required
 def list_athletes():
-    athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
+    user = request.current_user
+    if user.role == 'admin':
+        athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
+    else:
+        athletes = _coach_team_query(user.id).order_by(User.username).all()
     return jsonify([a.to_dict() for a in athletes])
 
 
-@api_bp.post('/coach/athletes')
+@api_bp.get('/coach/athletes/search')
 @coach_required
-def create_athlete():
-    data = request.get_json(silent=True) or {}
-    username = (data.get('username') or '').strip()
-    password = data.get('password') or ''
-    display_name = (data.get('display_name') or '').strip() or username
+def search_athletes():
+    """Recherche d'athlètes par nom (pour invitation). Exclut ceux déjà coachés."""
+    q = (request.args.get('q') or '').strip()
+    if len(q) < 2:
+        return jsonify([])
+    like = f'%{q}%'
+    rows = (
+        User.query.filter(
+            User.role == 'athlete',
+            User.coach_id.is_(None),
+            db.or_(User.display_name.ilike(like), User.username.ilike(like)),
+        )
+        .order_by(User.display_name, User.username)
+        .limit(20)
+        .all()
+    )
+    return jsonify([a.to_dict() for a in rows])
 
-    if not username or not password:
-        return jsonify({'error': 'username et password requis'}), 400
-    if User.query.filter_by(username=username).first():
-        return jsonify({'error': 'Ce nom d\u2019utilisateur existe dÃ©jÃ '}), 409
 
-    athlete = User(username=username, role='athlete', display_name=display_name)
-    athlete.set_password(password)
-    db.session.add(athlete)
-    db.session.commit()
-    return jsonify(athlete.to_dict()), 201
-
-
-@api_bp.delete('/coach/athletes/<int:athlete_id>')
+@api_bp.delete('/coach/athletes/<int:athlete_id>/unlink')
 @coach_required
-def delete_athlete(athlete_id):
+def unlink_athlete(athlete_id):
+    """Retire l'athlète de l'équipe (ne supprime pas le compte)."""
+    user = request.current_user
     athlete = User.query.get_or_404(athlete_id)
     if athlete.role != 'athlete':
         return jsonify({'error': 'Utilisateur non modifiable'}), 400
-    db.session.delete(athlete)
+    if user.role == 'coach' and athlete.coach_id != user.id:
+        return jsonify({'error': 'Cet athlète n\'est pas dans ton équipe'}), 403
+    athlete.coach_id = None
+    athlete.coach_associated_at = None
+    if user.role == 'coach':
+        CoachingInvitation.query.filter_by(
+            coach_id=user.id, athlete_id=athlete_id, status='pending',
+        ).update({'status': 'refused'}, synchronize_session=False)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@api_bp.post('/coach/quota/resolve')
+@coach_required
+def resolve_quota():
+    """Coach hors quota : choisit quels athlètes garder (IDs). Les autres sont détachés."""
+    user = request.current_user
+    if user.role != 'coach':
+        return jsonify({'error': 'Réservé au coach'}), 403
+    data = request.get_json(silent=True) or {}
+    keep_ids = data.get('keep_athlete_ids') or []
+    limit = user.athlete_limit()
+    if limit is not None and len(keep_ids) > limit:
+        return jsonify({'error': f'Tu ne peux garder que {limit} athlète(s)'}), 400
+    removed = _enforce_coach_quota_or_trim(user, prefer_keep_ids=keep_ids)
+    db.session.commit()
+    return jsonify({'ok': True, 'removed_athlete_ids': removed})
+
+
+# ---------------------------------------------------------- INVITATIONS ---
+
+@api_bp.post('/coach/invitations')
+@coach_required
+def create_invitation():
+    user = request.current_user
+    if user.role != 'coach':
+        return jsonify({'error': 'Seul un coach peut inviter'}), 403
+    data = request.get_json(silent=True) or {}
+    athlete_id = data.get('athlete_id')
+    if not athlete_id:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    athlete = User.query.get(athlete_id)
+    if not athlete or athlete.role != 'athlete':
+        return jsonify({'error': 'Athlète introuvable'}), 404
+    if athlete.coach_id:
+        return jsonify({'error': 'Cet athlète a déjà un coach'}), 409
+    limit = user.athlete_limit()
+    current_count = _coach_team_query(user.id).count()
+    if limit is not None and current_count >= limit:
+        return jsonify({
+            'error': f'Quota atteint ({current_count}/{limit}). Augmente ton abonnement ou retire un athlète.',
+        }), 403
+    existing = CoachingInvitation.query.filter_by(
+        coach_id=user.id, athlete_id=athlete.id, status='pending',
+    ).first()
+    if existing:
+        return jsonify(existing.to_dict()), 200
+    inv = CoachingInvitation(coach_id=user.id, athlete_id=athlete.id, status='pending')
+    db.session.add(inv)
+    db.session.commit()
+    return jsonify(inv.to_dict()), 201
+
+
+@api_bp.get('/coach/invitations')
+@coach_required
+def list_coach_invitations():
+    user = request.current_user
+    if user.role != 'coach':
+        return jsonify([])
+    rows = (
+        CoachingInvitation.query.filter_by(coach_id=user.id, status='pending')
+        .order_by(CoachingInvitation.created_at.desc()).all()
+    )
+    return jsonify([i.to_dict() for i in rows])
+
+
+@api_bp.get('/athlete/invitations')
+@login_required
+def list_athlete_invitations():
+    user = request.current_user
+    if user.role != 'athlete':
+        return jsonify([])
+    rows = (
+        CoachingInvitation.query.filter_by(athlete_id=user.id, status='pending')
+        .order_by(CoachingInvitation.created_at.desc()).all()
+    )
+    return jsonify([i.to_dict() for i in rows])
+
+
+@api_bp.post('/athlete/invitations/<int:invitation_id>/accept')
+@login_required
+def accept_invitation(invitation_id):
+    user = request.current_user
+    if user.role != 'athlete':
+        return jsonify({'error': 'Réservé à l\'athlète'}), 403
+    inv = CoachingInvitation.query.get_or_404(invitation_id)
+    if inv.athlete_id != user.id or inv.status != 'pending':
+        return jsonify({'error': 'Invitation invalide'}), 400
+    if user.coach_id:
+        return jsonify({'error': 'Tu as déjà un coach'}), 409
+    coach = User.query.get(inv.coach_id)
+    if not coach or coach.role != 'coach':
+        return jsonify({'error': 'Coach introuvable'}), 404
+    limit = coach.athlete_limit()
+    if limit is not None and _coach_team_query(coach.id).count() >= limit:
+        return jsonify({'error': 'Ce coach a atteint son quota d\'athlètes'}), 403
+    user.coach_id = coach.id
+    user.coach_associated_at = datetime.utcnow()
+    inv.status = 'accepted'
+    CoachingInvitation.query.filter(
+        CoachingInvitation.athlete_id == user.id,
+        CoachingInvitation.status == 'pending',
+        CoachingInvitation.id != inv.id,
+    ).update({'status': 'refused'}, synchronize_session=False)
+    db.session.commit()
+    return jsonify({'ok': True, 'user': user.to_dict()})
+
+
+@api_bp.post('/athlete/invitations/<int:invitation_id>/refuse')
+@login_required
+def refuse_invitation(invitation_id):
+    user = request.current_user
+    if user.role != 'athlete':
+        return jsonify({'error': 'Réservé à l\'athlète'}), 403
+    inv = CoachingInvitation.query.get_or_404(invitation_id)
+    if inv.athlete_id != user.id or inv.status != 'pending':
+        return jsonify({'error': 'Invitation invalide'}), 400
+    inv.status = 'refused'
     db.session.commit()
     return jsonify({'ok': True})
 
 
 # ------------------------------------------------------------------ USERS ---
 
-@api_bp.get('/coach/users')
-@coach_required
+@api_bp.get('/admin/users')
+@admin_required
 def list_users():
     users = User.query.order_by(User.role.desc(), User.username).all()
     return jsonify([u.to_dict() for u in users])
 
 
-@api_bp.post('/coach/users')
-@coach_required
+@api_bp.post('/admin/users')
+@admin_required
 def create_user():
     data = request.get_json(silent=True) or {}
     username = (data.get('username') or '').strip()
     password = data.get('password') or ''
     role = data.get('role') or 'athlete'
     display_name = (data.get('display_name') or '').strip() or username
+    subscription_tier = int(data.get('subscription_tier') or 0)
 
     if not username or not password:
         return jsonify({'error': 'username et password requis'}), 400
-    if role not in ('athlete', 'coach'):
+    if role not in ('athlete', 'coach', 'admin'):
         return jsonify({'error': 'role invalide'}), 400
     if User.query.filter_by(username=username).first():
-        return jsonify({'error': 'Ce nom d\u2019utilisateur existe dÃ©jÃ '}), 409
+        return jsonify({'error': 'Ce nom d\'utilisateur existe déjà'}), 409
 
-    user = User(username=username, role=role, display_name=display_name)
+    user = User(
+        username=username, role=role, display_name=display_name,
+        subscription_tier=subscription_tier if role == 'coach' else 0,
+    )
     user.set_password(password)
+    if role == 'athlete' and data.get('coach_id'):
+        coach = User.query.filter_by(id=int(data['coach_id']), role='coach').first()
+        if coach:
+            user.coach_id = coach.id
+            user.coach_associated_at = datetime.utcnow()
     db.session.add(user)
     db.session.commit()
     return jsonify(user.to_dict()), 201
 
 
-@api_bp.delete('/coach/users/<int:user_id>')
-@coach_required
+@api_bp.put('/admin/users/<int:user_id>')
+@admin_required
+def update_user(user_id):
+    user = User.query.get_or_404(user_id)
+    data = request.get_json(silent=True) or {}
+    if 'display_name' in data:
+        user.display_name = (data.get('display_name') or '').strip() or user.username
+    if 'password' in data and data['password']:
+        user.set_password(data['password'])
+    if 'role' in data and data['role'] in ('athlete', 'coach', 'admin'):
+        user.role = data['role']
+    if user.role == 'coach' and 'subscription_tier' in data:
+        tier = int(data['subscription_tier'])
+        if tier not in (0, 1, 2, 3):
+            return jsonify({'error': 'subscription_tier invalide (0-3)'}), 400
+        user.subscription_tier = tier
+        if data.get('auto_trim'):
+            _enforce_coach_quota_or_trim(user)
+    if user.role == 'athlete' and 'coach_id' in data:
+        coach_id = data.get('coach_id')
+        if coach_id in (None, '', 0, 'null'):
+            user.coach_id = None
+            user.coach_associated_at = None
+        else:
+            coach = User.query.filter_by(id=int(coach_id), role='coach').first()
+            if not coach:
+                return jsonify({'error': 'Coach introuvable'}), 404
+            user.coach_id = coach.id
+            user.coach_associated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify(user.to_dict())
+
+
+@api_bp.delete('/admin/users/<int:user_id>')
+@admin_required
 def delete_user(user_id):
     user = User.query.get_or_404(user_id)
     if user.id == request.current_user.id:
-        return jsonify({'error': 'Impossible de te supprimer toi-mÃªme'}), 400
-
-    # Purge manuelle des donnÃ©es liÃ©es (l'athlÃ¨te comme le coach peuvent
-    # Ãªtre rÃ©fÃ©rencÃ©s par des programmes/plans qu'ils ont crÃ©Ã©s).
-    plan_ids = [p.id for p in MealPlan.query.filter_by(athlete_id=user_id).all()]
-    if plan_ids:
-        MealEntry.query.filter(MealEntry.meal_plan_id.in_(plan_ids)).delete(synchronize_session=False)
-    MealPlan.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
-    MealPlan.query.filter_by(coach_id=user_id).update({'coach_id': None}, synchronize_session=False)
-    MobileWeeklyBilanMarking.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
-    Program.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
-    Program.query.filter_by(coach_id=user_id).update({'coach_id': None}, synchronize_session=False)
-    JournalEntry.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
-    PerformanceEntry.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
-    Objective.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
-
-    db.session.delete(user)
-    db.session.commit()
+        return jsonify({'error': 'Impossible de te supprimer toi-même'}), 400
+    try:
+        _purge_user_data(user_id)
+        db.session.delete(user)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': f'Suppression impossible : {e}'}), 500
     return jsonify({'ok': True})
+
+
+# Compat anciennes routes
+@api_bp.get('/coach/users')
+@admin_required
+def list_users_legacy():
+    return list_users()
+
+
+@api_bp.post('/coach/users')
+@admin_required
+def create_user_legacy():
+    return create_user()
+
+
+@api_bp.delete('/coach/users/<int:user_id>')
+@admin_required
+def delete_user_legacy(user_id):
+    return delete_user(user_id)
 
 
 # ------------------------------------------------------------ OBJECTIVES ---
@@ -251,7 +561,7 @@ def create_objective():
 @login_required
 def update_objective(objective_id):
     obj = Objective.query.get_or_404(objective_id)
-    if request.current_user.role != 'coach' and obj.athlete_id != request.current_user.id:
+    if not _is_staff() and obj.athlete_id != request.current_user.id:
         return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
     data = request.get_json(silent=True) or {}
     if 'title' in data:
@@ -266,7 +576,7 @@ def update_objective(objective_id):
 @login_required
 def delete_objective(objective_id):
     obj = Objective.query.get_or_404(objective_id)
-    if request.current_user.role != 'coach' and obj.athlete_id != request.current_user.id:
+    if not _is_staff() and obj.athlete_id != request.current_user.id:
         return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
     db.session.delete(obj)
     db.session.commit()
@@ -327,7 +637,7 @@ def list_programs():
 @login_required
 def get_program(program_id):
     program = Program.query.get_or_404(program_id)
-    if request.current_user.role != 'coach' and program.athlete_id != request.current_user.id:
+    if not _is_staff() and program.athlete_id != request.current_user.id:
         return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
     return jsonify(program.to_dict(with_sessions=True))
 
@@ -397,7 +707,7 @@ def activate_program(program_id):
     """Mark a program as the athlete's current one (shown on home)."""
     program = Program.query.get_or_404(program_id)
     user = request.current_user
-    if user.role != 'coach' and program.athlete_id != user.id:
+    if not _is_staff(user) and program.athlete_id != user.id:
         return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
     Program.query.filter_by(athlete_id=program.athlete_id, is_active=True).update(
         {'is_active': False}, synchronize_session=False,
@@ -636,7 +946,7 @@ def upsert_journal():
 @login_required
 def update_journal(entry_id):
     entry = JournalEntry.query.get_or_404(entry_id)
-    if request.current_user.role != 'coach' and entry.athlete_id != request.current_user.id:
+    if not _is_staff() and entry.athlete_id != request.current_user.id:
         return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
     data = request.get_json(silent=True) or {}
     for field in JOURNAL_FIELDS:
@@ -650,7 +960,7 @@ def update_journal(entry_id):
 @login_required
 def delete_journal(entry_id):
     entry = JournalEntry.query.get_or_404(entry_id)
-    if request.current_user.role != 'coach' and entry.athlete_id != request.current_user.id:
+    if not _is_staff() and entry.athlete_id != request.current_user.id:
         return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
     db.session.delete(entry)
     db.session.commit()
@@ -822,7 +1132,7 @@ def create_performance():
 @login_required
 def update_performance(entry_id):
     entry = PerformanceEntry.query.get_or_404(entry_id)
-    if request.current_user.role != 'coach' and entry.athlete_id != request.current_user.id:
+    if not _is_staff() and entry.athlete_id != request.current_user.id:
         return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
     data = request.get_json(silent=True) or {}
     for field in ('reps', 'load', 'rpe', 'notes', 'series_number'):
@@ -901,7 +1211,7 @@ def stats_journal_trend():
 @login_required
 def delete_performance(entry_id):
     entry = PerformanceEntry.query.get_or_404(entry_id)
-    if request.current_user.role != 'coach' and entry.athlete_id != request.current_user.id:
+    if not _is_staff() and entry.athlete_id != request.current_user.id:
         return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
     db.session.delete(entry)
     db.session.commit()
@@ -1623,7 +1933,7 @@ def list_meal_plans():
 @login_required
 def get_meal_plan(plan_id):
     plan = MealPlan.query.get_or_404(plan_id)
-    if request.current_user.role != 'coach' and plan.athlete_id != request.current_user.id:
+    if not _is_staff() and plan.athlete_id != request.current_user.id:
         return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
     return jsonify(plan.to_dict(with_meals=True))
 
@@ -1671,7 +1981,7 @@ def activate_meal_plan(plan_id):
     'diète respectée' shortcut to know which macros to apply)."""
     plan = MealPlan.query.get_or_404(plan_id)
     user = request.current_user
-    if user.role != 'coach' and plan.athlete_id != user.id:
+    if not _is_staff(user) and plan.athlete_id != user.id:
         return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
     MealPlan.query.filter_by(athlete_id=plan.athlete_id, is_active=True).update(
         {'is_active': False}, synchronize_session=False,
@@ -1841,6 +2151,8 @@ def weekly_bilan():
     attention_cutoff = today - timedelta(days=180)
 
     athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
+    if request.current_user.role == 'coach':
+        athletes = [a for a in athletes if a.coach_id == request.current_user.id]
     if not athletes:
         return jsonify([])
     athlete_ids = [a.id for a in athletes]

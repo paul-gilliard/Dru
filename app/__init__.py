@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
@@ -125,17 +126,76 @@ def create_app():
         except Exception as e:
             db.session.rollback()
             print(f"⚠️ meal_plan.is_active alter skipped: {e}")
-        
-        # Créer l'utilisateur admin par défaut s'il n'existe pas
-        from app.models import User
-        admin = User.query.filter_by(username='admin').first()
-        if not admin:
-            print("Creating default admin user...")
-            admin = User(username='admin', role='coach')
-            admin.set_password(os.environ.get('ADMIN_PASSWORD', 'admin123'))
-            db.session.add(admin)
+
+        # Roles / coach-athlete association / subscription
+        try:
+            from sqlalchemy import inspect as sa_inspect6
+            inspector6 = sa_inspect6(db.engine)
+            user_cols = {col['name'] for col in inspector6.get_columns('user')}
+            if 'coach_id' not in user_cols:
+                db.session.execute(db.text(
+                    "ALTER TABLE `user` ADD COLUMN coach_id INT NULL"
+                ))
+            if 'coach_associated_at' not in user_cols:
+                db.session.execute(db.text(
+                    "ALTER TABLE `user` ADD COLUMN coach_associated_at DATETIME NULL"
+                ))
+            if 'subscription_tier' not in user_cols:
+                db.session.execute(db.text(
+                    "ALTER TABLE `user` ADD COLUMN subscription_tier INT NOT NULL DEFAULT 0"
+                ))
             db.session.commit()
-            print("✓ Admin user created")
+            print("✓ user coach_id / subscription_tier OK")
+        except Exception as e:
+            db.session.rollback()
+            print(f"⚠️ user association alter skipped: {e}")
+
+        # Créer / migrer les comptes admin & coach
+        from app.models import User
+        admin_legacy = User.query.filter_by(username='admin').first()
+        if not admin_legacy:
+            print("Creating default coach user 'admin'...")
+            admin_legacy = User(username='admin', role='coach', subscription_tier=3, display_name='Coach')
+            admin_legacy.set_password(os.environ.get('ADMIN_PASSWORD', 'admin123'))
+            db.session.add(admin_legacy)
+            db.session.commit()
+            print("✓ Coach user 'admin' created")
+        else:
+            # Compte historique 'admin' = coach (plus le rôle admin plateforme)
+            if admin_legacy.role != 'coach':
+                admin_legacy.role = 'coach'
+            if admin_legacy.subscription_tier is None:
+                admin_legacy.subscription_tier = 3
+            elif int(admin_legacy.subscription_tier or 0) == 0:
+                # Premier déploiement : donner un tier large au coach historique
+                admin_legacy.subscription_tier = 3
+            db.session.commit()
+
+        # Backfill : athlètes sans coach → rattachés au coach historique 'admin'
+        try:
+            orphan_athletes = User.query.filter_by(role='athlete', coach_id=None).all()
+            if orphan_athletes and admin_legacy:
+                for a in orphan_athletes:
+                    a.coach_id = admin_legacy.id
+                    if not a.coach_associated_at:
+                        a.coach_associated_at = datetime.utcnow()
+                db.session.commit()
+                print(f"✓ {len(orphan_athletes)} athlete(s) rattachés au coach admin")
+        except Exception as e:
+            db.session.rollback()
+            print(f"⚠️ athlete backfill skipped: {e}")
+
+        superadmin = User.query.filter_by(username='superadmin').first()
+        if not superadmin:
+            print("Creating platform admin 'superadmin'...")
+            superadmin = User(
+                username='superadmin', role='admin', display_name='Admin',
+                subscription_tier=0,
+            )
+            superadmin.set_password(os.environ.get('SUPERADMIN_PASSWORD', 'superadmin123'))
+            db.session.add(superadmin)
+            db.session.commit()
+            print("✓ superadmin created (change password in prod)")
         
         # Seed exercises and foods if tables are empty
         from app.models import Exercise, Food

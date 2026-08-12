@@ -7,8 +7,18 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(16), nullable=False, default='athlete')  # 'coach' ou 'athlete'
+    # 'athlete' | 'coach' | 'admin'
+    role = db.Column(db.String(16), nullable=False, default='athlete')
     display_name = db.Column(db.String(128), nullable=True)
+    # Athlete → coach associé (null = sans coach)
+    coach_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    coach_associated_at = db.Column(db.DateTime, nullable=True)
+    # Coach only: 0=1 athlète (défaut), 1=3, 2=6, 3=illimité
+    subscription_tier = db.Column(db.Integer, nullable=False, default=0)
+
+    coach = db.relationship('User', remote_side=[id], foreign_keys=[coach_id], backref='athletes')
+
+    SUBSCRIPTION_LIMITS = {0: 1, 1: 3, 2: 6, 3: None}  # None = illimité
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -16,16 +26,56 @@ class User(db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    def athlete_limit(self):
+        """Nombre max d'athlètes pour un coach (None = illimité)."""
+        return self.SUBSCRIPTION_LIMITS.get(int(self.subscription_tier or 0), 1)
+
     def to_dict(self):
-        return {
+        data = {
             'id': self.id,
             'username': self.username,
             'role': self.role,
             'display_name': self.display_name or self.username,
+            'coach_id': self.coach_id,
+            'coach_associated_at': self.coach_associated_at.isoformat() if self.coach_associated_at else None,
+            'subscription_tier': int(self.subscription_tier or 0) if self.role in ('coach', 'admin') else None,
+            'athlete_limit': self.athlete_limit() if self.role == 'coach' else None,
         }
+        if self.role == 'athlete' and self.coach_id and self.coach:
+            data['coach_name'] = self.coach.display_name or self.coach.username
+        return data
 
     def __repr__(self):
         return f'<User {self.username} ({self.role})>'
+
+
+class CoachingInvitation(db.Model):
+    """Invitation coach → athlète (reste pending jusqu'à accept/refuse)."""
+    __tablename__ = 'coaching_invitation'
+    id = db.Column(db.Integer, primary_key=True)
+    coach_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    status = db.Column(db.String(16), nullable=False, default='pending')  # pending|accepted|refused
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    coach = db.relationship('User', foreign_keys=[coach_id])
+    athlete = db.relationship('User', foreign_keys=[athlete_id])
+
+    __table_args__ = (
+        db.Index('idx_invitation_athlete_status', 'athlete_id', 'status'),
+    )
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'coach_id': self.coach_id,
+            'athlete_id': self.athlete_id,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'coach_name': (self.coach.display_name or self.coach.username) if self.coach else None,
+            'athlete_name': (self.athlete.display_name or self.athlete.username) if self.athlete else None,
+            'athlete_username': self.athlete.username if self.athlete else None,
+        }
 
 class Role(db.Model):
     id = db.Column(db.Integer, primary_key=True)

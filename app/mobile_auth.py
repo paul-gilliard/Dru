@@ -59,14 +59,27 @@ def login_required(fn):
 
 
 def coach_required(fn):
+    """Coach ou admin (l'admin peut tout faire comme un coach)."""
     @wraps(fn)
     def wrapper(*args, **kwargs):
         user, error = _resolve_current_user()
         if error:
             return error
-        if user.role != 'coach':
+        if user.role not in ('coach', 'admin'):
             return jsonify({'error': 'Réservé au coach'}), 403
         request.current_user = user
         return fn(*args, **kwargs)
     return wrapper
 
+
+def admin_required(fn):
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        user, error = _resolve_current_user()
+        if error:
+            return error
+        if user.role != 'admin':
+            return jsonify({'error': 'Réservé à l\'admin'}), 403
+        request.current_user = user
+        return fn(*args, **kwargs)
+    return wrapper
