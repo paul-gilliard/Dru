@@ -1605,12 +1605,18 @@ def list_meal_plans():
     athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
     if athlete_id is None:
         return jsonify({'error': 'athlete_id requis'}), 400
+    # Eager-load meals + foods : to_dict() calcule toujours les totaux via
+    # get_daily_totals(), et with_meals=1 sert l'écran Nutrition en 1 seul
+    # round-trip (évite le N+1 côté mobile qui timeout sur Railway).
+    from sqlalchemy.orm import selectinload, joinedload
+    with_meals = str(request.args.get('with_meals', '0')).lower() in ('1', 'true', 'yes')
     plans = (
         MealPlan.query.filter_by(athlete_id=athlete_id)
+        .options(selectinload(MealPlan.meals).joinedload(MealEntry.food))
         .order_by(MealPlan.is_active.desc(), MealPlan.created_at.desc())
         .all()
     )
-    return jsonify([p.to_dict(with_meals=False) for p in plans])
+    return jsonify([p.to_dict(with_meals=with_meals) for p in plans])
 
 
 @api_bp.get('/meal-plans/<int:plan_id>')
