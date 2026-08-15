@@ -839,6 +839,22 @@ def delete_session(session_id):
     return jsonify({'ok': True})
 
 
+@api_bp.get('/sessions/<int:session_id>')
+@login_required
+def get_session(session_id):
+    """Charge une séance (avec exercices) sans scanner tous les programmes."""
+    session_obj = ProgramSession.query.get_or_404(session_id)
+    program = Program.query.get_or_404(session_obj.program_id)
+    user = request.current_user
+    if user.role == 'athlete' and program.athlete_id != user.id:
+        return jsonify({'error': 'Accès refusé'}), 403
+    if user.role == 'coach':
+        athlete = User.query.get(program.athlete_id)
+        if not athlete or athlete.coach_id != user.id:
+            return jsonify({'error': 'Accès refusé'}), 403
+    return jsonify(session_obj.to_dict(with_exercises=True))
+
+
 @api_bp.put('/sessions/<int:session_id>')
 @coach_required
 def rename_session(session_id):
@@ -1159,6 +1175,33 @@ def last_performance_for_exercise():
                .order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.series_number)
                .limit(40).all())
     return jsonify([e.to_dict() for e in entries])
+
+
+@api_bp.post('/performance/last-for-exercises')
+@login_required
+def last_performance_for_exercises():
+    """Batch : dernières perfs pour une liste d'exercices (évite N requêtes mobile)."""
+    data = request.get_json(silent=True) or {}
+    athlete_id = _scope_athlete_id(data.get('athlete_id'))
+    exercises = data.get('exercises') or []
+    if not athlete_id:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    names = [str(e).strip() for e in exercises if str(e).strip()]
+    if not names:
+        return jsonify({})
+    entries = (PerformanceEntry.query
+               .filter(PerformanceEntry.athlete_id == athlete_id,
+                       PerformanceEntry.exercise.in_(names))
+               .order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.series_number)
+               .all())
+    by_ex = {}
+    for e in entries:
+        bucket = by_ex.setdefault(e.exercise, [])
+        if len(bucket) < 40:
+            bucket.append(e.to_dict())
+    for name in names:
+        by_ex.setdefault(name, [])
+    return jsonify(by_ex)
 
 
 @api_bp.post('/performance')
@@ -1908,6 +1951,146 @@ def stats_daily_activity():
         })
         cur += timedelta(days=1)
     return jsonify(out)
+
+
+@api_bp.get('/stats/coach-bootstrap')
+@login_required
+def stats_coach_bootstrap():
+    """Une seule requête pour l'écran Stats coach (remplace 4 appels parallèles)."""
+    athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
+    if athlete_id is None:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    days = max(1, min(int(request.args.get('days', 180)), 180))
+    weeks = max(1, min(int(request.args.get('weeks', 24)), 24))
+    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
+
+    cutoff = date.today() - timedelta(days=days - 1)
+    oldest_start, _ = _week_bounds(weeks - 1)
+    range_start = min(cutoff, oldest_start)
+    today = date.today()
+
+    journal_all = (JournalEntry.query
+                   .filter(JournalEntry.athlete_id == athlete_id,
+                           JournalEntry.entry_date >= range_start)
+                   .order_by(JournalEntry.entry_date.asc())
+                   .all())
+    perf_all = (PerformanceEntry.query
+                .filter(PerformanceEntry.athlete_id == athlete_id,
+                        PerformanceEntry.entry_date >= range_start)
+                .all())
+
+    by_date = {}
+    for e in perf_all:
+        if e.entry_date < cutoff:
+            continue
+        d = e.entry_date.isoformat()
+        bucket = by_date.setdefault(d, {'series': 0, 'tonnage': 0.0, 'exercises': set()})
+        bucket['series'] += 1
+        if e.load is not None and e.reps is not None:
+            bucket['tonnage'] += e.load * e.reps
+        if e.exercise:
+            bucket['exercises'].add(e.exercise)
+    daily_activity = []
+    cur = cutoff
+    while cur <= today:
+        key = cur.isoformat()
+        b = by_date.get(key)
+        daily_activity.append({
+            'date': key,
+            'trained': bool(b and b['series'] > 0),
+            'series_count': b['series'] if b else 0,
+            'exercise_count': len(b['exercises']) if b else 0,
+            'tonnage': round(b['tonnage'], 1) if b else 0,
+        })
+        cur += timedelta(days=1)
+
+    journal_trend = [
+        {
+            'date': e.entry_date.isoformat(),
+            'weight': e.weight,
+            'protein': e.protein,
+            'carbs': e.carbs,
+            'fats': e.fats,
+            'kcals': e.kcals,
+            'water_ml': e.water_ml,
+            'steps': e.steps,
+            'sleep_hours': e.sleep_hours,
+            'energy': e.energy,
+            'stress': e.stress,
+            'hunger': e.hunger,
+        }
+        for e in journal_all if e.entry_date >= cutoff
+    ]
+
+    overview_weeks = []
+    for offset in range(weeks - 1, -1, -1):
+        start, end = _week_bounds(offset)
+        journal = [j for j in journal_all if start <= j.entry_date <= end]
+        perf = [p for p in perf_all if start <= p.entry_date <= end]
+        health = {
+            'weight': _avg([j.weight for j in journal]),
+            'kcals': _avg([j.kcals for j in journal]),
+            'water_ml': _avg([j.water_ml for j in journal]),
+            'sleep_hours': _avg([j.sleep_hours for j in journal]),
+            'protein': _avg([j.protein for j in journal]),
+            'carbs': _avg([j.carbs for j in journal]),
+            'fats': _avg([j.fats for j in journal]),
+            'steps': _avg([j.steps for j in journal]),
+            'energy': _avg([j.energy for j in journal]),
+            'stress': _avg([j.stress for j in journal]),
+            'hunger': _avg([j.hunger for j in journal]),
+        }
+        muscle_totals, _ = _muscle_tonnage_from_rows(perf, muscle_by_name)
+        overview_weeks.append({
+            'offset': offset,
+            'label': _week_label(offset),
+            'start': start.isoformat(),
+            'end': end.isoformat(),
+            'sessions': len({e.entry_date for e in perf}),
+            'total_tonnage': round(sum(muscle_totals.values()), 1),
+            'health': health,
+            'muscles': [
+                {'muscle': m, 'tonnage': round(t, 1)}
+                for m, t in sorted(muscle_totals.items(), key=lambda kv: -kv[1])
+            ],
+        })
+
+    by_muscle = {}
+    ex_meta = {}
+    for e in perf_all:
+        if not e.exercise:
+            continue
+        meta = ex_meta.setdefault(e.exercise, {'last': e.entry_date, 'entries': 0, 'tonnage': 0.0})
+        meta['entries'] += 1
+        if e.entry_date > meta['last']:
+            meta['last'] = e.entry_date
+        if e.load is not None and e.reps is not None:
+            meta['tonnage'] += e.load * e.reps
+    for name, meta in ex_meta.items():
+        muscle = muscle_by_name.get(name, 'Autre') or 'Autre'
+        bucket = by_muscle.setdefault(muscle, {'tonnage': 0.0, 'exercises': []})
+        bucket['tonnage'] += meta['tonnage']
+        bucket['exercises'].append({
+            'name': name,
+            'last_date': meta['last'].isoformat() if meta['last'] else None,
+            'entries': meta['entries'],
+        })
+    exercises_by_muscle = []
+    for muscle, bucket in by_muscle.items():
+        bucket['exercises'].sort(key=lambda e: e['last_date'] or '', reverse=True)
+        exercises_by_muscle.append({
+            'muscle': muscle,
+            'tonnage': round(bucket['tonnage'], 1),
+            'exercises': bucket['exercises'],
+        })
+    exercises_by_muscle.sort(key=lambda m: -m['tonnage'])
+
+    return jsonify({
+        'daily_activity': daily_activity,
+        'journal_trend': journal_trend,
+        'weekly_overview': {'weeks': overview_weeks},
+        'exercises_by_muscle': exercises_by_muscle,
+    })
 
 
 # -------------------------------------------------------------- FOOD BANK -
