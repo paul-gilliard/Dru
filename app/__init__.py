@@ -289,6 +289,92 @@ def create_app():
     def health():
         return {'status': 'ok', 'service': 'dru', 'mobile_api': True}
 
+    @app.get('/privacy')
+    def privacy_policy():
+        """Politique de confidentialité — URL obligatoire Play Store / App Store."""
+        from flask import Response
+        html = """<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dru — Politique de confidentialité</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1.25rem; line-height: 1.55; color: #111; }
+    h1, h2 { line-height: 1.25; }
+    h1 { font-size: 1.6rem; }
+    h2 { font-size: 1.15rem; margin-top: 1.75rem; }
+    .muted { color: #555; font-size: 0.95rem; }
+  </style>
+</head>
+<body>
+  <h1>Politique de confidentialité — Dru</h1>
+  <p class="muted">Dernière mise à jour : 15 août 2026 · Éditeur : Paul Gilliard · Contact : paul.gilliard.8@gmail.com</p>
+
+  <h2>1. Qui sommes-nous</h2>
+  <p>Dru est une application mobile de suivi sportif (programmes, journal, nutrition, performances) destinée aux athlètes et à leurs coachs.</p>
+
+  <h2>2. Données collectées</h2>
+  <ul>
+    <li><strong>Compte</strong> : identifiant / e-mail, mot de passe (hashé), nom d’affichage, rôle (athlète, coach, admin).</li>
+    <li><strong>Données sportives</strong> : programmes, séances, performances, objectifs, disponibilités.</li>
+    <li><strong>Journal / santé saisis</strong> : poids, sommeil, pas, hydratation, macros, sensations (énergie, stress, faim), notes.</li>
+    <li><strong>Nutrition</strong> : plans alimentaires et aliments associés.</li>
+    <li><strong>Technique</strong> : jeton d’authentification stocké localement sur l’appareil, logs serveur usuels.</li>
+  </ul>
+
+  <h2>3. Health Connect (Android uniquement)</h2>
+  <p>Avec ton accord explicite, Dru peut lire via Health Connect : pas, sommeil et nutrition. Le poids n’est jamais synchronisé automatiquement. Tu peux révoquer ces permissions à tout moment dans Health Connect / les réglages Android.</p>
+
+  <h2>4. Finalités</h2>
+  <p>Fournir le service (entraînement, suivi coach/athlète), améliorer la fiabilité de l’app, et assurer la sécurité des comptes. Pas de vente de données personnelles à des tiers publicitaires.</p>
+
+  <h2>5. Base légale</h2>
+  <p>Exécution du contrat (fourniture du service), consentement (Health Connect), et intérêt légitime (sécurité / prévention d’abus).</p>
+
+  <h2>6. Hébergement &amp; conservation</h2>
+  <p>Les données applicatives sont hébergées sur l’infrastructure cloud utilisée pour l’API Dru (Railway). Elles sont conservées tant que le compte existe, sauf demande de suppression.</p>
+
+  <h2>7. Partage</h2>
+  <p>Un athlète lié à un coach partage avec ce coach les données nécessaires au coaching (programmes, journal, perfs, etc.). Pas d’autre partage commercial.</p>
+
+  <h2>8. Tes droits</h2>
+  <p>Tu peux demander l’accès, la rectification ou la suppression de ton compte / données en écrivant à <a href="mailto:paul.gilliard.8@gmail.com">paul.gilliard.8@gmail.com</a>. Tu peux aussi te désinscrire / te déconnecter dans l’app.</p>
+
+  <h2>9. Sécurité</h2>
+  <p>Authentification JWT, mots de passe hashés, communications HTTPS vers l’API. Aucune sécurité n’est absolue ; signale tout incident suspect au contact ci-dessus.</p>
+
+  <h2>10. Mineurs</h2>
+  <p>L’app s’adresse à un public adulte ou sous supervision d’un coach / parent. Pas destinée aux enfants de moins de 13 ans.</p>
+
+  <h2>11. Modifications</h2>
+  <p>Cette politique peut évoluer. La date en tête de page sera mise à jour. En cas de changement important, une information pourra être affichée dans l’app.</p>
+</body>
+</html>"""
+        return Response(html, mimetype='text/html; charset=utf-8')
+
+    @app.get('/support')
+    def support_page():
+        from flask import Response
+        html = """<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Dru — Support</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1.25rem; line-height: 1.55; }
+  </style>
+</head>
+<body>
+  <h1>Support Dru</h1>
+  <p>Pour toute question, bug ou demande liée à ton compte :</p>
+  <p><a href="mailto:paul.gilliard.8@gmail.com">paul.gilliard.8@gmail.com</a></p>
+  <p><a href="/privacy">Politique de confidentialité</a></p>
+</body>
+</html>"""
+        return Response(html, mimetype='text/html; charset=utf-8')
+
     # Jinja filter: formate "Rest: 0.5min" → "Repos: 0:30"
     import re, math
     def _dec_min_to_mmss(dec_str):
