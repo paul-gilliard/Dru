@@ -287,7 +287,7 @@ def create_app():
 
     @app.get('/health')
     def health():
-        return {'status': 'ok', 'service': 'dru', 'mobile_api': True}
+        return {'status': 'ok', 'service': 'farmness', 'mobile_api': True}
 
     @app.get('/privacy')
     def privacy_policy():
@@ -298,7 +298,7 @@ def create_app():
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dru — Politique de confidentialité</title>
+  <title>Farmness — Politique de confidentialité</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1.25rem; line-height: 1.55; color: #111; }
     h1, h2 { line-height: 1.25; }
@@ -308,11 +308,11 @@ def create_app():
   </style>
 </head>
 <body>
-  <h1>Politique de confidentialité — Dru</h1>
+  <h1>Politique de confidentialité — Farmness</h1>
   <p class="muted">Dernière mise à jour : 15 août 2026 · Éditeur : Paul Gilliard · Contact : paul.gilliard.8@gmail.com</p>
 
   <h2>1. Qui sommes-nous</h2>
-  <p>Dru est une application mobile de suivi sportif (programmes, journal, nutrition, performances) destinée aux athlètes et à leurs coachs.</p>
+  <p>Farmness est une application mobile de suivi sportif (programmes, journal, nutrition, performances) destinée aux athlètes et à leurs coachs.</p>
 
   <h2>2. Données collectées</h2>
   <ul>
@@ -324,7 +324,7 @@ def create_app():
   </ul>
 
   <h2>3. Health Connect (Android uniquement)</h2>
-  <p>Avec ton accord explicite, Dru peut lire via Health Connect : pas, sommeil et nutrition. Le poids n’est jamais synchronisé automatiquement. Tu peux révoquer ces permissions à tout moment dans Health Connect / les réglages Android.</p>
+  <p>Avec ton accord explicite, Farmness peut lire via Health Connect : pas, sommeil et nutrition. Le poids n’est jamais synchronisé automatiquement. Tu peux révoquer ces permissions à tout moment dans Health Connect / les réglages Android.</p>
 
   <h2>4. Finalités</h2>
   <p>Fournir le service (entraînement, suivi coach/athlète), améliorer la fiabilité de l’app, et assurer la sécurité des comptes. Pas de vente de données personnelles à des tiers publicitaires.</p>
@@ -333,7 +333,7 @@ def create_app():
   <p>Exécution du contrat (fourniture du service), consentement (Health Connect), et intérêt légitime (sécurité / prévention d’abus).</p>
 
   <h2>6. Hébergement &amp; conservation</h2>
-  <p>Les données applicatives sont hébergées sur l’infrastructure cloud utilisée pour l’API Dru (Railway). Elles sont conservées tant que le compte existe, sauf demande de suppression.</p>
+  <p>Les données applicatives sont hébergées sur l’infrastructure cloud utilisée pour l’API Farmness (Railway). Elles sont conservées tant que le compte existe, sauf demande de suppression.</p>
 
   <h2>7. Partage</h2>
   <p>Un athlète lié à un coach partage avec ce coach les données nécessaires au coaching (programmes, journal, perfs, etc.). Pas d’autre partage commercial.</p>
@@ -361,13 +361,13 @@ def create_app():
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Dru — Support</title>
+  <title>Farmness — Support</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1.25rem; line-height: 1.55; }
   </style>
 </head>
 <body>
-  <h1>Support Dru</h1>
+  <h1>Support Farmness</h1>
   <p>Pour toute question, bug ou demande liée à ton compte :</p>
   <p><a href="mailto:paul.gilliard.8@gmail.com">paul.gilliard.8@gmail.com</a></p>
   <p><a href="/privacy">Politique de confidentialité</a></p>
