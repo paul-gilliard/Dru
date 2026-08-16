@@ -148,6 +148,10 @@ def create_app():
                 db.session.execute(db.text(
                     "ALTER TABLE `user` ADD COLUMN email VARCHAR(255) NULL"
                 ))
+            if 'independent_module' not in user_cols:
+                db.session.execute(db.text(
+                    "ALTER TABLE `user` ADD COLUMN independent_module TINYINT(1) NOT NULL DEFAULT 0"
+                ))
             # Username élargi pour stocker un email éventuel
             try:
                 db.session.execute(db.text(
@@ -162,10 +166,29 @@ def create_app():
             except Exception:
                 pass
             db.session.commit()
-            print("✓ user coach_id / subscription_tier / email OK")
+            print("✓ user coach_id / subscription_tier / email / independent_module OK")
         except Exception as e:
             db.session.rollback()
             print(f"⚠️ user association alter skipped: {e}")
+
+        try:
+            from sqlalchemy import inspect as sa_inspect_bank
+            inspector_bank = sa_inspect_bank(db.engine)
+            if 'exercise' in inspector_bank.get_table_names():
+                ecols = {c['name'] for c in inspector_bank.get_columns('exercise')}
+                if 'owner_id' not in ecols:
+                    db.session.execute(db.text("ALTER TABLE exercise ADD COLUMN owner_id INT NULL"))
+                    db.session.commit()
+                    print("✓ exercise.owner_id OK")
+            if 'food' in inspector_bank.get_table_names():
+                fcols = {c['name'] for c in inspector_bank.get_columns('food')}
+                if 'owner_id' not in fcols:
+                    db.session.execute(db.text("ALTER TABLE food ADD COLUMN owner_id INT NULL"))
+                    db.session.commit()
+                    print("✓ food.owner_id OK")
+        except Exception as e:
+            db.session.rollback()
+            print(f"⚠️ bank owner_id alter skipped: {e}")
 
         # Créer / migrer les comptes admin & coach
         from app.models import User

@@ -18,6 +18,8 @@ class User(db.Model):
     coach_associated_at = db.Column(db.DateTime, nullable=True)
     # Coach only: 0=1 athlète (défaut), 1=3, 2=6, 3=illimité
     subscription_tier = db.Column(db.Integer, nullable=False, default=0)
+    # Athlete: unlocks Stats + Easy Bilan (Indépendant)
+    independent_module = db.Column(db.Boolean, nullable=False, default=False)
 
     coach = db.relationship('User', remote_side=[id], foreign_keys=[coach_id], backref='athletes')
 
@@ -44,6 +46,7 @@ class User(db.Model):
             'coach_associated_at': self.coach_associated_at.isoformat() if self.coach_associated_at else None,
             'subscription_tier': int(self.subscription_tier or 0) if self.role in ('coach', 'admin') else None,
             'athlete_limit': self.athlete_limit() if self.role == 'coach' else None,
+            'independent_module': bool(self.independent_module) if self.role == 'athlete' else False,
         }
         if self.role == 'athlete' and self.coach_id and self.coach:
             data['coach_name'] = self.coach.display_name or self.coach.username
@@ -340,8 +343,11 @@ class Exercise(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(192), nullable=False, unique=True)
     muscle_group = db.Column(db.String(64), nullable=False)  # Une des valeurs de MUSCLE_GROUPS
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+
+    owner = db.relationship('User', foreign_keys=[owner_id])
 
     def __repr__(self):
         return f'<Exercise {self.name} ({self.muscle_group})>'
@@ -350,7 +356,9 @@ class Exercise(db.Model):
         return {
             'id': self.id,
             'name': self.name,
-            'muscle_group': self.muscle_group
+            'muscle_group': self.muscle_group,
+            'owner_id': self.owner_id,
+            'is_personal': self.owner_id is not None,
         }
 
 class Food(db.Model):
@@ -366,8 +374,11 @@ class Food(db.Model):
     simple_sugars = db.Column(db.Float)
     fiber = db.Column(db.Float)
     salt = db.Column(db.Float)
+    owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+
+    owner = db.relationship('User', foreign_keys=[owner_id])
 
     def __repr__(self):
         return f'<Food {self.name} ({self.kcal} kcal)>'
@@ -384,8 +395,60 @@ class Food(db.Model):
             'carbs': self.carbs,
             'simple_sugars': self.simple_sugars,
             'fiber': self.fiber,
-            'salt': self.salt
+            'salt': self.salt,
+            'owner_id': self.owner_id,
+            'is_personal': self.owner_id is not None,
         }
+
+
+class BankChangeRequest(db.Model):
+    """Demande de modification d'une entrée commune (exercice / aliment)."""
+    __tablename__ = 'bank_change_request'
+    id = db.Column(db.Integer, primary_key=True)
+    kind = db.Column(db.String(16), nullable=False)  # exercise | food
+    target_id = db.Column(db.Integer, nullable=False, index=True)
+    requester_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    payload = db.Column(db.Text, nullable=False, default='{}')
+    message = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(16), nullable=False, default='pending')  # pending|approved|rejected
+    reviewed_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    admin_note = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    requester = db.relationship('User', foreign_keys=[requester_id])
+    reviewer = db.relationship('User', foreign_keys=[reviewed_by_id])
+
+    def to_dict(self, with_target=False):
+        import json
+        try:
+            payload = json.loads(self.payload or '{}')
+        except (TypeError, ValueError):
+            payload = {}
+        data = {
+            'id': self.id,
+            'kind': self.kind,
+            'target_id': self.target_id,
+            'requester_id': self.requester_id,
+            'requester_name': (
+                (self.requester.display_name or self.requester.username) if self.requester else None
+            ),
+            'payload': payload,
+            'message': self.message,
+            'status': self.status,
+            'reviewed_by_id': self.reviewed_by_id,
+            'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None,
+            'admin_note': self.admin_note,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+        if with_target:
+            if self.kind == 'exercise':
+                ex = Exercise.query.get(self.target_id)
+                data['target'] = ex.to_dict() if ex else None
+            elif self.kind == 'food':
+                food = Food.query.get(self.target_id)
+                data['target'] = food.to_dict() if food else None
+        return data
 
 
 class MealPlan(db.Model):

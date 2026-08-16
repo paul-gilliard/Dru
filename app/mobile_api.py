@@ -2,13 +2,14 @@ from datetime import datetime, date, timedelta
 import re
 
 from flask import Blueprint, request, jsonify
+import json
 
 from app import db
 from app.mobile_auth import generate_token, login_required, coach_required, admin_required
 from app.models import (
     User, Availability, Program, ProgramSession, ExerciseEntry,
     JournalEntry, PerformanceEntry, Exercise, Food, MealPlan, MealEntry,
-    Objective, MobileWeeklyBilanMarking, CoachingInvitation, MUSCLE_GROUPS,
+    Objective, MobileWeeklyBilanMarking, CoachingInvitation, BankChangeRequest, MUSCLE_GROUPS,
 )
 
 api_bp = Blueprint('api', __name__)
@@ -70,6 +71,85 @@ def _scope_athlete_id(requested_id=None):
     return user.id
 
 
+
+def _can_manage_athlete(athlete_id, user=None):
+    """Athlète sur soi, coach de l'athlète, ou admin."""
+    user = user or request.current_user
+    if athlete_id is None:
+        return False
+    aid = int(athlete_id)
+    if user.role == 'admin':
+        return True
+    if user.role == 'athlete':
+        return aid == user.id
+    if user.role == 'coach':
+        athlete = User.query.filter_by(id=aid, role='athlete', coach_id=user.id).first()
+        return athlete is not None
+    return False
+
+
+def _deny_manage():
+    return jsonify({'error': 'Accès refusé'}), 403
+
+
+def _personal_name_suffix(user):
+    return f' ({user.username})'
+
+
+def _ensure_personal_name(name, user):
+    suffix = _personal_name_suffix(user)
+    name = (name or '').strip()
+    if not name.endswith(suffix):
+        name = f'{name}{suffix}'
+    return name
+
+
+def _bank_owner_scope_id():
+    """Pour lister les entrées perso visibles avec la banque commune."""
+    user = request.current_user
+    if user.role == 'athlete':
+        return user.id
+    requested = request.args.get('athlete_id') or request.args.get('owner_id')
+    if user.role == 'admin':
+        return int(requested) if requested else None
+    if user.role == 'coach' and requested:
+        aid = int(requested)
+        if User.query.filter_by(id=aid, role='athlete', coach_id=user.id).first():
+            return aid
+        return None
+    return user.id
+
+
+def _bank_visibility_filter(model, owner_scope_id):
+    from sqlalchemy import or_
+    if owner_scope_id is None:
+        return model.owner_id.is_(None)
+    return or_(model.owner_id.is_(None), model.owner_id == owner_scope_id)
+
+
+def _has_independent(user=None):
+    user = user or request.current_user
+    return user.role == 'athlete' and bool(getattr(user, 'independent_module', False))
+
+
+def _resolve_create_athlete_id(data):
+    user = request.current_user
+    if user.role == 'athlete':
+        return user.id
+    athlete_id = data.get('athlete_id')
+    if not athlete_id:
+        return None
+    return int(athlete_id)
+
+
+def _coach_id_for_create(athlete_id):
+    user = request.current_user
+    if user.role in ('coach', 'admin'):
+        return user.id if user.role == 'coach' else None
+    athlete = User.query.get(athlete_id)
+    return athlete.coach_id if athlete else None
+
+
 def _coach_team_query(coach_id):
     return User.query.filter_by(role='athlete', coach_id=coach_id)
 
@@ -104,6 +184,11 @@ def _purge_user_data(user_id):
     JournalEntry.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
     PerformanceEntry.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
     Objective.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
+    BankChangeRequest.query.filter(
+        (BankChangeRequest.requester_id == user_id) | (BankChangeRequest.reviewed_by_id == user_id)
+    ).delete(synchronize_session=False)
+    Exercise.query.filter_by(owner_id=user_id).delete(synchronize_session=False)
+    Food.query.filter_by(owner_id=user_id).delete(synchronize_session=False)
 
 
 def _athlete_summary(athlete):
@@ -538,6 +623,9 @@ def update_user(user_id):
         user.subscription_tier = tier
         if data.get('auto_trim'):
             _enforce_coach_quota_or_trim(user)
+    if user.role == 'athlete' and 'independent_module' in data:
+        raw = data.get('independent_module')
+        user.independent_module = raw in (True, 1, '1', 'true', 'True', 'yes', 'on')
     if user.role == 'athlete' and 'coach_id' in data:
         coach_id = data.get('coach_id')
         if coach_id in (None, '', 0, 'null'):
@@ -696,23 +784,25 @@ def list_programs():
 def get_program(program_id):
     program = Program.query.get_or_404(program_id)
     if not _is_staff() and program.athlete_id != request.current_user.id:
-        return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
+        return jsonify({'error': 'Accès refusé'}), 403
     return jsonify(program.to_dict(with_sessions=True))
 
 
 @api_bp.post('/programs')
-@coach_required
+@login_required
 def create_program():
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
-    athlete_id = data.get('athlete_id')
+    athlete_id = _resolve_create_athlete_id(data)
     if not name or not athlete_id:
         return jsonify({'error': 'name et athlete_id requis'}), 400
+    if not _can_manage_athlete(athlete_id):
+        return _deny_manage()
     has_any = Program.query.filter_by(athlete_id=athlete_id).count() > 0
     program = Program(
         name=name,
         athlete_id=athlete_id,
-        coach_id=request.current_user.id,
+        coach_id=_coach_id_for_create(athlete_id),
         is_active=not has_any,
     )
     db.session.add(program)
@@ -721,17 +811,13 @@ def create_program():
 
 
 @api_bp.delete('/programs/<int:program_id>')
-@coach_required
+@login_required
 def delete_program(program_id):
     program = Program.query.get_or_404(program_id)
+    if not _can_manage_athlete(program.athlete_id):
+        return _deny_manage()
     athlete_id = program.athlete_id
     was_active = bool(program.is_active)
-    # Detach logged performances so cascade-deleting sessions does not hit FK errors
-    session_ids = [s.id for s in program.sessions]
-    if session_ids:
-        PerformanceEntry.query.filter(
-            PerformanceEntry.program_session_id.in_(session_ids)
-        ).update({PerformanceEntry.program_session_id: None}, synchronize_session=False)
     db.session.delete(program)
     db.session.flush()
     if was_active:
@@ -747,9 +833,11 @@ def delete_program(program_id):
 
 
 @api_bp.put('/programs/<int:program_id>')
-@coach_required
+@login_required
 def rename_program(program_id):
     program = Program.query.get_or_404(program_id)
+    if not _can_manage_athlete(program.athlete_id):
+        return _deny_manage()
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
     if not name:
@@ -766,7 +854,7 @@ def activate_program(program_id):
     program = Program.query.get_or_404(program_id)
     user = request.current_user
     if not _is_staff(user) and program.athlete_id != user.id:
-        return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
+        return jsonify({'error': 'Accès refusé'}), 403
     Program.query.filter_by(athlete_id=program.athlete_id, is_active=True).update(
         {'is_active': False}, synchronize_session=False,
     )
@@ -776,14 +864,19 @@ def activate_program(program_id):
 
 
 @api_bp.post('/programs/<int:program_id>/duplicate')
-@coach_required
+@login_required
 def duplicate_program(program_id):
     source = Program.query.get_or_404(program_id)
+    if not _can_manage_athlete(source.athlete_id):
+        return _deny_manage()
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or f'{source.name} (copie)').strip()
     athlete_id = data.get('athlete_id') or source.athlete_id
+    athlete_id = int(athlete_id)
+    if not _can_manage_athlete(athlete_id):
+        return _deny_manage()
 
-    new_program = Program(name=name, athlete_id=athlete_id, coach_id=request.current_user.id)
+    new_program = Program(name=name, athlete_id=athlete_id, coach_id=_coach_id_for_create(athlete_id))
     db.session.add(new_program)
     db.session.flush()
 
@@ -806,9 +899,11 @@ def duplicate_program(program_id):
 
 
 @api_bp.post('/programs/<int:program_id>/sessions')
-@coach_required
+@login_required
 def create_session(program_id):
-    Program.query.get_or_404(program_id)
+    program = Program.query.get_or_404(program_id)
+    if not _can_manage_athlete(program.athlete_id):
+        return _deny_manage()
     data = request.get_json(silent=True) or {}
     day_of_week = data.get('day_of_week')
     if day_of_week is None:
@@ -820,7 +915,7 @@ def create_session(program_id):
 
     session_obj = ProgramSession(
         program_id=program_id, day_of_week=day_of_week,
-        session_name=data.get('session_name') or f'SÃ©ance jour {day_of_week + 1}'
+        session_name=data.get('session_name') or f'Séance jour {day_of_week + 1}'
     )
     db.session.add(session_obj)
     db.session.commit()
@@ -828,12 +923,12 @@ def create_session(program_id):
 
 
 @api_bp.delete('/sessions/<int:session_id>')
-@coach_required
+@login_required
 def delete_session(session_id):
     session_obj = ProgramSession.query.get_or_404(session_id)
-    PerformanceEntry.query.filter_by(program_session_id=session_id).update(
-        {PerformanceEntry.program_session_id: None}, synchronize_session=False
-    )
+    program = Program.query.get_or_404(session_obj.program_id)
+    if not _can_manage_athlete(program.athlete_id):
+        return _deny_manage()
     db.session.delete(session_obj)
     db.session.commit()
     return jsonify({'ok': True})
@@ -856,9 +951,12 @@ def get_session(session_id):
 
 
 @api_bp.put('/sessions/<int:session_id>')
-@coach_required
+@login_required
 def rename_session(session_id):
     session_obj = ProgramSession.query.get_or_404(session_id)
+    program = Program.query.get_or_404(session_obj.program_id)
+    if not _can_manage_athlete(program.athlete_id):
+        return _deny_manage()
     data = request.get_json(silent=True) or {}
     if 'session_name' in data:
         session_obj.session_name = data['session_name']
@@ -869,9 +967,12 @@ def rename_session(session_id):
 
 
 @api_bp.post('/sessions/<int:session_id>/exercises')
-@coach_required
+@login_required
 def add_exercise_entry(session_id):
-    ProgramSession.query.get_or_404(session_id)
+    session_obj = ProgramSession.query.get_or_404(session_id)
+    program = Program.query.get_or_404(session_obj.program_id)
+    if not _can_manage_athlete(program.athlete_id):
+        return _deny_manage()
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
     if not name:
@@ -898,9 +999,13 @@ def add_exercise_entry(session_id):
 
 
 @api_bp.put('/program-exercises/<int:entry_id>')
-@coach_required
+@login_required
 def update_exercise_entry(entry_id):
     entry = ExerciseEntry.query.get_or_404(entry_id)
+    session_obj = ProgramSession.query.get_or_404(entry.session_id)
+    program = Program.query.get_or_404(session_obj.program_id)
+    if not _can_manage_athlete(program.athlete_id):
+        return _deny_manage()
     data = request.get_json(silent=True) or {}
     for field in ('name', 'sets', 'reps', 'rest', 'rir', 'intensification', 'muscle', 'remark',
                   'series_description', 'main_series', 'position'):
@@ -911,9 +1016,13 @@ def update_exercise_entry(entry_id):
 
 
 @api_bp.delete('/program-exercises/<int:entry_id>')
-@coach_required
+@login_required
 def delete_exercise_entry(entry_id):
     entry = ExerciseEntry.query.get_or_404(entry_id)
+    session_obj = ProgramSession.query.get_or_404(entry.session_id)
+    program = Program.query.get_or_404(session_obj.program_id)
+    if not _can_manage_athlete(program.athlete_id):
+        return _deny_manage()
     db.session.delete(entry)
     db.session.commit()
     return jsonify({'ok': True})
@@ -924,7 +1033,9 @@ def delete_exercise_entry(entry_id):
 @api_bp.get('/exercise-bank')
 @login_required
 def list_exercise_bank():
-    exercises = Exercise.query.order_by(Exercise.muscle_group, Exercise.name).all()
+    owner_scope = _bank_owner_scope_id()
+    query = Exercise.query.filter(_bank_visibility_filter(Exercise, owner_scope))
+    exercises = query.order_by(Exercise.muscle_group, Exercise.name).all()
     return jsonify({
         'muscle_groups': MUSCLE_GROUPS,
         'exercises': [e.to_dict() for e in exercises],
@@ -932,26 +1043,43 @@ def list_exercise_bank():
 
 
 @api_bp.post('/exercise-bank')
-@coach_required
+@login_required
 def create_exercise_bank():
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
     muscle_group = data.get('muscle_group')
     if not name or muscle_group not in MUSCLE_GROUPS:
         return jsonify({'error': 'name et muscle_group (valide) requis'}), 400
+    user = request.current_user
+    as_personal = bool(data.get('personal')) or user.role == 'athlete'
+    owner_id = None
+    if as_personal:
+        owner_id = user.id
+        name = _ensure_personal_name(name, user)
+    elif user.role not in ('coach', 'admin'):
+        return jsonify({'error': 'Réservé au coach'}), 403
     if Exercise.query.filter_by(name=name).first():
-        return jsonify({'error': 'Cet exercice existe dÃ©jÃ '}), 409
-    exercise = Exercise(name=name, muscle_group=muscle_group)
+        return jsonify({'error': 'Cet exercice existe déjà'}), 409
+    exercise = Exercise(name=name, muscle_group=muscle_group, owner_id=owner_id)
     db.session.add(exercise)
     db.session.commit()
     return jsonify(exercise.to_dict()), 201
 
 
 @api_bp.put('/exercise-bank/<int:exercise_id>')
-@coach_required
+@login_required
 def update_exercise_bank(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
     data = request.get_json(silent=True) or {}
+    user = request.current_user
+    if exercise.owner_id is None:
+        if user.role != 'admin':
+            return jsonify({
+                'error': 'Banque commune : crée une demande de modification ou ta version perso',
+                'code': 'COMMON_BANK_LOCKED',
+            }), 403
+    elif exercise.owner_id != user.id and user.role != 'admin':
+        return _deny_manage()
     if data.get('name'):
         exercise.name = data['name']
     if data.get('muscle_group') in MUSCLE_GROUPS:
@@ -961,9 +1089,14 @@ def update_exercise_bank(exercise_id):
 
 
 @api_bp.delete('/exercise-bank/<int:exercise_id>')
-@coach_required
+@login_required
 def delete_exercise_bank(exercise_id):
     exercise = Exercise.query.get_or_404(exercise_id)
+    user = request.current_user
+    if exercise.owner_id is None:
+        return jsonify({'error': 'Impossible de supprimer une entrée commune'}), 403
+    if exercise.owner_id != user.id and user.role != 'admin':
+        return _deny_manage()
     db.session.delete(exercise)
     db.session.commit()
     return jsonify({'ok': True})
@@ -2099,7 +2232,8 @@ def stats_coach_bootstrap():
 @login_required
 def list_foods():
     search = request.args.get('q')
-    query = Food.query
+    owner_scope = _bank_owner_scope_id()
+    query = Food.query.filter(_bank_visibility_filter(Food, owner_scope))
     if search:
         query = query.filter(Food.name.ilike(f'%{search}%'))
     foods = query.order_by(Food.name).limit(500).all()
@@ -2107,19 +2241,28 @@ def list_foods():
 
 
 @api_bp.post('/foods')
-@coach_required
+@login_required
 def create_food():
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
     if not name or data.get('kcal') is None or data.get('carbs') is None:
         return jsonify({'error': 'name, kcal et carbs requis'}), 400
+    user = request.current_user
+    as_personal = bool(data.get('personal')) or user.role == 'athlete'
+    owner_id = None
+    if as_personal:
+        owner_id = user.id
+        name = _ensure_personal_name(name, user)
+    elif user.role not in ('coach', 'admin'):
+        return jsonify({'error': 'Réservé au coach'}), 403
     if Food.query.filter_by(name=name).first():
-        return jsonify({'error': 'Cet aliment existe dÃ©jÃ '}), 409
+        return jsonify({'error': 'Cet aliment existe déjà'}), 409
 
     food = Food(
         name=name, brand=data.get('brand'), kcal=data['kcal'], proteins=data.get('proteins'),
         lipids=data.get('lipids'), saturated_fats=data.get('saturated_fats'), carbs=data['carbs'],
         simple_sugars=data.get('simple_sugars'), fiber=data.get('fiber'), salt=data.get('salt'),
+        owner_id=owner_id,
     )
     db.session.add(food)
     db.session.commit()
@@ -2127,10 +2270,19 @@ def create_food():
 
 
 @api_bp.put('/foods/<int:food_id>')
-@coach_required
+@login_required
 def update_food(food_id):
     food = Food.query.get_or_404(food_id)
     data = request.get_json(silent=True) or {}
+    user = request.current_user
+    if food.owner_id is None:
+        if user.role != 'admin':
+            return jsonify({
+                'error': 'Banque commune : crée une demande de modification ou ta version perso',
+                'code': 'COMMON_BANK_LOCKED',
+            }), 403
+    elif food.owner_id != user.id and user.role != 'admin':
+        return _deny_manage()
     for field in ('name', 'brand', 'kcal', 'proteins', 'lipids', 'saturated_fats', 'carbs',
                   'simple_sugars', 'fiber', 'salt'):
         if field in data:
@@ -2140,9 +2292,14 @@ def update_food(food_id):
 
 
 @api_bp.delete('/foods/<int:food_id>')
-@coach_required
+@login_required
 def delete_food(food_id):
     food = Food.query.get_or_404(food_id)
+    user = request.current_user
+    if food.owner_id is None:
+        return jsonify({'error': 'Impossible de supprimer une entrée commune'}), 403
+    if food.owner_id != user.id and user.role != 'admin':
+        return _deny_manage()
     db.session.delete(food)
     db.session.commit()
     return jsonify({'ok': True})
@@ -2156,9 +2313,6 @@ def list_meal_plans():
     athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
     if athlete_id is None:
         return jsonify({'error': 'athlete_id requis'}), 400
-    # Eager-load meals + foods : to_dict() calcule toujours les totaux via
-    # get_daily_totals(), et with_meals=1 sert l'écran Nutrition en 1 seul
-    # round-trip (évite le N+1 côté mobile qui timeout sur Railway).
     from sqlalchemy.orm import selectinload, joinedload
     with_meals = str(request.args.get('with_meals', '0')).lower() in ('1', 'true', 'yes')
     plans = (
@@ -2175,30 +2329,36 @@ def list_meal_plans():
 def get_meal_plan(plan_id):
     plan = MealPlan.query.get_or_404(plan_id)
     if not _is_staff() and plan.athlete_id != request.current_user.id:
-        return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
+        return jsonify({'error': 'Accès refusé'}), 403
     return jsonify(plan.to_dict(with_meals=True))
 
 
 @api_bp.post('/meal-plans')
-@coach_required
+@login_required
 def create_meal_plan():
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
-    athlete_id = data.get('athlete_id')
+    athlete_id = _resolve_create_athlete_id(data)
     if not name or not athlete_id:
         return jsonify({'error': 'name et athlete_id requis'}), 400
+    if not _can_manage_athlete(athlete_id):
+        return _deny_manage()
     has_any = MealPlan.query.filter_by(athlete_id=athlete_id).count() > 0
-    plan = MealPlan(name=name, athlete_id=athlete_id, coach_id=request.current_user.id,
-                     meal_count=data.get('meal_count', 6), is_active=not has_any)
+    plan = MealPlan(
+        name=name, athlete_id=athlete_id, coach_id=_coach_id_for_create(athlete_id),
+        meal_count=data.get('meal_count', 6), is_active=not has_any,
+    )
     db.session.add(plan)
     db.session.commit()
     return jsonify(plan.to_dict()), 201
 
 
 @api_bp.delete('/meal-plans/<int:plan_id>')
-@coach_required
+@login_required
 def delete_meal_plan(plan_id):
     plan = MealPlan.query.get_or_404(plan_id)
+    if not _can_manage_athlete(plan.athlete_id):
+        return _deny_manage()
     athlete_id = plan.athlete_id
     was_active = bool(plan.is_active)
     db.session.delete(plan)
@@ -2218,12 +2378,10 @@ def delete_meal_plan(plan_id):
 @api_bp.post('/meal-plans/<int:plan_id>/activate')
 @login_required
 def activate_meal_plan(plan_id):
-    """Mark a meal plan as the athlete's active diet (used by the Journal
-    'diète respectée' shortcut to know which macros to apply)."""
     plan = MealPlan.query.get_or_404(plan_id)
     user = request.current_user
     if not _is_staff(user) and plan.athlete_id != user.id:
-        return jsonify({'error': 'AccÃ¨s refusÃ©'}), 403
+        return jsonify({'error': 'Accès refusé'}), 403
     MealPlan.query.filter_by(athlete_id=plan.athlete_id, is_active=True).update(
         {'is_active': False}, synchronize_session=False,
     )
@@ -2233,9 +2391,11 @@ def activate_meal_plan(plan_id):
 
 
 @api_bp.put('/meal-plans/<int:plan_id>')
-@coach_required
+@login_required
 def rename_meal_plan(plan_id):
     plan = MealPlan.query.get_or_404(plan_id)
+    if not _can_manage_athlete(plan.athlete_id):
+        return _deny_manage()
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
     if not name:
@@ -2246,15 +2406,19 @@ def rename_meal_plan(plan_id):
 
 
 @api_bp.post('/meal-plans/<int:plan_id>/duplicate')
-@coach_required
+@login_required
 def duplicate_meal_plan(plan_id):
     source = MealPlan.query.get_or_404(plan_id)
+    if not _can_manage_athlete(source.athlete_id):
+        return _deny_manage()
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or f'{source.name} (copie)').strip()
-    athlete_id = data.get('athlete_id') or source.athlete_id
+    athlete_id = int(data.get('athlete_id') or source.athlete_id)
+    if not _can_manage_athlete(athlete_id):
+        return _deny_manage()
 
     new_plan = MealPlan(
-        name=name, athlete_id=athlete_id, coach_id=request.current_user.id,
+        name=name, athlete_id=athlete_id, coach_id=_coach_id_for_create(athlete_id),
         meal_count=source.meal_count,
         **{f'meal_time_{i}': getattr(source, f'meal_time_{i}') for i in range(1, 7)},
         **{f'meal_label_{i}': getattr(source, f'meal_label_{i}') for i in range(1, 7)},
@@ -2273,9 +2437,11 @@ def duplicate_meal_plan(plan_id):
 
 
 @api_bp.post('/meal-plans/<int:plan_id>/meals')
-@coach_required
+@login_required
 def add_meal_entry(plan_id):
-    MealPlan.query.get_or_404(plan_id)
+    plan = MealPlan.query.get_or_404(plan_id)
+    if not _can_manage_athlete(plan.athlete_id):
+        return _deny_manage()
     data = request.get_json(silent=True) or {}
     meal_number = data.get('meal_number')
     food_id = data.get('food_id')
@@ -2294,9 +2460,12 @@ def add_meal_entry(plan_id):
 
 
 @api_bp.put('/meal-entries/<int:entry_id>')
-@coach_required
+@login_required
 def update_meal_entry(entry_id):
     entry = MealEntry.query.get_or_404(entry_id)
+    plan = MealPlan.query.get_or_404(entry.meal_plan_id)
+    if not _can_manage_athlete(plan.athlete_id):
+        return _deny_manage()
     data = request.get_json(silent=True) or {}
     if 'quantity' in data:
         entry.quantity = data['quantity']
@@ -2305,26 +2474,243 @@ def update_meal_entry(entry_id):
 
 
 @api_bp.delete('/meal-entries/<int:entry_id>')
-@coach_required
+@login_required
 def delete_meal_entry(entry_id):
     entry = MealEntry.query.get_or_404(entry_id)
+    plan = MealPlan.query.get_or_404(entry.meal_plan_id)
+    if not _can_manage_athlete(plan.athlete_id):
+        return _deny_manage()
     db.session.delete(entry)
     db.session.commit()
     return jsonify({'ok': True})
 
 
 @api_bp.put('/meal-plans/<int:plan_id>/meal-time')
-@coach_required
+@login_required
 def set_meal_time(plan_id):
     plan = MealPlan.query.get_or_404(plan_id)
+    if not _can_manage_athlete(plan.athlete_id):
+        return _deny_manage()
     data = request.get_json(silent=True) or {}
     meal_number = data.get('meal_number')
     if meal_number not in range(1, 7):
-        return jsonify({'error': 'meal_number doit Ãªtre entre 1 et 6'}), 400
+        return jsonify({'error': 'meal_number doit être entre 1 et 6'}), 400
     setattr(plan, f'meal_time_{meal_number}', data.get('time'))
     setattr(plan, f'meal_label_{meal_number}', data.get('label'))
     db.session.commit()
     return jsonify(plan.to_dict())
+
+
+# -------------------------------------------------- BANK CHANGE REQUESTS -
+
+@api_bp.post('/bank-change-requests')
+@login_required
+def create_bank_change_request():
+    data = request.get_json(silent=True) or {}
+    kind = data.get('kind')
+    target_id = data.get('target_id')
+    payload = data.get('payload') or {}
+    message = (data.get('message') or '').strip() or None
+    if kind not in ('exercise', 'food') or not target_id:
+        return jsonify({'error': 'kind (exercise|food) et target_id requis'}), 400
+    if not isinstance(payload, dict) or not payload:
+        return jsonify({'error': 'payload objet requis'}), 400
+
+    if kind == 'exercise':
+        target = Exercise.query.get_or_404(int(target_id))
+    else:
+        target = Food.query.get_or_404(int(target_id))
+    if target.owner_id is not None:
+        return jsonify({'error': 'Uniquement pour la banque commune'}), 400
+
+    req = BankChangeRequest(
+        kind=kind,
+        target_id=int(target_id),
+        requester_id=request.current_user.id,
+        payload=json.dumps(payload, ensure_ascii=False),
+        message=message,
+        status='pending',
+    )
+    db.session.add(req)
+    db.session.commit()
+    return jsonify({
+        **req.to_dict(with_target=True),
+        'hint': 'Tu peux aussi créer ta version perso avec personal=true',
+    }), 201
+
+
+@api_bp.get('/bank-change-requests/mine')
+@login_required
+def list_my_bank_change_requests():
+    rows = (
+        BankChangeRequest.query.filter_by(requester_id=request.current_user.id)
+        .order_by(BankChangeRequest.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    return jsonify([r.to_dict(with_target=True) for r in rows])
+
+
+@api_bp.get('/admin/bank-change-requests')
+@admin_required
+def list_admin_bank_change_requests():
+    status = request.args.get('status') or 'pending'
+    query = BankChangeRequest.query
+    if status != 'all':
+        query = query.filter_by(status=status)
+    rows = query.order_by(BankChangeRequest.created_at.desc()).limit(200).all()
+    return jsonify([r.to_dict(with_target=True) for r in rows])
+
+
+@api_bp.post('/admin/bank-change-requests/<int:req_id>/approve')
+@admin_required
+def approve_bank_change_request(req_id):
+    req = BankChangeRequest.query.get_or_404(req_id)
+    if req.status != 'pending':
+        return jsonify({'error': 'Demande déjà traitée'}), 400
+    try:
+        payload = json.loads(req.payload or '{}')
+    except (TypeError, ValueError):
+        payload = {}
+
+    if req.kind == 'exercise':
+        target = Exercise.query.get_or_404(req.target_id)
+        if payload.get('name'):
+            conflict = Exercise.query.filter(
+                Exercise.name == payload['name'], Exercise.id != target.id,
+            ).first()
+            if conflict:
+                return jsonify({'error': 'Nom déjà pris'}), 409
+            target.name = payload['name']
+        if payload.get('muscle_group') in MUSCLE_GROUPS:
+            target.muscle_group = payload['muscle_group']
+    else:
+        target = Food.query.get_or_404(req.target_id)
+        for field in ('name', 'brand', 'kcal', 'proteins', 'lipids', 'saturated_fats', 'carbs',
+                      'simple_sugars', 'fiber', 'salt'):
+            if field in payload:
+                setattr(target, field, payload[field])
+
+    data = request.get_json(silent=True) or {}
+    req.status = 'approved'
+    req.reviewed_by_id = request.current_user.id
+    req.reviewed_at = datetime.utcnow()
+    req.admin_note = (data.get('admin_note') or '').strip() or None
+    db.session.commit()
+    return jsonify(req.to_dict(with_target=True))
+
+
+@api_bp.post('/admin/bank-change-requests/<int:req_id>/reject')
+@admin_required
+def reject_bank_change_request(req_id):
+    req = BankChangeRequest.query.get_or_404(req_id)
+    if req.status != 'pending':
+        return jsonify({'error': 'Demande déjà traitée'}), 400
+    data = request.get_json(silent=True) or {}
+    req.status = 'rejected'
+    req.reviewed_by_id = request.current_user.id
+    req.reviewed_at = datetime.utcnow()
+    req.admin_note = (data.get('admin_note') or '').strip() or None
+    db.session.commit()
+    return jsonify(req.to_dict(with_target=True))
+
+
+# ---------------------------------------------------- ATHLETE BILAN HEBDO -
+
+@api_bp.get('/athlete/bilan-hebdo')
+@login_required
+def athlete_weekly_bilan():
+    user = request.current_user
+    if user.role != 'athlete':
+        return jsonify({'error': 'Réservé à l\'athlète'}), 403
+    if not _has_independent(user):
+        return jsonify({'error': 'Module Indépendant requis', 'code': 'INDEPENDENT_REQUIRED'}), 403
+
+    today = date.today()
+    current_start = _week_start(today)
+    previous_start = current_start - timedelta(days=7)
+    current_end = current_start + timedelta(days=6)
+    previous_end = previous_start + timedelta(days=6)
+    attention_cutoff = today - timedelta(days=180)
+
+    journal_all = (JournalEntry.query
+                   .filter(JournalEntry.athlete_id == user.id,
+                           JournalEntry.entry_date >= previous_start,
+                           JournalEntry.entry_date <= current_end)
+                   .all())
+    perf_all = (PerformanceEntry.query
+                .filter(PerformanceEntry.athlete_id == user.id,
+                        PerformanceEntry.entry_date >= attention_cutoff)
+                .all())
+    marking = MobileWeeklyBilanMarking.query.filter_by(
+        athlete_id=user.id, week_start=current_start,
+    ).first()
+    objectives = (Objective.query.filter_by(athlete_id=user.id)
+                  .order_by(Objective.created_at.desc()).limit(5).all())
+
+    cur_journal = [j for j in journal_all if current_start <= j.entry_date <= current_end]
+    prev_journal = [j for j in journal_all if previous_start <= j.entry_date <= previous_end]
+    cur_perf = [p for p in perf_all if current_start <= p.entry_date <= current_end]
+    prev_perf = [p for p in perf_all if previous_start <= p.entry_date <= previous_end]
+
+    current = _weekly_metrics_from_rows(cur_journal, cur_perf)
+    previous = _weekly_metrics_from_rows(prev_journal, prev_perf)
+    metrics = []
+    for key, label in METRIC_LABELS:
+        cur_v, prev_v = current[key], previous[key]
+        diff = round(cur_v - prev_v, 1) if cur_v is not None and prev_v is not None else None
+        metrics.append({'key': key, 'label': label, 'current': cur_v, 'previous': prev_v, 'diff': diff})
+
+    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
+    muscle_a, ex_a = _muscle_tonnage_from_rows(cur_perf, muscle_by_name)
+    muscle_b, ex_b = _muscle_tonnage_from_rows(prev_perf, muscle_by_name)
+    muscle_rows = _build_muscle_rows(muscle_a, ex_a, muscle_b, ex_b)
+    series_by_ex = _series_by_exercise_from_rows(perf_all)
+    attention = _analyse_attention_from_series(series_by_ex, 0, 1)
+
+    entry = {
+        'athlete': user.to_dict(),
+        'week_start': current_start.isoformat(),
+        'done': bool(marking.done) if marking else False,
+        'metrics': metrics,
+        'objectives': [o.to_dict() for o in objectives],
+        'muscles': muscle_rows,
+        'attention': attention,
+    }
+    return jsonify([entry])
+
+
+@api_bp.post('/athlete/bilan-hebdo/mark')
+@login_required
+def athlete_mark_weekly_bilan():
+    user = request.current_user
+    if user.role != 'athlete' or not _has_independent(user):
+        return jsonify({'error': 'Module Indépendant requis'}), 403
+    data = request.get_json(silent=True) or {}
+    week_start = _parse_date(data.get('week_start')) or _week_start(date.today())
+    marking = MobileWeeklyBilanMarking.query.filter_by(athlete_id=user.id, week_start=week_start).first()
+    if marking:
+        marking.done = True
+    else:
+        marking = MobileWeeklyBilanMarking(athlete_id=user.id, week_start=week_start, done=True)
+        db.session.add(marking)
+    db.session.commit()
+    return jsonify(marking.to_dict())
+
+
+@api_bp.post('/athlete/bilan-hebdo/unmark')
+@login_required
+def athlete_unmark_weekly_bilan():
+    user = request.current_user
+    if user.role != 'athlete' or not _has_independent(user):
+        return jsonify({'error': 'Module Indépendant requis'}), 403
+    data = request.get_json(silent=True) or {}
+    week_start = _parse_date(data.get('week_start')) or _week_start(date.today())
+    marking = MobileWeeklyBilanMarking.query.filter_by(athlete_id=user.id, week_start=week_start).first()
+    if marking:
+        db.session.delete(marking)
+        db.session.commit()
+    return jsonify({'ok': True})
 
 
 # ------------------------------------------------------------- BILAN HEBDO -
