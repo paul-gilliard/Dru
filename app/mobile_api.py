@@ -482,8 +482,14 @@ def create_invitation():
     limit = user.athlete_limit()
     current_count = _coach_team_query(user.id).count()
     if limit is not None and current_count >= limit:
+        if limit == 0:
+            return jsonify({
+                'error': 'Abonnement requis pour coacher des athlètes. Choisis un niveau payant.',
+                'code': 'SUBSCRIPTION_REQUIRED',
+            }), 403
         return jsonify({
             'error': f'Quota atteint ({current_count}/{limit}). Augmente ton abonnement ou retire un athlète.',
+            'code': 'QUOTA_REACHED',
         }), 403
     existing = CoachingInvitation.query.filter_by(
         coach_id=user.id, athlete_id=athlete.id, status='pending',
@@ -538,7 +544,12 @@ def accept_invitation(invitation_id):
         return jsonify({'error': 'Coach introuvable'}), 404
     limit = coach.athlete_limit()
     if limit is not None and _coach_team_query(coach.id).count() >= limit:
-        return jsonify({'error': 'Ce coach a atteint son quota d\'athlètes'}), 403
+        if limit == 0:
+            return jsonify({
+                'error': 'Ce coach n\'a pas d\'abonnement actif pour accepter un athlète',
+                'code': 'SUBSCRIPTION_REQUIRED',
+            }), 403
+        return jsonify({'error': 'Ce coach a atteint son quota d\'athlètes', 'code': 'QUOTA_REACHED'}), 403
     _link_athlete_to_coach(user, coach.id)
     inv.status = 'accepted'
     CoachingInvitation.query.filter(
@@ -619,6 +630,7 @@ def create_user():
 def update_user(user_id):
     user = User.query.get_or_404(user_id)
     data = request.get_json(silent=True) or {}
+    admin = request.current_user
     if 'display_name' in data:
         user.display_name = (data.get('display_name') or '').strip() or user.username
     if 'password' in data and data['password']:
@@ -640,12 +652,36 @@ def update_user(user_id):
         tier = int(data['subscription_tier'])
         if tier not in (0, 1, 2, 3):
             return jsonify({'error': 'subscription_tier invalide (0-3)'}), 400
+        prev = int(user.subscription_tier or 0)
         user.subscription_tier = tier
         if data.get('auto_trim'):
             _enforce_coach_quota_or_trim(user)
+        if prev != tier:
+            try:
+                from app.billing import record_admin_manual_change
+                record_admin_manual_change(
+                    user, 'coach_tier', tier, admin,
+                    note=f'Passage manuel N{prev} → N{tier}',
+                )
+            except Exception:
+                pass
     if user.role == 'athlete' and 'independent_module' in data:
         raw = data.get('independent_module')
-        user.independent_module = raw in (True, 1, '1', 'true', 'True', 'yes', 'on')
+        next_val = raw in (True, 1, '1', 'true', 'True', 'yes', 'on')
+        prev_val = bool(user.independent_module)
+        user.independent_module = next_val
+        if prev_val != next_val:
+            try:
+                from app.billing import record_admin_manual_change
+                record_admin_manual_change(
+                    user,
+                    'athlete_independent' if next_val else 'athlete_free',
+                    None,
+                    admin,
+                    note='Activation manuelle Indépendant' if next_val else 'Désactivation manuelle Indépendant',
+                )
+            except Exception:
+                pass
     if user.role == 'athlete' and 'coach_id' in data:
         coach_id = data.get('coach_id')
         if coach_id in (None, '', 0, 'null'):
@@ -3325,7 +3361,15 @@ def accept_athlete_request(invitation_id):
         return jsonify({'error': 'Cet athlète a déjà un coach'}), 409
     limit = coach.athlete_limit()
     if limit is not None and User.query.filter_by(role='athlete', coach_id=coach.id).count() >= limit:
-        return jsonify({'error': f'Quota atteint. Augmente ton abonnement ou retire un athlète.'}), 403
+        if limit == 0:
+            return jsonify({
+                'error': 'Abonnement requis pour coacher des athlètes. Choisis un niveau payant.',
+                'code': 'SUBSCRIPTION_REQUIRED',
+            }), 403
+        return jsonify({
+            'error': 'Quota atteint. Augmente ton abonnement ou retire un athlète.',
+            'code': 'QUOTA_REACHED',
+        }), 403
     _link_athlete_to_coach(athlete, coach.id)
     inv.status = 'accepted'
     CoachingInvitation.query.filter(

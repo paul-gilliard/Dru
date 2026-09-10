@@ -37,7 +37,7 @@ class User(db.Model):
 
     coach = db.relationship('User', remote_side=[id], foreign_keys=[coach_id], backref='athletes')
 
-    SUBSCRIPTION_LIMITS = {0: 1, 1: 3, 2: 6, 3: None}  # None = illimité
+    SUBSCRIPTION_LIMITS = {0: 0, 1: 3, 2: 10, 3: None}  # 0 = pas d'athlète sans abo payant ; None = illimité
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -47,7 +47,7 @@ class User(db.Model):
 
     def athlete_limit(self):
         """Nombre max d'athlètes pour un coach (None = illimité)."""
-        return self.SUBSCRIPTION_LIMITS.get(int(self.subscription_tier or 0), 1)
+        return self.SUBSCRIPTION_LIMITS.get(int(self.subscription_tier or 0), 0)
 
     def to_dict(self):
         data = {
@@ -721,4 +721,53 @@ class MobileWeeklyBilanMarking(db.Model):
             'week_start': self.week_start.isoformat(),
             'done': bool(self.done),
             'athlete_note': self.note_dict(),
+        }
+
+
+class SubscriptionPayment(db.Model):
+    """Paiement / changement d'abonnement (Stripe ou upgrade manuel admin)."""
+    __tablename__ = 'subscription_payment'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    # athlete_independent | athlete_free | coach_tier
+    kind = db.Column(db.String(32), nullable=False)
+    target_tier = db.Column(db.Integer, nullable=True)  # coach 0-3 ; null pour athlete
+    amount_euros = db.Column(db.Float, nullable=False, default=0)
+    billing_period = db.Column(db.String(16), nullable=False, default='monthly')
+    # stripe | admin_manual
+    source = db.Column(db.String(24), nullable=False, default='stripe')
+    # pending | paid | refused | cancelled
+    status = db.Column(db.String(16), nullable=False, default='pending', index=True)
+    stripe_session_id = db.Column(db.String(255), nullable=True, unique=True, index=True)
+    stripe_payment_intent = db.Column(db.String(255), nullable=True)
+    note = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    resolved_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+
+    user = db.relationship('User', foreign_keys=[user_id], backref='subscription_payments')
+    resolved_by = db.relationship('User', foreign_keys=[resolved_by_id])
+
+    def to_dict(self):
+        u = self.user
+        rb = self.resolved_by
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'user_name': (u.display_name or u.username) if u else None,
+            'user_email': (u.email or u.username) if u else None,
+            'user_role': u.role if u else None,
+            'kind': self.kind,
+            'target_tier': self.target_tier,
+            'amount_euros': float(self.amount_euros or 0),
+            'billing_period': self.billing_period,
+            'source': self.source,
+            'status': self.status,
+            'stripe_session_id': self.stripe_session_id,
+            'note': self.note,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
+            'resolved_by_id': self.resolved_by_id,
+            'resolved_by_name': (rb.display_name or rb.username) if rb else None,
         }

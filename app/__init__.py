@@ -29,6 +29,7 @@ def create_app():
             print("✓ Dropped")
         
         print("Creating database tables...")
+        import app.models  # noqa: F401 — register models (incl. SubscriptionPayment)
         db.create_all()
         print("✓ Database tables created")
         
@@ -372,6 +373,8 @@ def create_app():
     # Mobile JWT API (Expo Android / iOS / Web)
     from app.mobile_api import api_bp
     app.register_blueprint(api_bp, url_prefix='/api')
+    from app.billing import billing_bp
+    app.register_blueprint(billing_bp, url_prefix='/api')
 
     @app.get('/health')
     def health():

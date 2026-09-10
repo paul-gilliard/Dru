@@ -20,6 +20,15 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
         f'mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
 
+    # Stripe (mode test : clés sk_test_ / pk_test_)
+    STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY') or ''
+    STRIPE_PUBLISHABLE_KEY = os.environ.get('STRIPE_PUBLISHABLE_KEY') or ''
+    STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET') or ''
+    # URL publique de l'API (pages success/cancel) — ex. https://….up.railway.app
+    PUBLIC_BASE_URL = (os.environ.get('PUBLIC_BASE_URL') or os.environ.get('RAILWAY_PUBLIC_DOMAIN') or '').rstrip('/')
+    if PUBLIC_BASE_URL and not PUBLIC_BASE_URL.startswith('http'):
+        PUBLIC_BASE_URL = 'https://' + PUBLIC_BASE_URL
+
 
 class DevelopmentConfig(Config):
     """Configuration pour le développement local (XAMPP)"""

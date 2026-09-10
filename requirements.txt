@@ -12,3 +12,4 @@ gunicorn
 PyMySQL
 cryptography
 python-dotenv
+stripe
