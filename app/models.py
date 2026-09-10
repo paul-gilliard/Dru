@@ -20,6 +20,20 @@ class User(db.Model):
     subscription_tier = db.Column(db.Integer, nullable=False, default=0)
     # Athlete: unlocks Stats + Easy Bilan (Indépendant)
     independent_module = db.Column(db.Boolean, nullable=False, default=False)
+    # Athlete: jour de bilan hebdo choisi par le coach (0=lundi … 6=dimanche)
+    bilan_weekday = db.Column(db.Integer, nullable=True)
+    # Coach profile (carte de visite / recherche)
+    first_name = db.Column(db.String(64), nullable=True)
+    last_name = db.Column(db.String(64), nullable=True)
+    specialty = db.Column(db.String(128), nullable=True)
+    partner_brand = db.Column(db.String(128), nullable=True)
+    athlete_types = db.Column(db.String(255), nullable=True)
+    city = db.Column(db.String(128), nullable=True)
+    lat = db.Column(db.Float, nullable=True)
+    lng = db.Column(db.Float, nullable=True)
+    contact_channel = db.Column(db.String(32), nullable=True)  # phone|whatsapp|email|instagram|other
+    contact_value = db.Column(db.String(255), nullable=True)
+    profile_completed_at = db.Column(db.DateTime, nullable=True)
 
     coach = db.relationship('User', remote_side=[id], foreign_keys=[coach_id], backref='athletes')
 
@@ -47,9 +61,59 @@ class User(db.Model):
             'subscription_tier': int(self.subscription_tier or 0) if self.role in ('coach', 'admin') else None,
             'athlete_limit': self.athlete_limit() if self.role == 'coach' else None,
             'independent_module': bool(self.independent_module) if self.role == 'athlete' else False,
+            'bilan_weekday': int(self.bilan_weekday) if self.role == 'athlete' and self.bilan_weekday is not None else None,
         }
         if self.role == 'athlete' and self.coach_id and self.coach:
             data['coach_name'] = self.coach.display_name or self.coach.username
+        if self.role in ('coach', 'admin'):
+            data.update(self.coach_profile_public_dict())
+        return data
+
+    def coach_profile_is_complete(self):
+        if self.role not in ('coach', 'admin'):
+            return False
+        return bool(
+            (self.first_name or '').strip()
+            and (self.last_name or '').strip()
+            and (self.specialty or '').strip()
+            and (self.city or '').strip()
+            and self.lat is not None
+            and self.lng is not None
+            and (self.contact_channel or '').strip()
+            and (self.contact_value or '').strip()
+        )
+
+    def coach_profile_public_dict(self):
+        """Champs visibles en recherche (sans contact en clair)."""
+        complete = self.coach_profile_is_complete()
+        return {
+            'first_name': self.first_name,
+            'last_name': self.last_name,
+            'specialty': self.specialty,
+            'partner_brand': self.partner_brand,
+            'athlete_types': self.athlete_types,
+            'city': self.city,
+            'lat': self.lat,
+            'lng': self.lng,
+            'contact_channel': self.contact_channel,
+            'profile_complete': complete,
+            'profile_completed_at': self.profile_completed_at.isoformat() if self.profile_completed_at else None,
+        }
+
+    def coach_profile_dict(self, *, reveal_contact=False):
+        data = self.coach_profile_public_dict()
+        data['public_fields'] = [
+            'first_name', 'last_name', 'specialty', 'partner_brand',
+            'athlete_types', 'city', 'contact_channel',
+        ]
+        data['private_until_linked'] = ['contact_value']
+        if reveal_contact:
+            data['contact_value'] = self.contact_value
+            data['contact_masked'] = False
+        else:
+            raw = (self.contact_value or '').strip()
+            data['contact_value'] = ('•' * min(max(len(raw), 4), 12)) if raw else None
+            data['contact_masked'] = True
         return data
 
     def __repr__(self):
@@ -57,12 +121,14 @@ class User(db.Model):
 
 
 class CoachingInvitation(db.Model):
-    """Invitation coach → athlète (reste pending jusqu'à accept/refuse)."""
+    """Invitation coach↔athlète (pending jusqu'à accept/refuse)."""
     __tablename__ = 'coaching_invitation'
     id = db.Column(db.Integer, primary_key=True)
     coach_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     status = db.Column(db.String(16), nullable=False, default='pending')  # pending|accepted|refused
+    # coach_to_athlete (défaut legacy) | athlete_to_coach
+    direction = db.Column(db.String(32), nullable=False, default='coach_to_athlete')
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     coach = db.relationship('User', foreign_keys=[coach_id])
@@ -78,11 +144,13 @@ class CoachingInvitation(db.Model):
             'coach_id': self.coach_id,
             'athlete_id': self.athlete_id,
             'status': self.status,
+            'direction': self.direction or 'coach_to_athlete',
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'coach_name': (self.coach.display_name or self.coach.username) if self.coach else None,
             'athlete_name': (self.athlete.display_name or self.athlete.username) if self.athlete else None,
             'athlete_username': self.athlete.username if self.athlete else None,
         }
+
 
 class Role(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -616,11 +684,35 @@ class MobileWeeklyBilanMarking(db.Model):
     athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     week_start = db.Column(db.Date, nullable=False, index=True)
     done = db.Column(db.Boolean, nullable=False, default=True)
+    athlete_note = db.Column(db.Text, nullable=True)
+    athlete_note_json = db.Column(db.Text, nullable=True)
+    athlete_note_updated_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     __table_args__ = (
         db.UniqueConstraint('athlete_id', 'week_start', name='uq_mobile_bilan_athlete_week'),
         )
+
+    def note_dict(self):
+        import json
+        payload = None
+        if self.athlete_note_json:
+            try:
+                payload = json.loads(self.athlete_note_json)
+            except Exception:
+                payload = None
+        if not self.athlete_note and not payload:
+            return None
+        return {
+            'summary': self.athlete_note,
+            'hunger': (payload or {}).get('hunger'),
+            'fatigue': (payload or {}).get('fatigue'),
+            'energy_crash': (payload or {}).get('energy_crash'),
+            'energy_crash_time': (payload or {}).get('energy_crash_time'),
+            'exercise_difficulty': (payload or {}).get('exercise_difficulty'),
+            'other': (payload or {}).get('other'),
+            'updated_at': self.athlete_note_updated_at.isoformat() if self.athlete_note_updated_at else None,
+        }
 
     def to_dict(self):
         return {
@@ -628,4 +720,5 @@ class MobileWeeklyBilanMarking(db.Model):
             'athlete_id': self.athlete_id,
             'week_start': self.week_start.isoformat(),
             'done': bool(self.done),
+            'athlete_note': self.note_dict(),
         }

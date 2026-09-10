@@ -152,6 +152,25 @@ def create_app():
                 db.session.execute(db.text(
                     "ALTER TABLE `user` ADD COLUMN independent_module TINYINT(1) NOT NULL DEFAULT 0"
                 ))
+            if 'bilan_weekday' not in user_cols:
+                db.session.execute(db.text(
+                    "ALTER TABLE `user` ADD COLUMN bilan_weekday INT NULL"
+                ))
+            for col, ddl in [
+                ('first_name', "ALTER TABLE `user` ADD COLUMN first_name VARCHAR(64) NULL"),
+                ('last_name', "ALTER TABLE `user` ADD COLUMN last_name VARCHAR(64) NULL"),
+                ('specialty', "ALTER TABLE `user` ADD COLUMN specialty VARCHAR(128) NULL"),
+                ('partner_brand', "ALTER TABLE `user` ADD COLUMN partner_brand VARCHAR(128) NULL"),
+                ('athlete_types', "ALTER TABLE `user` ADD COLUMN athlete_types VARCHAR(255) NULL"),
+                ('city', "ALTER TABLE `user` ADD COLUMN city VARCHAR(128) NULL"),
+                ('lat', "ALTER TABLE `user` ADD COLUMN lat FLOAT NULL"),
+                ('lng', "ALTER TABLE `user` ADD COLUMN lng FLOAT NULL"),
+                ('contact_channel', "ALTER TABLE `user` ADD COLUMN contact_channel VARCHAR(32) NULL"),
+                ('contact_value', "ALTER TABLE `user` ADD COLUMN contact_value VARCHAR(255) NULL"),
+                ('profile_completed_at', "ALTER TABLE `user` ADD COLUMN profile_completed_at DATETIME NULL"),
+            ]:
+                if col not in user_cols:
+                    db.session.execute(db.text(ddl))
             # Username élargi pour stocker un email éventuel
             try:
                 db.session.execute(db.text(
@@ -166,7 +185,63 @@ def create_app():
             except Exception:
                 pass
             db.session.commit()
-            print("✓ user coach_id / subscription_tier / email / independent_module OK")
+            print("✓ user coach_id / subscription_tier / email / independent_module / bilan / profile OK")
+
+            # Migration one-shot : ancien jour global coach → chaque athlète sans jour
+            try:
+                from app.models import User
+                coaches = User.query.filter(
+                    User.role.in_(['coach', 'admin']),
+                    User.bilan_weekday.isnot(None),
+                ).all()
+                migrated = 0
+                for coach in coaches:
+                    day = int(coach.bilan_weekday)
+                    team = User.query.filter_by(role='athlete', coach_id=coach.id, bilan_weekday=None).all()
+                    for athlete in team:
+                        athlete.bilan_weekday = day
+                        migrated += 1
+                    # Ne plus traiter le coach comme source du jour
+                    coach.bilan_weekday = None
+                if migrated:
+                    db.session.commit()
+                    print(f"✓ migrated coach bilan_weekday → {migrated} athlete(s)")
+            except Exception as mig_err:
+                db.session.rollback()
+                print(f"! bilan weekday migration skipped: {mig_err}")
+
+            # Invitation direction (athlète → coach)
+            try:
+                inv_cols = {col['name'] for col in inspector6.get_columns('coaching_invitation')}
+                if 'direction' not in inv_cols:
+                    db.session.execute(db.text(
+                        "ALTER TABLE coaching_invitation ADD COLUMN direction VARCHAR(32) NOT NULL DEFAULT 'coach_to_athlete'"
+                    ))
+                    db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                print(f"⚠️ invitation.direction alter skipped: {e}")
+
+            # Mobile bilan notes
+            try:
+                if 'mobile_weekly_bilan_marking' in inspector6.get_table_names():
+                    bcols = {col['name'] for col in inspector6.get_columns('mobile_weekly_bilan_marking')}
+                    if 'athlete_note' not in bcols:
+                        db.session.execute(db.text(
+                            "ALTER TABLE mobile_weekly_bilan_marking ADD COLUMN athlete_note TEXT NULL"
+                        ))
+                    if 'athlete_note_json' not in bcols:
+                        db.session.execute(db.text(
+                            "ALTER TABLE mobile_weekly_bilan_marking ADD COLUMN athlete_note_json TEXT NULL"
+                        ))
+                    if 'athlete_note_updated_at' not in bcols:
+                        db.session.execute(db.text(
+                            "ALTER TABLE mobile_weekly_bilan_marking ADD COLUMN athlete_note_updated_at DATETIME NULL"
+                        ))
+                    db.session.commit()
+            except Exception as e:
+                db.session.rollback()
+                print(f"⚠️ mobile bilan note alter skipped: {e}")
         except Exception as e:
             db.session.rollback()
             print(f"⚠️ user association alter skipped: {e}")

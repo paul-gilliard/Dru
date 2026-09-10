@@ -350,6 +350,12 @@ def dashboard():
         .order_by(CoachingInvitation.created_at.desc()).all()
     )
 
+    bilan_ctx = _athlete_bilan_context(user, today)
+    current_week_start = _week_start(today)
+    marking = MobileWeeklyBilanMarking.query.filter_by(
+        athlete_id=user.id, week_start=current_week_start,
+    ).first()
+
     return jsonify({
         'role': 'athlete',
         'today': today.isoformat(),
@@ -362,6 +368,13 @@ def dashboard():
         'pending_invitations': [i.to_dict() for i in pending_invites],
         'coach_id': user.coach_id,
         'coach_name': (user.coach.display_name or user.coach.username) if user.coach else None,
+        'bilan_weekday': bilan_ctx['bilan_weekday'],
+        'bilan_day_label': bilan_ctx['bilan_day_label'],
+        'is_bilan_day': bilan_ctx['is_bilan_day'],
+        'is_bilan_eve': bilan_ctx['is_bilan_eve'],
+        'can_write_bilan_note': bilan_ctx['can_write_note'],
+        'athlete_note': marking.note_dict() if marking else None,
+        'week_start': current_week_start.isoformat(),
     })
 
 
@@ -468,7 +481,7 @@ def create_invitation():
     ).first()
     if existing:
         return jsonify(existing.to_dict()), 200
-    inv = CoachingInvitation(coach_id=user.id, athlete_id=athlete.id, status='pending')
+    inv = CoachingInvitation(coach_id=user.id, athlete_id=athlete.id, status='pending', direction='coach_to_athlete')
     db.session.add(inv)
     db.session.commit()
     return jsonify(inv.to_dict()), 201
@@ -2617,6 +2630,74 @@ def reject_bank_change_request(req_id):
 
 # ---------------------------------------------------- ATHLETE BILAN HEBDO -
 
+
+DAY_NAMES_FR = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche']
+
+
+def _clean_note_text(value, max_len=500):
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    return text[:max_len]
+
+
+def _build_athlete_note_summary(payload):
+    lines = []
+    hunger = _clean_note_text(payload.get('hunger'))
+    fatigue = _clean_note_text(payload.get('fatigue'))
+    crash = _clean_note_text(payload.get('energy_crash'))
+    crash_time = _clean_note_text(payload.get('energy_crash_time'), 32)
+    exo = _clean_note_text(payload.get('exercise_difficulty'))
+    other = _clean_note_text(payload.get('other'))
+    if hunger:
+        lines.append(f'Faim : {hunger}')
+    if fatigue:
+        lines.append(f'Fatigue : {fatigue}')
+    if crash or crash_time:
+        if crash and crash_time:
+            lines.append(f'Coup de barre ({crash_time}) : {crash}')
+        elif crash_time:
+            lines.append(f'Coup de barre à {crash_time}')
+        else:
+            lines.append(f'Coup de barre : {crash}')
+    if exo:
+        lines.append(f'Difficulté exo : {exo}')
+    if other:
+        lines.append(f'Autre : {other}')
+    return '\n'.join(lines) if lines else None
+
+
+def _athlete_bilan_context(user, today=None):
+    today = today or date.today()
+    weekday = int(user.bilan_weekday) if user.bilan_weekday is not None else None
+    j_minus_1 = ((weekday - 1) % 7) if weekday is not None else None
+    return {
+        'bilan_weekday': weekday,
+        'bilan_day_label': DAY_NAMES_FR[weekday] if weekday is not None else None,
+        'is_bilan_day': weekday is not None and today.weekday() == weekday,
+        'is_bilan_eve': j_minus_1 is not None and today.weekday() == j_minus_1,
+        'can_write_note': weekday is not None and user.coach_id is not None,
+    }
+
+
+def _get_or_create_marking(athlete_id, week_start, done=False):
+    marking = MobileWeeklyBilanMarking.query.filter_by(athlete_id=athlete_id, week_start=week_start).first()
+    if marking:
+        return marking
+    marking = MobileWeeklyBilanMarking(athlete_id=athlete_id, week_start=week_start, done=done)
+    db.session.add(marking)
+    return marking
+
+
+def _coach_owns_athlete(coach, athlete_id):
+    if coach.role == 'admin':
+        return True
+    athlete = User.query.get(athlete_id)
+    return bool(athlete and athlete.role == 'athlete' and athlete.coach_id == coach.id)
+
+
 @api_bp.get('/athlete/bilan-hebdo')
 @login_required
 def athlete_weekly_bilan():
@@ -2854,6 +2935,7 @@ def weekly_bilan():
             'athlete': a.to_dict(),
             'week_start': current_start.isoformat(),
             'done': bool(marking and marking.done),
+            'athlete_note': marking.note_dict() if marking else None,
             'metrics': metrics,
             'objectives': [o.to_dict() for o in objectives],
             'muscles': muscle_rows,
@@ -2914,4 +2996,294 @@ def bilan_unchecked_count():
             MobileWeeklyBilanMarking.done.is_(True),
         ).count()
     return jsonify({'unchecked_count': max(total_athletes - marked, 0)})
+
+
+# ---------------------------------------------------- BILAN DAY PER ATHLETE -
+
+@api_bp.get('/coach/athletes/<int:athlete_id>/bilan-settings')
+@coach_required
+def get_athlete_bilan_settings(athlete_id):
+    if not _coach_owns_athlete(request.current_user, athlete_id):
+        return jsonify({'error': 'Athlète non autorisé'}), 403
+    athlete = User.query.get_or_404(athlete_id)
+    weekday = int(athlete.bilan_weekday) if athlete.bilan_weekday is not None else None
+    return jsonify({
+        'athlete_id': athlete.id,
+        'bilan_weekday': weekday,
+        'bilan_day_label': DAY_NAMES_FR[weekday] if weekday is not None else None,
+        'required': True,
+    })
+
+
+@api_bp.put('/coach/athletes/<int:athlete_id>/bilan-settings')
+@coach_required
+def put_athlete_bilan_settings(athlete_id):
+    """Jour de bilan hebdo pour UN athlète (0=lundi … 6=dimanche)."""
+    if not _coach_owns_athlete(request.current_user, athlete_id):
+        return jsonify({'error': 'Athlète non autorisé'}), 403
+    athlete = User.query.get_or_404(athlete_id)
+    if athlete.role != 'athlete':
+        return jsonify({'error': 'Utilisateur non athlète'}), 400
+    data = request.get_json(silent=True) or {}
+    try:
+        weekday = int(data.get('bilan_weekday'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'bilan_weekday requis (0=lundi … 6=dimanche)'}), 400
+    if weekday < 0 or weekday > 6:
+        return jsonify({'error': 'bilan_weekday doit être entre 0 et 6'}), 400
+    athlete.bilan_weekday = weekday
+    db.session.commit()
+    return jsonify({
+        'athlete_id': athlete.id,
+        'bilan_weekday': weekday,
+        'bilan_day_label': DAY_NAMES_FR[weekday],
+        'required': True,
+        'athlete': athlete.to_dict(),
+    })
+
+
+# Compat: ancien endpoint global → exige athlete_id désormais
+@api_bp.put('/coach/bilan-settings')
+@coach_required
+def put_bilan_settings_compat():
+    data = request.get_json(silent=True) or {}
+    athlete_id = data.get('athlete_id')
+    if not athlete_id:
+        return jsonify({'error': 'athlete_id requis — le jour de bilan se choisit par athlète'}), 400
+    return put_athlete_bilan_settings(int(athlete_id))
+
+
+@api_bp.post('/athlete/bilan-hebdo/note')
+@login_required
+def athlete_save_bilan_note():
+    user = request.current_user
+    if user.role != 'athlete':
+        return jsonify({'error': "Réservé à l'athlète"}), 403
+    if not user.coach_id:
+        return jsonify({'error': 'Aucun coach associé'}), 400
+    if user.bilan_weekday is None:
+        return jsonify({'error': "Ton coach n'a pas encore choisi ton jour de bilan"}), 400
+    data = request.get_json(silent=True) or {}
+    week_start = _parse_date(data.get('week_start')) or _week_start(date.today())
+    payload = {
+        'hunger': _clean_note_text(data.get('hunger')),
+        'fatigue': _clean_note_text(data.get('fatigue')),
+        'energy_crash': _clean_note_text(data.get('energy_crash')),
+        'energy_crash_time': _clean_note_text(data.get('energy_crash_time'), 32),
+        'exercise_difficulty': _clean_note_text(data.get('exercise_difficulty')),
+        'other': _clean_note_text(data.get('other')),
+    }
+    summary = _build_athlete_note_summary(payload)
+    if not summary:
+        return jsonify({'error': 'Écris au moins un élément de bilan'}), 400
+    marking = _get_or_create_marking(user.id, week_start, done=False)
+    marking.athlete_note = summary
+    marking.athlete_note_json = json.dumps(payload, ensure_ascii=False)
+    marking.athlete_note_updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify(marking.to_dict())
+
+
+# ---------------------------------------------------- COACH PROFILE / SEARCH -
+
+CONTACT_CHANNELS = {'phone', 'whatsapp', 'email', 'instagram', 'other'}
+
+
+@api_bp.get('/coach/profile')
+@coach_required
+def get_coach_profile():
+    user = request.current_user
+    data = user.coach_profile_dict(reveal_contact=True)
+    data['user'] = user.to_dict()
+    return jsonify(data)
+
+
+@api_bp.put('/coach/profile')
+@coach_required
+def put_coach_profile():
+    user = request.current_user
+    data = request.get_json(silent=True) or {}
+
+    def _s(key, max_len=255):
+        v = data.get(key)
+        if v is None:
+            return None
+        t = str(v).strip()
+        return t[:max_len] if t else None
+
+    user.first_name = _s('first_name', 64)
+    user.last_name = _s('last_name', 64)
+    user.specialty = _s('specialty', 128)
+    user.partner_brand = _s('partner_brand', 128)
+    user.athlete_types = _s('athlete_types', 255)
+    user.city = _s('city', 128)
+    channel = _s('contact_channel', 32)
+    if channel and channel not in CONTACT_CHANNELS:
+        return jsonify({'error': 'contact_channel invalide'}), 400
+    user.contact_channel = channel
+    user.contact_value = _s('contact_value', 255)
+
+    if 'lat' in data:
+        try:
+            user.lat = float(data['lat']) if data['lat'] is not None else None
+        except (TypeError, ValueError):
+            return jsonify({'error': 'lat invalide'}), 400
+    if 'lng' in data:
+        try:
+            user.lng = float(data['lng']) if data['lng'] is not None else None
+        except (TypeError, ValueError):
+            return jsonify({'error': 'lng invalide'}), 400
+
+    # Sync display_name from first/last when provided
+    if user.first_name or user.last_name:
+        user.display_name = ' '.join(x for x in [user.first_name, user.last_name] if x).strip() or user.display_name
+
+    if user.coach_profile_is_complete():
+        if not user.profile_completed_at:
+            user.profile_completed_at = datetime.utcnow()
+    else:
+        user.profile_completed_at = None
+
+    db.session.commit()
+    out = user.coach_profile_dict(reveal_contact=True)
+    out['user'] = user.to_dict()
+    return jsonify(out)
+
+
+@api_bp.get('/coaches/search')
+@login_required
+def search_coaches():
+    """Recherche coaches pour map : city et/ou bbox."""
+    city = (request.args.get('city') or '').strip()
+    q = User.query.filter(User.role == 'coach')
+    if city:
+        like = f'%{city}%'
+        q = q.filter(User.city.ilike(like))
+    # bbox: west,south,east,north
+    bbox = request.args.get('bbox')
+    if bbox:
+        try:
+            west, south, east, north = [float(x) for x in bbox.split(',')]
+            q = q.filter(
+                User.lat.isnot(None), User.lng.isnot(None),
+                User.lat >= south, User.lat <= north,
+                User.lng >= west, User.lng <= east,
+            )
+        except ValueError:
+            return jsonify({'error': 'bbox invalide (west,south,east,north)'}), 400
+    else:
+        # Sans bbox : seulement ceux géolocalisés pour la map
+        q = q.filter(User.lat.isnot(None), User.lng.isnot(None))
+
+    rows = q.order_by(User.display_name, User.username).limit(100).all()
+    viewer = request.current_user
+    out = []
+    for c in rows:
+        reveal = viewer.role == 'athlete' and viewer.coach_id == c.id
+        card = c.coach_profile_dict(reveal_contact=reveal)
+        card['id'] = c.id
+        card['display_name'] = c.display_name or c.username
+        card['profile_complete'] = c.coach_profile_is_complete()
+        out.append(card)
+    return jsonify(out)
+
+
+@api_bp.get('/coaches/<int:coach_id>')
+@login_required
+def get_coach_public(coach_id):
+    coach = User.query.filter_by(id=coach_id, role='coach').first_or_404()
+    viewer = request.current_user
+    reveal = viewer.role == 'athlete' and viewer.coach_id == coach.id
+    data = coach.coach_profile_dict(reveal_contact=reveal)
+    data['id'] = coach.id
+    data['display_name'] = coach.display_name or coach.username
+    return jsonify(data)
+
+
+@api_bp.post('/athlete/coach-requests')
+@login_required
+def create_athlete_coach_request():
+    user = request.current_user
+    if user.role != 'athlete':
+        return jsonify({'error': "Réservé à l'athlète"}), 403
+    if user.coach_id:
+        return jsonify({'error': 'Tu as déjà un coach'}), 409
+    data = request.get_json(silent=True) or {}
+    coach_id = data.get('coach_id')
+    if not coach_id:
+        return jsonify({'error': 'coach_id requis'}), 400
+    coach = User.query.filter_by(id=coach_id, role='coach').first()
+    if not coach:
+        return jsonify({'error': 'Coach introuvable'}), 404
+    existing = CoachingInvitation.query.filter_by(
+        coach_id=coach.id, athlete_id=user.id, status='pending',
+    ).first()
+    if existing:
+        return jsonify(existing.to_dict()), 200
+    inv = CoachingInvitation(
+        coach_id=coach.id, athlete_id=user.id,
+        status='pending', direction='athlete_to_coach',
+    )
+    db.session.add(inv)
+    db.session.commit()
+    return jsonify(inv.to_dict()), 201
+
+
+@api_bp.get('/coach/athlete-requests')
+@coach_required
+def list_athlete_requests():
+    user = request.current_user
+    if user.role == 'admin':
+        rows = (CoachingInvitation.query
+                .filter_by(status='pending', direction='athlete_to_coach')
+                .order_by(CoachingInvitation.created_at.desc()).all())
+    else:
+        rows = (CoachingInvitation.query
+                .filter_by(coach_id=user.id, status='pending', direction='athlete_to_coach')
+                .order_by(CoachingInvitation.created_at.desc()).all())
+    return jsonify([i.to_dict() for i in rows])
+
+
+@api_bp.post('/coach/athlete-requests/<int:invitation_id>/accept')
+@coach_required
+def accept_athlete_request(invitation_id):
+    user = request.current_user
+    inv = CoachingInvitation.query.get_or_404(invitation_id)
+    if inv.status != 'pending' or (inv.direction or '') != 'athlete_to_coach':
+        return jsonify({'error': 'Demande invalide'}), 400
+    if user.role != 'admin' and inv.coach_id != user.id:
+        return jsonify({'error': 'Non autorisé'}), 403
+    coach = User.query.get(inv.coach_id)
+    athlete = User.query.get(inv.athlete_id)
+    if not coach or not athlete or athlete.role != 'athlete':
+        return jsonify({'error': 'Utilisateur introuvable'}), 404
+    if athlete.coach_id:
+        return jsonify({'error': 'Cet athlète a déjà un coach'}), 409
+    limit = coach.athlete_limit()
+    if limit is not None and User.query.filter_by(role='athlete', coach_id=coach.id).count() >= limit:
+        return jsonify({'error': f'Quota atteint. Augmente ton abonnement ou retire un athlète.'}), 403
+    athlete.coach_id = coach.id
+    athlete.coach_associated_at = datetime.utcnow()
+    inv.status = 'accepted'
+    CoachingInvitation.query.filter(
+        CoachingInvitation.athlete_id == athlete.id,
+        CoachingInvitation.status == 'pending',
+        CoachingInvitation.id != inv.id,
+    ).update({'status': 'refused'}, synchronize_session=False)
+    db.session.commit()
+    return jsonify(inv.to_dict())
+
+
+@api_bp.post('/coach/athlete-requests/<int:invitation_id>/refuse')
+@coach_required
+def refuse_athlete_request(invitation_id):
+    user = request.current_user
+    inv = CoachingInvitation.query.get_or_404(invitation_id)
+    if inv.status != 'pending' or (inv.direction or '') != 'athlete_to_coach':
+        return jsonify({'error': 'Demande invalide'}), 400
+    if user.role != 'admin' and inv.coach_id != user.id:
+        return jsonify({'error': 'Non autorisé'}), 403
+    inv.status = 'refused'
+    db.session.commit()
+    return jsonify(inv.to_dict())
 
