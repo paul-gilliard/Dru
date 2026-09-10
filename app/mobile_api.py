@@ -3310,6 +3310,24 @@ def get_coach_public(coach_id):
     return jsonify(data)
 
 
+@api_bp.delete('/athlete/coach')
+@login_required
+def athlete_leave_coach():
+    """L'athlète se détache de son coach (compte et données gardés)."""
+    user = request.current_user
+    if user.role != 'athlete':
+        return jsonify({'error': "Réservé à l'athlète"}), 403
+    if not user.coach_id:
+        return jsonify({'error': "Tu n'as pas de coach"}), 400
+    coach_id = user.coach_id
+    _link_athlete_to_coach(user, None)
+    CoachingInvitation.query.filter_by(
+        coach_id=coach_id, athlete_id=user.id, status='pending',
+    ).update({'status': 'refused'}, synchronize_session=False)
+    db.session.commit()
+    return jsonify({'ok': True, 'user': user.to_dict()})
+
+
 @api_bp.post('/athlete/coach-requests')
 @login_required
 def create_athlete_coach_request():
