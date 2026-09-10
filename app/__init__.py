@@ -29,7 +29,7 @@ def create_app():
             print("✓ Dropped")
         
         print("Creating database tables...")
-        import app.models  # noqa: F401 — register models (incl. SubscriptionPayment)
+        from app import models as _models  # noqa: F401 — register models (incl. SubscriptionPayment)
         db.create_all()
         print("✓ Database tables created")
         
