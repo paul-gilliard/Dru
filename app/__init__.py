@@ -286,19 +286,9 @@ def create_app():
                 admin_legacy.subscription_tier = 3
             db.session.commit()
 
-        # Backfill : athlètes sans coach → rattachés au coach historique 'admin'
-        try:
-            orphan_athletes = User.query.filter_by(role='athlete', coach_id=None).all()
-            if orphan_athletes and admin_legacy:
-                for a in orphan_athletes:
-                    a.coach_id = admin_legacy.id
-                    if not a.coach_associated_at:
-                        a.coach_associated_at = datetime.utcnow()
-                db.session.commit()
-                print(f"✓ {len(orphan_athletes)} athlete(s) rattachés au coach admin")
-        except Exception as e:
-            db.session.rollback()
-            print(f"⚠️ athlete backfill skipped: {e}")
+        # Ne plus rattacher automatiquement les orphelins au compte 'admin'
+        # (sinon des athlètes non coachés apparaissent dans l'équipe Admin).
+        # Le rattachement se fait uniquement via invitation / demande / admin users.
 
         # Email Paul
         try:

@@ -314,10 +314,8 @@ def dashboard():
     today = date.today()
 
     if user.role in ('coach', 'admin'):
-        if user.role == 'admin':
-            athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
-        else:
-            athletes = _coach_team_query(user.id).order_by(User.username).all()
+        # Toujours l'équipe du compte connecté (admin plateforme gère le reste via /admin/users).
+        athletes = _coach_team_query(user.id).order_by(User.username).all()
         summary = [_athlete_summary(a) for a in athletes]
         limit = user.athlete_limit() if user.role == 'coach' else None
         over_quota = bool(user.role == 'coach' and limit is not None and len(athletes) > limit)
@@ -397,10 +395,7 @@ def dashboard():
 @coach_required
 def list_athletes():
     user = request.current_user
-    if user.role == 'admin':
-        athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
-    else:
-        athletes = _coach_team_query(user.id).order_by(User.username).all()
+    athletes = _coach_team_query(user.id).order_by(User.username).all()
     return jsonify([a.to_dict() for a in athletes])
 
 
