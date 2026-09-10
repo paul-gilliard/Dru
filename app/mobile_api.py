@@ -274,11 +274,14 @@ def login():
 
 @api_bp.post('/auth/register')
 def register():
-    """Inscription autonome athlète — l'identifiant est l'email."""
+    """Inscription autonome — athlète ou coach (pas admin)."""
     data = request.get_json(silent=True) or {}
     email = _normalize_email(data.get('email') or data.get('username'))
     password = data.get('password') or ''
     display_name = (data.get('display_name') or '').strip()
+    role = (data.get('role') or 'athlete').strip().lower()
+    if role not in ('athlete', 'coach'):
+        return jsonify({'error': 'Choisis athlète ou coach'}), 400
     if not email or not password:
         return jsonify({'error': 'email et password requis'}), 400
     if not _is_valid_email(email):
@@ -291,7 +294,14 @@ def register():
         return jsonify({'error': 'Cette adresse email est déjà utilisée'}), 409
     if not display_name:
         display_name = email.split('@')[0]
-    user = User(username=email, email=email, role='athlete', display_name=display_name)
+    user = User(
+        username=email,
+        email=email,
+        role=role,
+        display_name=display_name,
+        subscription_tier=0 if role == 'coach' else 0,
+        independent_module=False,
+    )
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
