@@ -154,6 +154,21 @@ def _coach_team_query(coach_id):
     return User.query.filter_by(role='athlete', coach_id=coach_id)
 
 
+def _link_athlete_to_coach(athlete, coach_id):
+    """Assigne / retire un coach. Reset du jour de bilan si la collab change."""
+    new_id = int(coach_id) if coach_id is not None else None
+    old_id = athlete.coach_id
+    if old_id != new_id:
+        athlete.bilan_weekday = None
+    athlete.coach_id = new_id
+    if new_id is None:
+        athlete.coach_associated_at = None
+    else:
+        athlete.coach_associated_at = datetime.utcnow()
+
+
+
+
 def _purge_user_data(user_id):
     """Supprime / détache toutes les données liées avant delete User (évite les FK)."""
     CoachingInvitation.query.filter(
@@ -228,14 +243,12 @@ def _enforce_coach_quota_or_trim(coach, prefer_keep_ids=None):
         removed = []
         for a in athletes:
             if a.id not in kept_ids:
-                a.coach_id = None
-                a.coach_associated_at = None
+                _link_athlete_to_coach(a, None)
                 removed.append(a.id)
         return removed
     removed = []
     for a in athletes[limit:]:
-        a.coach_id = None
-        a.coach_associated_at = None
+        _link_athlete_to_coach(a, None)
         removed.append(a.id)
     return removed
 
@@ -426,8 +439,7 @@ def unlink_athlete(athlete_id):
         return jsonify({'error': 'Utilisateur non modifiable'}), 400
     if user.role == 'coach' and athlete.coach_id != user.id:
         return jsonify({'error': 'Cet athlète n\'est pas dans ton équipe'}), 403
-    athlete.coach_id = None
-    athlete.coach_associated_at = None
+    _link_athlete_to_coach(athlete, None)
     if user.role == 'coach':
         CoachingInvitation.query.filter_by(
             coach_id=user.id, athlete_id=athlete_id, status='pending',
@@ -530,8 +542,7 @@ def accept_invitation(invitation_id):
     limit = coach.athlete_limit()
     if limit is not None and _coach_team_query(coach.id).count() >= limit:
         return jsonify({'error': 'Ce coach a atteint son quota d\'athlètes'}), 403
-    user.coach_id = coach.id
-    user.coach_associated_at = datetime.utcnow()
+    _link_athlete_to_coach(user, coach.id)
     inv.status = 'accepted'
     CoachingInvitation.query.filter(
         CoachingInvitation.athlete_id == user.id,
@@ -600,8 +611,7 @@ def create_user():
     if role == 'athlete' and data.get('coach_id'):
         coach = User.query.filter_by(id=int(data['coach_id']), role='coach').first()
         if coach:
-            user.coach_id = coach.id
-            user.coach_associated_at = datetime.utcnow()
+            _link_athlete_to_coach(user, coach.id)
     db.session.add(user)
     db.session.commit()
     return jsonify(user.to_dict()), 201
@@ -642,14 +652,12 @@ def update_user(user_id):
     if user.role == 'athlete' and 'coach_id' in data:
         coach_id = data.get('coach_id')
         if coach_id in (None, '', 0, 'null'):
-            user.coach_id = None
-            user.coach_associated_at = None
+            _link_athlete_to_coach(user, None)
         else:
             coach = User.query.filter_by(id=int(coach_id), role='coach').first()
             if not coach:
                 return jsonify({'error': 'Coach introuvable'}), 404
-            user.coach_id = coach.id
-            user.coach_associated_at = datetime.utcnow()
+            _link_athlete_to_coach(user, coach.id)
     db.session.commit()
     return jsonify(user.to_dict())
 
@@ -2692,8 +2700,7 @@ def _get_or_create_marking(athlete_id, week_start, done=False):
 
 
 def _coach_owns_athlete(coach, athlete_id):
-    if coach.role == 'admin':
-        return True
+    """Jour de bilan / actions bilan : uniquement les athlètes de CETTE équipe."""
     athlete = User.query.get(athlete_id)
     return bool(athlete and athlete.role == 'athlete' and athlete.coach_id == coach.id)
 
@@ -2858,9 +2865,8 @@ def weekly_bilan():
     previous_end = previous_start + timedelta(days=6)
     attention_cutoff = today - timedelta(days=180)
 
-    athletes = User.query.filter_by(role='athlete').order_by(User.username).all()
-    if request.current_user.role == 'coach':
-        athletes = [a for a in athletes if a.coach_id == request.current_user.id]
+    # Easy Bilan = uniquement les athlètes de l'équipe du compte connecté (coach ou admin).
+    athletes = _coach_team_query(request.current_user.id).order_by(User.username).all()
     if not athletes:
         return jsonify([])
     athlete_ids = [a.id for a in athletes]
@@ -2982,10 +2988,7 @@ def unmark_weekly_bilan():
 @coach_required
 def bilan_unchecked_count():
     current_start = _week_start(date.today())
-    if request.current_user.role == 'coach':
-        athletes = _coach_team_query(request.current_user.id).all()
-    else:
-        athletes = User.query.filter_by(role='athlete').all()
+    athletes = _coach_team_query(request.current_user.id).all()
     athlete_ids = [a.id for a in athletes]
     total_athletes = len(athlete_ids)
     marked = 0
@@ -3262,8 +3265,7 @@ def accept_athlete_request(invitation_id):
     limit = coach.athlete_limit()
     if limit is not None and User.query.filter_by(role='athlete', coach_id=coach.id).count() >= limit:
         return jsonify({'error': f'Quota atteint. Augmente ton abonnement ou retire un athlète.'}), 403
-    athlete.coach_id = coach.id
-    athlete.coach_associated_at = datetime.utcnow()
+    _link_athlete_to_coach(athlete, coach.id)
     inv.status = 'accepted'
     CoachingInvitation.query.filter(
         CoachingInvitation.athlete_id == athlete.id,
