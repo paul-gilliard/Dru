@@ -376,6 +376,8 @@ def dashboard():
         'objectives': [o.to_dict() for o in objectives],
         'last_journal': last_journal.to_dict() if last_journal else None,
         'has_logged_today': today_journal is not None,
+        'journal_streak': _journal_streak(user.id, today),
+        'training_week_streak': _training_week_streak(user.id, program, today),
         'pending_invitations': [i.to_dict() for i in pending_invites],
         'coach_id': user.coach_id,
         'coach_name': (user.coach.display_name or user.coach.username) if user.coach else None,
@@ -2670,6 +2672,70 @@ def _build_athlete_note_summary(payload):
     if other:
         lines.append(f'Autre : {other}')
     return '\n'.join(lines) if lines else None
+
+
+
+def _journal_streak(athlete_id, today):
+    """Jours consecutifs avec journal. Si aujourd'hui vide, part d'hier."""
+    dates = {
+        j.entry_date for j in JournalEntry.query.filter(
+            JournalEntry.athlete_id == athlete_id,
+            JournalEntry.entry_date >= today - timedelta(days=120),
+        ).all()
+    }
+    cursor = today if today in dates else today - timedelta(days=1)
+    streak = 0
+    while cursor in dates:
+        streak += 1
+        cursor -= timedelta(days=1)
+    return streak
+
+
+def _training_week_streak(athlete_id, program, today):
+    """Semaines consecutives ou toutes les seances du programme ont ete loggees."""
+    if not program or not program.sessions:
+        return 0
+    session_days = sorted({s.day_of_week for s in program.sessions})
+    if not session_days:
+        return 0
+    oldest = today - timedelta(days=24 * 7)
+    logs = PerformanceEntry.query.filter(
+        PerformanceEntry.athlete_id == athlete_id,
+        PerformanceEntry.entry_date >= oldest,
+    ).all()
+    logged_dates = {e.entry_date for e in logs}
+    logged_by_session_date = {
+        (e.program_session_id, e.entry_date)
+        for e in logs if e.program_session_id is not None
+    }
+
+    def week_complete(week_start):
+        for dow in session_days:
+            day = week_start + timedelta(days=dow)
+            if day > today:
+                return None
+            sess = next((s for s in program.sessions if s.day_of_week == dow), None)
+            if not sess:
+                continue
+            if (sess.id, day) in logged_by_session_date or day in logged_dates:
+                continue
+            return False
+        return True
+
+    streak = 0
+    current_start = _week_start(today)
+    start = current_start
+    first = week_complete(start)
+    if first is not True:
+        start = current_start - timedelta(days=7)
+    for i in range(24):
+        ws = start - timedelta(days=7 * i)
+        ok = week_complete(ws)
+        if ok is True:
+            streak += 1
+        else:
+            break
+    return streak
 
 
 def _athlete_bilan_context(user, today=None):
