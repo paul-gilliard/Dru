@@ -395,14 +395,18 @@ def create_default_admin():
 # Muscles groups disponibles
 MUSCLE_GROUPS = [
     'ABDOS',
+    'ADDUCTEUR',
+    'AVANT-BRAS',
     'BICEPS',
     'DOS',
     'EPAULES',
+    'FESSIERS',
     'ISCHIO',
     'LEGS',
     'MOLLET',
     'PEC',
-    'QUAD'
+    'QUAD',
+    'TRICEPS',
 ]
 
 
