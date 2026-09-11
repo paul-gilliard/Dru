@@ -506,7 +506,12 @@ def dashboard():
                      .order_by(JournalEntry.entry_date.desc()).first())
     today_journal = JournalEntry.query.filter_by(athlete_id=user.id, entry_date=today).first()
     pending_invites = (
-        CoachingInvitation.query.filter_by(athlete_id=user.id, status='pending')
+        CoachingInvitation.query.filter(
+            CoachingInvitation.athlete_id == user.id,
+            CoachingInvitation.status == 'pending',
+            # Ne pas remonter les demandes initiées par l'athlète (côté coach).
+            CoachingInvitation.direction == 'coach_to_athlete',
+        )
         .order_by(CoachingInvitation.created_at.desc()).all()
     )
 
@@ -671,7 +676,11 @@ def list_athlete_invitations():
     if user.role != 'athlete':
         return jsonify([])
     rows = (
-        CoachingInvitation.query.filter_by(athlete_id=user.id, status='pending')
+        CoachingInvitation.query.filter(
+            CoachingInvitation.athlete_id == user.id,
+            CoachingInvitation.status == 'pending',
+            CoachingInvitation.direction == 'coach_to_athlete',
+        )
         .order_by(CoachingInvitation.created_at.desc()).all()
     )
     return jsonify([i.to_dict() for i in rows])
@@ -686,6 +695,8 @@ def accept_invitation(invitation_id):
     inv = CoachingInvitation.query.get_or_404(invitation_id)
     if inv.athlete_id != user.id or inv.status != 'pending':
         return jsonify({'error': 'Invitation invalide'}), 400
+    if (inv.direction or 'coach_to_athlete') != 'coach_to_athlete':
+        return jsonify({'error': 'Cette demande doit être acceptée par le coach'}), 400
     if user.coach_id:
         return jsonify({'error': 'Tu as déjà un coach'}), 409
     coach = User.query.get(inv.coach_id)
@@ -719,6 +730,8 @@ def refuse_invitation(invitation_id):
     inv = CoachingInvitation.query.get_or_404(invitation_id)
     if inv.athlete_id != user.id or inv.status != 'pending':
         return jsonify({'error': 'Invitation invalide'}), 400
+    if (inv.direction or 'coach_to_athlete') != 'coach_to_athlete':
+        return jsonify({'error': 'Cette demande doit être traitée par le coach'}), 400
     inv.status = 'refused'
     db.session.commit()
     return jsonify({'ok': True})
