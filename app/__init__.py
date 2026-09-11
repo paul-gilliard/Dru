@@ -347,6 +347,26 @@ def create_app():
         except Exception as e:
             db.session.rollback()
             print(f"⚠️ Superadmin skipped: {e}")
+
+        # Reset optionnel du coach historique "admin" (ancien backdoor azerty — irrécupérable).
+        # Définis COACH_ADMIN_PASSWORD sur le service web Railway, redéploie, puis retire la variable.
+        coach_admin_password = (os.environ.get('COACH_ADMIN_PASSWORD') or '').strip()
+        if coach_admin_password:
+            try:
+                coach_admin = (
+                    User.query.filter_by(username='admin').first()
+                    or User.query.filter(db.func.lower(User.username) == 'admin').first()
+                )
+                if coach_admin:
+                    coach_admin.role = 'coach'
+                    coach_admin.set_password(coach_admin_password)
+                    db.session.commit()
+                    print(f"✓ Coach '{coach_admin.username}' mdp reset via COACH_ADMIN_PASSWORD")
+                else:
+                    print("⚠️ Aucun user 'admin' trouvé pour COACH_ADMIN_PASSWORD")
+            except Exception as e:
+                db.session.rollback()
+                print(f"⚠️ Coach admin reset skipped: {e}")
         
         # Seed exercises and foods if tables are empty
         from app.models import Exercise, Food
