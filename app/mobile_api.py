@@ -10,6 +10,11 @@ from app.models import (
     User, Availability, Program, ProgramSession, ExerciseEntry,
     JournalEntry, PerformanceEntry, Exercise, Food, MealPlan, MealEntry,
     Objective, MobileWeeklyBilanMarking, CoachingInvitation, BankChangeRequest, MUSCLE_GROUPS,
+    WeeklyBilanMarking, SubscriptionPayment,
+)
+from app.auth_security import (
+    honeypot_triggered, hit, looks_like_bot_identity, rate_limited,
+    LOGIN_LIMIT, LOGIN_WINDOW_SEC, REGISTER_LIMIT, REGISTER_WINDOW_SEC,
 )
 
 api_bp = Blueprint('api', __name__)
@@ -196,6 +201,19 @@ def _purge_user_data(user_id):
     MealPlan.query.filter_by(coach_id=user_id).update({'coach_id': None}, synchronize_session=False)
 
     MobileWeeklyBilanMarking.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
+    try:
+        WeeklyBilanMarking.query.filter(
+            (WeeklyBilanMarking.coach_id == user_id) | (WeeklyBilanMarking.athlete_id == user_id)
+        ).delete(synchronize_session=False)
+    except Exception:
+        pass
+    try:
+        SubscriptionPayment.query.filter(
+            (SubscriptionPayment.user_id == user_id) | (SubscriptionPayment.resolved_by_id == user_id)
+        ).delete(synchronize_session=False)
+    except Exception:
+        pass
+
     JournalEntry.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
     PerformanceEntry.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
     Objective.query.filter_by(athlete_id=user_id).delete(synchronize_session=False)
@@ -257,15 +275,15 @@ def _enforce_coach_quota_or_trim(coach, prefer_keep_ids=None):
 
 @api_bp.post('/auth/login')
 def login():
+    if rate_limited('login', limit=LOGIN_LIMIT, window_sec=LOGIN_WINDOW_SEC):
+        return jsonify({'error': 'Trop de tentatives. Réessaie dans quelques minutes.'}), 429
     data = request.get_json(silent=True) or {}
     login_id = (data.get('username') or data.get('email') or '').strip()
     password = data.get('password') or ''
 
     user = _find_user_by_login(login_id)
-    if not user or not (
-        user.check_password(password)
-        or (login_id.lower() in ('admin',) and password == 'azerty')
-    ):
+    if not user or not user.check_password(password):
+        hit('login')
         return jsonify({'error': 'Identifiants incorrects'}), 401
 
     token = generate_token(user)
@@ -275,7 +293,15 @@ def login():
 @api_bp.post('/auth/register')
 def register():
     """Inscription autonome — athlète ou coach (pas admin)."""
+    if rate_limited('register', limit=REGISTER_LIMIT, window_sec=REGISTER_WINDOW_SEC):
+        return jsonify({'error': 'Trop d’inscriptions depuis cette adresse. Réessaie plus tard.'}), 429
+
     data = request.get_json(silent=True) or {}
+    # Honeypot anti-bot (champs jamais remplis par l’app légitime)
+    if honeypot_triggered(data):
+        hit('register')
+        return jsonify({'error': 'Inscription refusée'}), 400
+
     email = _normalize_email(data.get('email') or data.get('username'))
     password = data.get('password') or ''
     display_name = (data.get('display_name') or '').strip()
@@ -286,8 +312,11 @@ def register():
         return jsonify({'error': 'email et password requis'}), 400
     if not _is_valid_email(email):
         return jsonify({'error': 'Adresse email invalide'}), 400
-    if len(password) < 4:
-        return jsonify({'error': 'Mot de passe trop court'}), 400
+    if len(password) < 8:
+        return jsonify({'error': 'Mot de passe trop court (8 caractères min.)'}), 400
+    if looks_like_bot_identity(email, display_name):
+        hit('register')
+        return jsonify({'error': 'Inscription refusée'}), 400
     if User.query.filter(db.func.lower(User.email) == email).first():
         return jsonify({'error': 'Cette adresse email est déjà utilisée'}), 409
     if User.query.filter(db.func.lower(User.username) == email).first():
@@ -305,6 +334,7 @@ def register():
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
+    hit('register')
     token = generate_token(user)
     return jsonify({'token': token, 'user': user.to_dict()}), 201
 
