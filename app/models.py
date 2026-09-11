@@ -22,6 +22,10 @@ class User(db.Model):
     independent_module = db.Column(db.Boolean, nullable=False, default=False)
     # Athlete: jour de bilan hebdo choisi par le coach (0=lundi … 6=dimanche)
     bilan_weekday = db.Column(db.Integer, nullable=True)
+    # Athlete de démonstration : ne compte pas dans le quota du coach, supprimable
+    is_demo = db.Column(db.Boolean, nullable=False, default=False)
+    # Coach : date de création de son athlète démo (empêche de le recréer après suppression)
+    demo_seeded_at = db.Column(db.DateTime, nullable=True)
     # Coach profile (carte de visite / recherche)
     first_name = db.Column(db.String(64), nullable=True)
     last_name = db.Column(db.String(64), nullable=True)
@@ -62,6 +66,7 @@ class User(db.Model):
             'athlete_limit': self.athlete_limit() if self.role == 'coach' else None,
             'independent_module': bool(self.independent_module) if self.role == 'athlete' else False,
             'bilan_weekday': int(self.bilan_weekday) if self.role == 'athlete' and self.bilan_weekday is not None else None,
+            'is_demo': bool(self.is_demo) if self.role == 'athlete' else False,
         }
         if self.role == 'athlete' and self.coach_id and self.coach:
             data['coach_name'] = self.coach.display_name or self.coach.username

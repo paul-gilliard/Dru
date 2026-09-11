@@ -169,6 +169,8 @@ def create_app():
                 ('contact_channel', "ALTER TABLE `user` ADD COLUMN contact_channel VARCHAR(32) NULL"),
                 ('contact_value', "ALTER TABLE `user` ADD COLUMN contact_value VARCHAR(255) NULL"),
                 ('profile_completed_at', "ALTER TABLE `user` ADD COLUMN profile_completed_at DATETIME NULL"),
+                ('is_demo', "ALTER TABLE `user` ADD COLUMN is_demo TINYINT(1) NOT NULL DEFAULT 0"),
+                ('demo_seeded_at', "ALTER TABLE `user` ADD COLUMN demo_seeded_at DATETIME NULL"),
             ]:
                 if col not in user_cols:
                     db.session.execute(db.text(ddl))

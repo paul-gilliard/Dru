@@ -268,6 +268,21 @@ def _coach_team_query(coach_id):
     return User.query.filter_by(role='athlete', coach_id=coach_id)
 
 
+def _coach_quota_count(coach_id):
+    """Athlètes comptés dans l'abonnement : l'athlète de démo est offert."""
+    return _coach_team_query(coach_id).filter(User.is_demo.isnot(True)).count()
+
+
+def _ensure_demo_athlete_safe(coach):
+    """Athlète de démo du coach — un échec de seed ne doit jamais casser l'écran."""
+    try:
+        from app.demo_athlete import ensure_demo_athlete
+        return ensure_demo_athlete(coach)
+    except Exception:
+        db.session.rollback()
+        return None
+
+
 def _link_athlete_to_coach(athlete, coach_id):
     """Assigne / retire un coach. Reset du jour de bilan si la collab change."""
     new_id = int(coach_id) if coach_id is not None else None
@@ -285,6 +300,11 @@ def _link_athlete_to_coach(athlete, coach_id):
 
 def _purge_user_data(user_id):
     """Supprime / détache toutes les données liées avant delete User (évite les FK)."""
+    # Les athlètes de démo du compte n'ont aucune raison de survivre à leur coach.
+    for demo in User.query.filter_by(role='athlete', coach_id=user_id, is_demo=True).all():
+        _purge_user_data(demo.id)
+        db.session.delete(demo)
+
     CoachingInvitation.query.filter(
         (CoachingInvitation.coach_id == user_id) | (CoachingInvitation.athlete_id == user_id)
     ).delete(synchronize_session=False)
@@ -351,6 +371,7 @@ def _enforce_coach_quota_or_trim(coach, prefer_keep_ids=None):
         return []
     athletes = (
         _coach_team_query(coach.id)
+        .filter(User.is_demo.isnot(True))
         .order_by(User.coach_associated_at.desc(), User.id.desc())
         .all()
     )
@@ -443,6 +464,8 @@ def register():
     user.set_password(password)
     db.session.add(user)
     db.session.commit()
+    if role == 'coach':
+        _ensure_demo_athlete_safe(user)
     hit('register')
     token = generate_token(user)
     return jsonify({'token': token, 'user': user.to_dict()}), 201
@@ -463,17 +486,20 @@ def dashboard():
     today = date.today()
 
     if user.role in ('coach', 'admin'):
+        _ensure_demo_athlete_safe(user)
         # Toujours l'équipe du compte connecté (admin plateforme gère le reste via /admin/users).
         athletes = _coach_team_query(user.id).order_by(User.username).all()
         summary = [_athlete_summary(a) for a in athletes]
         limit = user.athlete_limit() if user.role == 'coach' else None
-        over_quota = bool(user.role == 'coach' and limit is not None and len(athletes) > limit)
+        quota_count = sum(1 for a in athletes if not a.is_demo)
+        over_quota = bool(user.role == 'coach' and limit is not None and quota_count > limit)
         return jsonify({
             'role': user.role,
             'athletes': summary,
             'subscription_tier': int(user.subscription_tier or 0) if user.role == 'coach' else None,
             'athlete_limit': limit,
             'athlete_count': len(athletes),
+            'quota_count': quota_count,
             'over_quota': over_quota,
         })
 
@@ -551,6 +577,7 @@ def dashboard():
 @coach_required
 def list_athletes():
     user = request.current_user
+    _ensure_demo_athlete_safe(user)
     athletes = _coach_team_query(user.id).order_by(User.username).all()
     return jsonify([a.to_dict() for a in athletes])
 
@@ -567,6 +594,7 @@ def search_athletes():
         User.query.filter(
             User.role == 'athlete',
             User.coach_id.is_(None),
+            User.is_demo.isnot(True),
             db.or_(
                 User.display_name.ilike(like),
                 User.username.ilike(like),
@@ -590,6 +618,12 @@ def unlink_athlete(athlete_id):
         return jsonify({'error': 'Utilisateur non modifiable'}), 400
     if user.role == 'coach' and athlete.coach_id != user.id:
         return jsonify({'error': 'Cet athlète n\'est pas dans ton équipe'}), 403
+    if athlete.is_demo:
+        # Compte fictif : on le supprime pour de bon (demo_seeded_at évite qu'il revienne).
+        _purge_user_data(athlete.id)
+        db.session.delete(athlete)
+        db.session.commit()
+        return jsonify({'ok': True, 'deleted': True})
     _link_athlete_to_coach(athlete, None)
     if user.role == 'coach':
         CoachingInvitation.query.filter_by(
@@ -634,7 +668,7 @@ def create_invitation():
     if athlete.coach_id:
         return jsonify({'error': 'Cet athlète a déjà un coach'}), 409
     limit = user.athlete_limit()
-    current_count = _coach_team_query(user.id).count()
+    current_count = _coach_quota_count(user.id)
     if limit is not None and current_count >= limit:
         if limit == 0:
             return jsonify({
@@ -703,7 +737,7 @@ def accept_invitation(invitation_id):
     if not coach or coach.role != 'coach':
         return jsonify({'error': 'Coach introuvable'}), 404
     limit = coach.athlete_limit()
-    if limit is not None and _coach_team_query(coach.id).count() >= limit:
+    if limit is not None and _coach_quota_count(coach.id) >= limit:
         if limit == 0:
             return jsonify({
                 'error': 'Ce coach n\'a pas d\'abonnement actif pour accepter un athlète',
@@ -3567,7 +3601,7 @@ def accept_athlete_request(invitation_id):
     if athlete.coach_id:
         return jsonify({'error': 'Cet athlète a déjà un coach'}), 409
     limit = coach.athlete_limit()
-    if limit is not None and User.query.filter_by(role='athlete', coach_id=coach.id).count() >= limit:
+    if limit is not None and _coach_quota_count(coach.id) >= limit:
         if limit == 0:
             return jsonify({
                 'error': 'Abonnement requis pour coacher des athlètes. Choisis un niveau payant.',
