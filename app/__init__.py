@@ -312,19 +312,29 @@ def create_app():
             print(f"⚠️ Paul email skipped: {e}")
 
         # Compte admin plateforme : Superadmin
-        platform_admin_password = os.environ.get('SUPERADMIN_PASSWORD', '14785commePAUL!')
+        # Mot de passe UNIQUEMENT via SUPERADMIN_PASSWORD (Railway / env) — jamais en dur.
+        platform_admin_password = (os.environ.get('SUPERADMIN_PASSWORD') or '').strip()
         try:
             platform_admin = (
                 User.query.filter_by(username='Superadmin').first()
                 or User.query.filter(db.func.lower(User.username) == 'superadmin').first()
             )
-            if platform_admin:
+            if not platform_admin_password:
+                if platform_admin:
+                    platform_admin.username = 'Superadmin'
+                    platform_admin.display_name = 'Superadmin'
+                    platform_admin.role = 'admin'
+                    db.session.commit()
+                    print("✓ Superadmin présent (mdp inchangé — définis SUPERADMIN_PASSWORD pour le reset)")
+                else:
+                    print("⚠️ SUPERADMIN_PASSWORD manquant — Superadmin non créé")
+            elif platform_admin:
                 platform_admin.username = 'Superadmin'
                 platform_admin.display_name = 'Superadmin'
                 platform_admin.role = 'admin'
                 platform_admin.set_password(platform_admin_password)
                 db.session.commit()
-                print("✓ Superadmin mis à jour")
+                print("✓ Superadmin mis à jour (mdp depuis SUPERADMIN_PASSWORD)")
             else:
                 platform_admin = User(
                     username='Superadmin', role='admin', display_name='Superadmin',
@@ -333,7 +343,7 @@ def create_app():
                 platform_admin.set_password(platform_admin_password)
                 db.session.add(platform_admin)
                 db.session.commit()
-                print("✓ Superadmin créé")
+                print("✓ Superadmin créé (mdp depuis SUPERADMIN_PASSWORD)")
         except Exception as e:
             db.session.rollback()
             print(f"⚠️ Superadmin skipped: {e}")
