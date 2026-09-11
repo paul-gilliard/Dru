@@ -194,22 +194,53 @@ def _current_plan_payload(user: User):
     }
 
 
+def _clear_limbo_pendings(user_id: int) -> bool:
+    """
+    Annule les demandes qui laissent le coach/athlète dans un entre-deux
+    (demande admin / checkout Stripe abandonné). L'abonnement reste binaire :
+    appliqué après paiement, sinon inchangé.
+    """
+    now = datetime.utcnow()
+    changed = False
+    n_manual = SubscriptionPayment.query.filter_by(
+        user_id=user_id, status='pending', source='manual_request',
+    ).update({'status': 'cancelled', 'resolved_at': now}, synchronize_session=False)
+    if n_manual:
+        changed = True
+    # Checkout Stripe non finalisé depuis > 30 min = abandonné
+    from datetime import timedelta
+    cutoff = now - timedelta(minutes=30)
+    n_stripe = (
+        SubscriptionPayment.query.filter(
+            SubscriptionPayment.user_id == user_id,
+            SubscriptionPayment.status == 'pending',
+            SubscriptionPayment.source == 'stripe',
+            SubscriptionPayment.created_at < cutoff,
+        ).update({'status': 'cancelled', 'resolved_at': now}, synchronize_session=False)
+    )
+    if n_stripe:
+        changed = True
+    return changed
+
+
 @billing_bp.get('/me/subscription')
 @login_required
 def get_my_subscription():
     user = request.current_user
     if user.role not in ('athlete', 'coach'):
         return jsonify({'error': 'Réservé athlète / coach'}), 403
+    if _clear_limbo_pendings(user.id):
+        db.session.commit()
     history = (
         SubscriptionPayment.query.filter_by(user_id=user.id)
         .order_by(SubscriptionPayment.created_at.desc())
         .limit(20)
         .all()
     )
-    pending = next((p for p in history if p.status == 'pending'), None)
+    # Ne plus exposer d'état « demande en cours » côté app.
     return jsonify({
         'current': _current_plan_payload(user),
-        'pending': pending.to_dict() if pending else None,
+        'pending': None,
         'history': [p.to_dict() for p in history],
         'stripe_configured': bool((current_app.config.get('STRIPE_SECRET_KEY') or '').strip()),
         'test_card_hint': 'Carte test Stripe : 4242 4242 4242 4242 — date future — CVC quelconque',
@@ -259,9 +290,9 @@ def create_checkout():
     else:
         return jsonify({'error': 'kind invalide (athlete_independent | coach_tier)'}), 400
 
-    # Annule les pending Stripe précédents
+    # Annule tout pending précédent (manual + stripe) avant un nouveau checkout
     SubscriptionPayment.query.filter_by(
-        user_id=user.id, status='pending', source='stripe',
+        user_id=user.id, status='pending',
     ).update({'status': 'cancelled', 'resolved_at': datetime.utcnow()}, synchronize_session=False)
 
     base = _public_base()
@@ -369,7 +400,7 @@ def confirm_checkout():
 @billing_bp.post('/me/subscription')
 @login_required
 def request_subscription():
-    """Crée une demande pending (si Stripe off) ou oriente vers checkout.
+    """Plus de file « demande admin » : upgrade = Stripe, sinon Superadmin via Users.
     Downgrade free/tier0 → appliqué tout de suite.
     """
     user = request.current_user
@@ -388,7 +419,6 @@ def request_subscription():
             return jsonify({'error': 'Réservé athlète'}), 403
         if user.independent_module:
             return jsonify({'error': 'Tu es déjà en Indépendant'}), 400
-        target_tier = None
     elif kind == 'coach_tier':
         if user.role != 'coach':
             return jsonify({'error': 'Réservé coach'}), 403
@@ -403,7 +433,10 @@ def request_subscription():
     else:
         return jsonify({'error': 'kind invalide'}), 400
 
-    # Stripe dispo → le client doit utiliser /checkout (upgrade auto)
+    # Annule d’éventuelles vieilles demandes limbo
+    if _clear_limbo_pendings(user.id):
+        db.session.commit()
+
     if _stripe_ready():
         return jsonify({
             'error': 'Utilise le paiement Stripe pour upgrader.',
@@ -411,24 +444,10 @@ def request_subscription():
             'stripe_configured': True,
         }), 409
 
-    # Une seule pending à la fois
-    SubscriptionPayment.query.filter_by(
-        user_id=user.id, status='pending',
-    ).update({'status': 'cancelled', 'resolved_at': datetime.utcnow()}, synchronize_session=False)
-
-    pay = SubscriptionPayment(
-        user_id=user.id,
-        kind=kind,
-        target_tier=target_tier,
-        amount_euros=_amount_euros(kind, target_tier),
-        billing_period='monthly',
-        source='manual_request',
-        status='pending',
-        note=f'Demande {_plan_label(kind, target_tier)} — en attente validation admin',
-    )
-    db.session.add(pay)
-    db.session.commit()
-    return jsonify({'ok': True, 'payment': pay.to_dict(), 'pending': True}), 201
+    return jsonify({
+        'error': 'Paiement en ligne indisponible. Demande à Superadmin d’activer ton abonnement.',
+        'code': 'STRIPE_NOT_CONFIGURED',
+    }), 503
 
 
 @billing_bp.delete('/me/subscription/pending')
