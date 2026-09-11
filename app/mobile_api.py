@@ -109,6 +109,115 @@ def _ensure_personal_name(name, user):
     return name
 
 
+def _public_name_from_personal(name, user=None):
+    """Retire le suffixe perso ` (username)` pour proposer un nom banque commune."""
+    name = (name or '').strip()
+    if user is not None:
+        suffix = _personal_name_suffix(user)
+        if name.endswith(suffix):
+            return name[: -len(suffix)].strip() or name
+    if name.endswith(')') and ' (' in name:
+        return name.rsplit(' (', 1)[0].strip() or name
+    return name
+
+
+def _queue_promote_to_common(kind, target, requester):
+    """Crée (ou réutilise) une demande Superadmin pour publier une entrée perso en commune."""
+    if target is None or getattr(target, 'owner_id', None) is None:
+        return None
+    pending = (
+        BankChangeRequest.query.filter_by(
+            kind=kind, target_id=target.id, status='pending', requester_id=requester.id,
+        ).all()
+    )
+    for row in pending:
+        try:
+            payload = json.loads(row.payload or '{}')
+        except (TypeError, ValueError):
+            payload = {}
+        if payload.get('action') == 'promote_to_common':
+            return row
+
+    public_name = _public_name_from_personal(target.name, requester)
+    if kind == 'exercise':
+        payload = {
+            'action': 'promote_to_common',
+            'name': public_name,
+            'muscle_group': target.muscle_group,
+        }
+    else:
+        payload = {
+            'action': 'promote_to_common',
+            'name': public_name,
+            'brand': target.brand,
+            'kcal': target.kcal,
+            'proteins': target.proteins,
+            'lipids': target.lipids,
+            'saturated_fats': target.saturated_fats,
+            'carbs': target.carbs,
+            'simple_sugars': target.simple_sugars,
+            'fiber': target.fiber,
+            'salt': target.salt,
+        }
+    req = BankChangeRequest(
+        kind=kind,
+        target_id=target.id,
+        requester_id=requester.id,
+        payload=json.dumps(payload, ensure_ascii=False),
+        message='Publication en banque commune',
+        status='pending',
+    )
+    db.session.add(req)
+    db.session.flush()
+    return req
+
+
+def _promote_personal_to_common(kind, target, payload):
+    """
+    Publie une copie commune (owner_id=None). L'entrée perso reste intacte
+    pour ne pas casser les programmes qui pointent déjà dessus.
+    Returns (common_entry, error_response_or_None)
+    """
+    if target.owner_id is None:
+        return target, None
+    public_name = (payload.get('name') or '').strip() or _public_name_from_personal(target.name)
+    if kind == 'exercise':
+        muscle = payload.get('muscle_group') or target.muscle_group
+        if muscle not in MUSCLE_GROUPS:
+            return None, (jsonify({'error': 'muscle_group invalide'}), 400)
+        existing = Exercise.query.filter_by(name=public_name).first()
+        if existing:
+            if existing.owner_id is None:
+                return existing, None
+            return None, (jsonify({'error': f'Nom « {public_name} » déjà pris (perso)'}), 409)
+        common = Exercise(name=public_name, muscle_group=muscle, owner_id=None)
+        db.session.add(common)
+        db.session.flush()
+        return common, None
+
+    existing = Food.query.filter_by(name=public_name).first()
+    if existing:
+        if existing.owner_id is None:
+            return existing, None
+        return None, (jsonify({'error': f'Nom « {public_name} » déjà pris (perso)'}), 409)
+    common = Food(
+        name=public_name,
+        brand=payload.get('brand', target.brand),
+        kcal=payload['kcal'] if payload.get('kcal') is not None else target.kcal,
+        proteins=payload.get('proteins', target.proteins),
+        lipids=payload.get('lipids', target.lipids),
+        saturated_fats=payload.get('saturated_fats', target.saturated_fats),
+        carbs=payload['carbs'] if payload.get('carbs') is not None else target.carbs,
+        simple_sugars=payload.get('simple_sugars', target.simple_sugars),
+        fiber=payload.get('fiber', target.fiber),
+        salt=payload.get('salt', target.salt),
+        owner_id=None,
+    )
+    db.session.add(common)
+    db.session.flush()
+    return common, None
+
+
 def _bank_owner_scope_id():
     """Pour lister les entrées perso visibles avec la banque commune."""
     user = request.current_user
@@ -1145,17 +1254,19 @@ def create_exercise_bank():
     if not name or muscle_group not in MUSCLE_GROUPS:
         return jsonify({'error': 'name et muscle_group (valide) requis'}), 400
     user = request.current_user
-    as_personal = bool(data.get('personal')) or user.role == 'athlete'
+    # Seul le Superadmin crée directement en banque commune ; sinon perso + file de publication.
+    as_common = user.role == 'admin' and not bool(data.get('personal'))
     owner_id = None
-    if as_personal:
+    if not as_common:
         owner_id = user.id
         name = _ensure_personal_name(name, user)
-    elif user.role not in ('coach', 'admin'):
-        return jsonify({'error': 'Réservé au coach'}), 403
     if Exercise.query.filter_by(name=name).first():
         return jsonify({'error': 'Cet exercice existe déjà'}), 409
     exercise = Exercise(name=name, muscle_group=muscle_group, owner_id=owner_id)
     db.session.add(exercise)
+    db.session.flush()
+    if owner_id is not None:
+        _queue_promote_to_common('exercise', exercise, user)
     db.session.commit()
     return jsonify(exercise.to_dict()), 201
 
@@ -2342,13 +2453,11 @@ def create_food():
     if not name or data.get('kcal') is None or data.get('carbs') is None:
         return jsonify({'error': 'name, kcal et carbs requis'}), 400
     user = request.current_user
-    as_personal = bool(data.get('personal')) or user.role == 'athlete'
+    as_common = user.role == 'admin' and not bool(data.get('personal'))
     owner_id = None
-    if as_personal:
+    if not as_common:
         owner_id = user.id
         name = _ensure_personal_name(name, user)
-    elif user.role not in ('coach', 'admin'):
-        return jsonify({'error': 'Réservé au coach'}), 403
     if Food.query.filter_by(name=name).first():
         return jsonify({'error': 'Cet aliment existe déjà'}), 409
 
@@ -2359,6 +2468,9 @@ def create_food():
         owner_id=owner_id,
     )
     db.session.add(food)
+    db.session.flush()
+    if owner_id is not None:
+        _queue_promote_to_common('food', food, user)
     db.session.commit()
     return jsonify(food.to_dict()), 201
 
@@ -2614,7 +2726,21 @@ def create_bank_change_request():
         target = Exercise.query.get_or_404(int(target_id))
     else:
         target = Food.query.get_or_404(int(target_id))
-    if target.owner_id is not None:
+
+    is_promote = payload.get('action') == 'promote_to_common'
+    if is_promote:
+        if target.owner_id is None:
+            return jsonify({'error': 'Déjà en banque commune'}), 400
+        if target.owner_id != request.current_user.id and request.current_user.role != 'admin':
+            return _deny_manage()
+        if not payload.get('name'):
+            payload = {
+                **payload,
+                'name': _public_name_from_personal(target.name, request.current_user),
+            }
+        if not message:
+            message = 'Publication en banque commune'
+    elif target.owner_id is not None:
         return jsonify({'error': 'Uniquement pour la banque commune'}), 400
 
     req = BankChangeRequest(
@@ -2629,7 +2755,11 @@ def create_bank_change_request():
     db.session.commit()
     return jsonify({
         **req.to_dict(with_target=True),
-        'hint': 'Tu peux aussi créer ta version perso avec personal=true',
+        'hint': (
+            'Publication : le Superadmin pourra diffuser cet item à tous'
+            if is_promote
+            else 'Tu peux aussi créer ta version perso avec personal=true'
+        ),
     }), 201
 
 
@@ -2669,6 +2799,14 @@ def approve_bank_change_request(req_id):
 
     if req.kind == 'exercise':
         target = Exercise.query.get_or_404(req.target_id)
+    else:
+        target = Food.query.get_or_404(req.target_id)
+
+    if payload.get('action') == 'promote_to_common':
+        _, err = _promote_personal_to_common(req.kind, target, payload)
+        if err:
+            return err
+    elif req.kind == 'exercise':
         if payload.get('name'):
             conflict = Exercise.query.filter(
                 Exercise.name == payload['name'], Exercise.id != target.id,
@@ -2679,7 +2817,6 @@ def approve_bank_change_request(req_id):
         if payload.get('muscle_group') in MUSCLE_GROUPS:
             target.muscle_group = payload['muscle_group']
     else:
-        target = Food.query.get_or_404(req.target_id)
         for field in ('name', 'brand', 'kcal', 'proteins', 'lipids', 'saturated_fats', 'carbs',
                       'simple_sugars', 'fiber', 'salt'):
             if field in payload:
