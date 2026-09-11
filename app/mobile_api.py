@@ -3540,15 +3540,14 @@ def create_athlete_coach_request():
 @api_bp.get('/coach/athlete-requests')
 @coach_required
 def list_athlete_requests():
+    """Demandes athlète→coach : uniquement celles adressées à ce compte."""
     user = request.current_user
-    if user.role == 'admin':
-        rows = (CoachingInvitation.query
-                .filter_by(status='pending', direction='athlete_to_coach')
-                .order_by(CoachingInvitation.created_at.desc()).all())
-    else:
-        rows = (CoachingInvitation.query
-                .filter_by(coach_id=user.id, status='pending', direction='athlete_to_coach')
-                .order_by(CoachingInvitation.created_at.desc()).all())
+    rows = (
+        CoachingInvitation.query
+        .filter_by(coach_id=user.id, status='pending', direction='athlete_to_coach')
+        .order_by(CoachingInvitation.created_at.desc())
+        .all()
+    )
     return jsonify([i.to_dict() for i in rows])
 
 
@@ -3559,7 +3558,7 @@ def accept_athlete_request(invitation_id):
     inv = CoachingInvitation.query.get_or_404(invitation_id)
     if inv.status != 'pending' or (inv.direction or '') != 'athlete_to_coach':
         return jsonify({'error': 'Demande invalide'}), 400
-    if user.role != 'admin' and inv.coach_id != user.id:
+    if inv.coach_id != user.id:
         return jsonify({'error': 'Non autorisé'}), 403
     coach = User.query.get(inv.coach_id)
     athlete = User.query.get(inv.athlete_id)
@@ -3596,7 +3595,7 @@ def refuse_athlete_request(invitation_id):
     inv = CoachingInvitation.query.get_or_404(invitation_id)
     if inv.status != 'pending' or (inv.direction or '') != 'athlete_to_coach':
         return jsonify({'error': 'Demande invalide'}), 400
-    if user.role != 'admin' and inv.coach_id != user.id:
+    if inv.coach_id != user.id:
         return jsonify({'error': 'Non autorisé'}), 403
     inv.status = 'refused'
     db.session.commit()
