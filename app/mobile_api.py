@@ -281,9 +281,9 @@ def _coach_quota_count(coach_id):
 def _ensure_demo_athlete_safe(coach, *, background=True):
     """Athlète de démo du coach — un échec de seed ne doit jamais casser l'écran.
 
-    Sur /dashboard et /coach/athletes le seed lourd tourne en arrière-plan pour
-    ne pas bloquer le worker gunicorn sync (sinon le mobile voit Network Error /
-    timeout au premier hit post-login). Sur /auth/register on reste synchrone.
+    Le seed (~400 perfs + journal) est trop lourd pour le chemin HTTP sync :
+    gunicorn abort le worker (SystemExit) et le mobile voit Network Error.
+    Toujours préférer background=True (register / dashboard / list athletes).
     """
     if coach is None or getattr(coach, 'role', None) != 'coach':
         return None
@@ -513,8 +513,8 @@ def register():
     db.session.add(user)
     db.session.commit()
     if role == 'coach':
-        # Synchrone à l'inscription : le coach voit Alex Démo dès le 1er dashboard.
-        _ensure_demo_athlete_safe(user, background=False)
+        # Background : le seed sync faisait planter gunicorn à l'inscription.
+        _ensure_demo_athlete_safe(user)
     hit('register')
     token = generate_token(user)
     return jsonify({'token': token, 'user': user.to_dict()}), 201
