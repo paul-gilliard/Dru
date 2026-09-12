@@ -1,7 +1,8 @@
 from datetime import datetime, date, timedelta
 import re
+import threading
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, current_app, request, jsonify
 import json
 
 from app import db
@@ -18,6 +19,10 @@ from app.auth_security import (
 )
 
 api_bp = Blueprint('api', __name__)
+
+# Seed démo (~400 perfs + journal) : ne jamais bloquer deux fois le même coach.
+_demo_seed_lock = threading.Lock()
+_demo_seed_in_flight = set()
 
 _EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
@@ -273,14 +278,57 @@ def _coach_quota_count(coach_id):
     return _coach_team_query(coach_id).filter(User.is_demo.isnot(True)).count()
 
 
-def _ensure_demo_athlete_safe(coach):
-    """Athlète de démo du coach — un échec de seed ne doit jamais casser l'écran."""
-    try:
-        from app.demo_athlete import ensure_demo_athlete
-        return ensure_demo_athlete(coach)
-    except Exception:
-        db.session.rollback()
+def _ensure_demo_athlete_safe(coach, *, background=True):
+    """Athlète de démo du coach — un échec de seed ne doit jamais casser l'écran.
+
+    Sur /dashboard et /coach/athletes le seed lourd tourne en arrière-plan pour
+    ne pas bloquer le worker gunicorn sync (sinon le mobile voit Network Error /
+    timeout au premier hit post-login). Sur /auth/register on reste synchrone.
+    """
+    if coach is None or getattr(coach, 'role', None) != 'coach':
         return None
+
+    if coach.demo_seeded_at is not None:
+        try:
+            from app.demo_athlete import demo_athlete_of
+            return demo_athlete_of(coach.id)
+        except Exception:
+            return None
+
+    if not background:
+        try:
+            from app.demo_athlete import ensure_demo_athlete
+            return ensure_demo_athlete(coach)
+        except Exception:
+            db.session.rollback()
+            return None
+
+    coach_id = int(coach.id)
+    with _demo_seed_lock:
+        if coach_id in _demo_seed_in_flight:
+            return None
+        _demo_seed_in_flight.add(coach_id)
+
+    app = current_app._get_current_object()
+
+    def _run():
+        try:
+            with app.app_context():
+                from app.demo_athlete import ensure_demo_athlete
+                c = User.query.get(coach_id)
+                if c is not None and c.demo_seeded_at is None:
+                    ensure_demo_athlete(c)
+        except Exception:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+        finally:
+            with _demo_seed_lock:
+                _demo_seed_in_flight.discard(coach_id)
+
+    threading.Thread(target=_run, name=f'demo-seed-{coach_id}', daemon=True).start()
+    return None
 
 
 def _link_athlete_to_coach(athlete, coach_id):
@@ -465,7 +513,8 @@ def register():
     db.session.add(user)
     db.session.commit()
     if role == 'coach':
-        _ensure_demo_athlete_safe(user)
+        # Synchrone à l'inscription : le coach voit Alex Démo dès le 1er dashboard.
+        _ensure_demo_athlete_safe(user, background=False)
     hit('register')
     token = generate_token(user)
     return jsonify({'token': token, 'user': user.to_dict()}), 201
