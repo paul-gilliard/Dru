@@ -9,15 +9,66 @@ from config import Config
 db = SQLAlchemy()
 migrate = Migrate()
 
+WEAK_SECRET_KEYS = {
+    '',
+    'dru-mobile-dev-secret-key-change-me',
+    'change-me-in-prod',
+    'dev-key-change-in-prod',
+    'secret',
+    'changeme',
+    'dev',
+    'development',
+}
+
+
+def _is_development() -> bool:
+    """True en local / tests. False sur Railway ou FLASK_ENV=production."""
+    if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_PUBLIC_DOMAIN'):
+        return False
+    env = (os.environ.get('FLASK_ENV') or os.environ.get('ENVIRONMENT') or 'development').lower()
+    return env in ('development', 'dev', 'local', 'test')
+
+
 def create_app():
     app = Flask(__name__)
     
     # Charger la configuration depuis config.py
     app.config.from_object(Config)
+
+    secret = (app.config.get('SECRET_KEY') or os.environ.get('SECRET_KEY') or '').strip()
+    if secret in WEAK_SECRET_KEYS and not _is_development():
+        raise RuntimeError(
+            'SECRET_KEY faible ou manquant en production. '
+            'Définis une valeur aléatoire forte dans les variables d''environnement Railway.'
+        )
+    app.config['SECRET_KEY'] = secret or app.config.get('SECRET_KEY')
+    app.config['IS_DEVELOPMENT'] = _is_development()
+    public = (app.config.get('PUBLIC_BASE_URL') or '').rstrip('/')
+    if public and not str(public).startswith('http'):
+        public = 'https://' + public
+        app.config['PUBLIC_BASE_URL'] = public
+
+    uri = app.config.get('SQLALCHEMY_DATABASE_URI') or ''
+    if uri.startswith('sqlite'):
+        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'connect_args': {'check_same_thread': False}}
+    elif uri:
+        app.config.setdefault('SQLALCHEMY_ENGINE_OPTIONS', {
+            'pool_pre_ping': True,
+            'pool_recycle': 280,
+            'pool_size': int(os.environ.get('DB_POOL_SIZE', '5')),
+            'max_overflow': int(os.environ.get('DB_MAX_OVERFLOW', '10')),
+        })
     
     db.init_app(app)
     migrate.init_app(app, db)
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    cors_raw = (os.environ.get('CORS_ORIGINS') or '').strip()
+    if cors_raw:
+        origins = [o.strip() for o in cors_raw.split(',') if o.strip()]
+    elif _is_development():
+        origins = '*'
+    else:
+        origins = [public] if public else []
+    CORS(app, resources={r"/api/*": {"origins": origins or []}, r"/health": {"origins": origins or []}})
     
     # Créer les tables au démarrage si elles n'existent pas
     with app.app_context():
@@ -410,7 +461,7 @@ def create_app():
 
     @app.get('/health')
     def health():
-        return {'status': 'ok', 'service': 'farmness', 'mobile_api': True}
+        return {'status': 'ok', 'service': 'farmness', 'mobile_api': True, 'billing': 'subscription'}
 
     @app.get('/privacy')
     def privacy_policy():

@@ -1,6 +1,7 @@
 """Anti-abus auth : rate limit IP + honeypot + blocklist bots (sans Redis)."""
 from __future__ import annotations
 
+import os
 import re
 import threading
 import time
@@ -16,6 +17,8 @@ REGISTER_LIMIT = 5          # inscriptions / IP
 REGISTER_WINDOW_SEC = 3600  # par heure
 LOGIN_LIMIT = 30            # tentatives / IP
 LOGIN_WINDOW_SEC = 600      # par 10 min
+SEARCH_LIMIT = 40           # recherches athlètes / IP
+SEARCH_WINDOW_SEC = 600
 
 _BOT_NAME_RE = re.compile(
     r'(crawler|scrap(e|er)?|spider|bot\b|robot|selenium|puppeteer|headless|http.?client)',
@@ -26,11 +29,36 @@ _BOT_NAME_RE = re.compile(
 _HONEYPOT_KEYS = ('website', 'company', 'url', 'hp_field', 'fax')
 
 
+def trusted_proxy_count() -> int:
+    """Nombre de proxies de confiance devant l'app (Railway = 1 par défaut en prod)."""
+    raw = (os.environ.get('TRUSTED_PROXY_COUNT') or '').strip()
+    if raw.isdigit():
+        return max(0, int(raw))
+    # Railway / reverse-proxy : X-Forwarded-For fiable si on prend la bonne entrée.
+    if os.environ.get('RAILWAY_ENVIRONMENT') or os.environ.get('RAILWAY_PUBLIC_DOMAIN'):
+        return 1
+    return 0
+
+
 def client_ip() -> str:
-    forwarded = (request.headers.get('X-Forwarded-For') or '').split(',')[0].strip()
-    if forwarded:
-        return forwarded
-    return request.remote_addr or 'unknown'
+    """IP client : ne fait confiance à X-Forwarded-For que si proxies configurés."""
+    remote = (request.remote_addr or 'unknown').strip()
+    hops = trusted_proxy_count()
+    if hops <= 0:
+        return remote or 'unknown'
+    forwarded = (request.headers.get('X-Forwarded-For') or '').strip()
+    if not forwarded:
+        return remote or 'unknown'
+    parts = [p.strip() for p in forwarded.split(',') if p.strip()]
+    if not parts:
+        return remote or 'unknown'
+    # Avec N proxies de confiance, l'IP client est à -(N+1) depuis la fin
+    # (dernier = proxy le plus proche). Fallback : première entrée.
+    idx = max(0, len(parts) - hops - 1) if hops else 0
+    # Convention courante : premier hop = client original derrière 1 proxy.
+    if hops == 1 and len(parts) >= 1:
+        return parts[0]
+    return parts[idx] if idx < len(parts) else parts[0]
 
 
 def _prune(bucket: deque[float], window_sec: int, now: float) -> None:

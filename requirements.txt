@@ -13,3 +13,5 @@ PyMySQL
 cryptography
 python-dotenv
 stripe
+
+pytest==8.3.3

@@ -10,7 +10,7 @@ TOKEN_TTL_DAYS = 30
 
 def generate_token(user):
     payload = {
-        'sub': user.id,
+        'sub': str(user.id),
         'role': user.role,
         'exp': datetime.now(timezone.utc) + timedelta(days=TOKEN_TTL_DAYS),
         'iat': datetime.now(timezone.utc),
@@ -19,7 +19,13 @@ def generate_token(user):
 
 
 def decode_token(token):
-    return jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+    # verify_sub=False : anciens tokens avec sub numérique restent valides.
+    return jwt.decode(
+        token,
+        current_app.config['SECRET_KEY'],
+        algorithms=['HS256'],
+        options={'verify_sub': False},
+    )
 
 
 def get_bearer_token():
@@ -41,7 +47,12 @@ def _resolve_current_user():
     except jwt.InvalidTokenError:
         return None, (jsonify({'error': 'Token invalide'}), 401)
 
-    user = User.query.get(payload.get('sub'))
+    raw_sub = payload.get('sub')
+    try:
+        user_id = int(raw_sub)
+    except (TypeError, ValueError):
+        return None, (jsonify({'error': 'Token invalide'}), 401)
+    user = User.query.get(user_id)
     if not user:
         return None, (jsonify({'error': 'Utilisateur introuvable'}), 401)
     return user, None
@@ -79,7 +90,7 @@ def admin_required(fn):
         if error:
             return error
         if user.role != 'admin':
-            return jsonify({'error': 'Réservé à l\'admin'}), 403
+            return jsonify({'error': "Réservé à l'admin"}), 403
         request.current_user = user
         return fn(*args, **kwargs)
     return wrapper

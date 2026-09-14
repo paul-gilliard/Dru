@@ -733,6 +733,50 @@ class MobileWeeklyBilanMarking(db.Model):
         }
 
 
+
+class SecurityEvent(db.Model):
+    """Tentatives suspectes / abus — visible uniquement par role admin."""
+    __tablename__ = 'security_event'
+
+    id = db.Column(db.Integer, primary_key=True)
+    event_type = db.Column(db.String(64), nullable=False, index=True)
+    severity = db.Column(db.String(16), nullable=False, default='info', index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
+    ip = db.Column(db.String(64), nullable=True, index=True)
+    path = db.Column(db.String(255), nullable=True)
+    detail_json = db.Column(db.Text, nullable=True)
+    reviewed = db.Column(db.Boolean, nullable=False, default=False)
+    reviewed_at = db.Column(db.DateTime, nullable=True)
+    reviewed_by_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    user = db.relationship('User', foreign_keys=[user_id])
+    reviewed_by = db.relationship('User', foreign_keys=[reviewed_by_id])
+
+    def to_dict(self):
+        import json
+        detail = {}
+        if self.detail_json:
+            try:
+                detail = json.loads(self.detail_json)
+            except (TypeError, ValueError):
+                detail = {'raw': self.detail_json}
+        u = self.user
+        return {
+            'id': self.id,
+            'event_type': self.event_type,
+            'severity': self.severity,
+            'user_id': self.user_id,
+            'user_name': (u.display_name or u.username) if u else None,
+            'user_role': u.role if u else None,
+            'ip': self.ip,
+            'path': self.path,
+            'detail': detail,
+            'reviewed': bool(self.reviewed),
+            'reviewed_at': self.reviewed_at.isoformat() if self.reviewed_at else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
 class SubscriptionPayment(db.Model):
     """Paiement / changement d'abonnement (Stripe ou upgrade manuel admin)."""
     __tablename__ = 'subscription_payment'
