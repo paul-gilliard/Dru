@@ -3550,10 +3550,10 @@ METRIC_LABELS = [
     ('weight', 'Poids (kg)'),
     ('kcals', 'Calories (kcal)'),
     ('sleep_hours', 'Sommeil (h)'),
-    ('energy', 'Ã‰nergie (/10)'),
+    ('energy', 'Énergie (/10)'),
     ('stress', 'Stress (/10)'),
     ('tonnage', 'Tonnage (kg)'),
-    ('sessions', 'SÃ©ances loggÃ©es'),
+    ('sessions', 'Séances loggées'),
     ('entries_logged', 'Jours de journal'),
 ]
 

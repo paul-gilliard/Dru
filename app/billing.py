@@ -12,18 +12,18 @@ from app.models import SubscriptionPayment, User
 
 billing_bp = Blueprint('billing', __name__)
 
-# Montants serveur (centimes) â€” mensuel
-ATHLETE_INDEPENDENT_CENTS = 199  # 1,99 â‚¬
+# Montants serveur (centimes) — mensuel
+ATHLETE_INDEPENDENT_CENTS = 199  # 1,99 €
 COACH_TIER_CENTS = {
-    1: 999,   # 9,99 â‚¬
-    2: 2499,  # 24,99 â‚¬
-    3: 4999,  # 49,99 â‚¬
+    1: 999,   # 9,99 €
+    2: 2499,  # 24,99 €
+    3: 4999,  # 49,99 €
 }
 COACH_TIER_LABELS = {
     0: 'Sans abonnement',
-    1: 'Niveau 1 â€” 3 athlÃ¨tes',
-    2: 'Niveau 2 â€” 10 athlÃ¨tes',
-    3: 'Niveau 3 â€” illimitÃ©',
+    1: 'Niveau 1 — 3 athlètes',
+    2: 'Niveau 2 — 10 athlètes',
+    3: 'Niveau 3 — illimité',
 }
 
 
@@ -79,27 +79,27 @@ def _amount_euros(kind: str, target_tier) -> float:
 
 def _plan_label(kind: str, target_tier) -> str:
     if kind == 'athlete_independent':
-        return 'Module IndÃ©pendant'
+        return 'Module Indépendant'
     if kind == 'athlete_free':
-        return 'AthlÃ¨te Free'
+        return 'Athlète Free'
     if kind == 'coach_tier':
         return COACH_TIER_LABELS.get(int(target_tier or 0), f'Niveau {target_tier}')
     return kind
 
 
 def apply_subscription_change(user: User, kind: str, target_tier=None):
-    """Applique le plan sur le user (aprÃ¨s paiement Stripe ou action admin)."""
+    """Applique le plan sur le user (après paiement Stripe ou action admin)."""
     if kind == 'athlete_independent':
         if user.role != 'athlete':
-            raise ValueError('RÃ©servÃ© aux athlÃ¨tes')
+            raise ValueError('Réservé aux athlètes')
         user.independent_module = True
     elif kind == 'athlete_free':
         if user.role != 'athlete':
-            raise ValueError('RÃ©servÃ© aux athlÃ¨tes')
+            raise ValueError('Réservé aux athlètes')
         user.independent_module = False
     elif kind == 'coach_tier':
         if user.role != 'coach':
-            raise ValueError('RÃ©servÃ© aux coachs')
+            raise ValueError('Réservé aux coachs')
         tier = int(target_tier)
         if tier not in (0, 1, 2, 3):
             raise ValueError('tier invalide')
@@ -137,7 +137,7 @@ def _fulfill_payment(pay: SubscriptionPayment, *, payment_intent=None):
     pay.resolved_at = datetime.utcnow()
     if payment_intent:
         pay.stripe_payment_intent = payment_intent
-    # Coach hors quota aprÃ¨s downgrade : trim si besoin
+    # Coach hors quota après downgrade : trim si besoin
     if user.role == 'coach' and pay.kind == 'coach_tier':
         try:
             from app.api import _enforce_coach_quota_or_trim
@@ -153,7 +153,7 @@ def _current_plan_payload(user: User):
         return {
             'role': 'athlete',
             'independent_module': independent,
-            'label': 'IndÃ©pendant' if independent else 'Free',
+            'label': 'Indépendant' if independent else 'Free',
             'price_euros': 1.99 if independent else 0,
             'plans': [
                 {
@@ -166,9 +166,9 @@ def _current_plan_payload(user: User):
                 },
                 {
                     'kind': 'athlete_independent',
-                    'label': 'IndÃ©pendant',
+                    'label': 'Indépendant',
                     'price_euros': 1.99,
-                    'price_label': '1,99 â‚¬ / mois',
+                    'price_label': '1,99 € / mois',
                     'blurb': 'Stats + Easy Bilan',
                     'current': independent,
                 },
@@ -183,7 +183,7 @@ def _current_plan_payload(user: User):
             'label': COACH_TIER_LABELS[0],
             'price_euros': 0,
             'price_label': 'Gratuit',
-            'blurb': '0 athlÃ¨te â€” abonnement requis pour coacher',
+            'blurb': '0 athlète — abonnement requis pour coacher',
             'current': tier == 0,
         },
         {
@@ -191,8 +191,8 @@ def _current_plan_payload(user: User):
             'target_tier': 1,
             'label': COACH_TIER_LABELS[1],
             'price_euros': 9.99,
-            'price_label': '9,99 â‚¬ / mois',
-            'blurb': 'Jusquâ€™Ã  3 athlÃ¨tes',
+            'price_label': '9,99 € / mois',
+            'blurb': 'Jusqu’à 3 athlètes',
             'current': tier == 1,
         },
         {
@@ -200,8 +200,8 @@ def _current_plan_payload(user: User):
             'target_tier': 2,
             'label': COACH_TIER_LABELS[2],
             'price_euros': 24.99,
-            'price_label': '24,99 â‚¬ / mois',
-            'blurb': 'Jusquâ€™Ã  10 athlÃ¨tes',
+            'price_label': '24,99 € / mois',
+            'blurb': 'Jusqu’à 10 athlètes',
             'current': tier == 2,
         },
         {
@@ -209,8 +209,8 @@ def _current_plan_payload(user: User):
             'target_tier': 3,
             'label': COACH_TIER_LABELS[3],
             'price_euros': 49.99,
-            'price_label': '49,99 â‚¬ / mois',
-            'blurb': 'AthlÃ¨tes illimitÃ©s',
+            'price_label': '49,99 € / mois',
+            'blurb': 'Athlètes illimités',
             'current': tier == 3,
         },
     ]
@@ -286,10 +286,10 @@ def create_checkout():
     """Crée une session Stripe Checkout (abonnement mensuel). Paiement OK → upgrade auto."""
     user = request.current_user
     if user.role not in ('athlete', 'coach'):
-        return jsonify({'error': 'RÃ©servÃ© athlÃ¨te / coach'}), 403
+        return jsonify({'error': 'Réservé athlète / coach'}), 403
     if not _stripe_ready():
         return jsonify({
-            'error': 'Stripe non configurÃ© (STRIPE_SECRET_KEY manquant cÃ´tÃ© serveur).',
+            'error': 'Stripe non configuré (STRIPE_SECRET_KEY manquant côté serveur).',
             'code': 'STRIPE_NOT_CONFIGURED',
         }), 503
 
@@ -305,25 +305,25 @@ def create_checkout():
 
     if kind == 'athlete_independent':
         if user.role != 'athlete':
-            return jsonify({'error': 'RÃ©servÃ© athlÃ¨te'}), 403
+            return jsonify({'error': 'Réservé athlète'}), 403
         if user.independent_module:
-            return jsonify({'error': 'Tu es dÃ©jÃ  en IndÃ©pendant'}), 400
+            return jsonify({'error': 'Tu es déjà en Indépendant'}), 400
         target_tier = None
         cents = ATHLETE_INDEPENDENT_CENTS
-        product_name = 'Farmness â€” Module IndÃ©pendant (mensuel)'
+        product_name = 'Farmness — Module Indépendant (mensuel)'
     elif kind == 'coach_tier':
         if user.role != 'coach':
-            return jsonify({'error': 'RÃ©servÃ© coach'}), 403
+            return jsonify({'error': 'Réservé coach'}), 403
         try:
             target_tier = int(target_tier)
         except (TypeError, ValueError):
             return jsonify({'error': 'target_tier requis'}), 400
         if target_tier not in (1, 2, 3):
-            return jsonify({'error': 'Choisis un niveau payant (1â€“3). Pour annuler, utilise le downgrade.'}), 400
+            return jsonify({'error': 'Choisis un niveau payant (1–3). Pour annuler, utilise le downgrade.'}), 400
         if int(user.subscription_tier or 0) == target_tier:
-            return jsonify({'error': 'Tu es dÃ©jÃ  sur ce niveau'}), 400
+            return jsonify({'error': 'Tu es déjà sur ce niveau'}), 400
         cents = COACH_TIER_CENTS[target_tier]
-        product_name = f'Farmness â€” {COACH_TIER_LABELS[target_tier]} (mensuel)'
+        product_name = f'Farmness — {COACH_TIER_LABELS[target_tier]} (mensuel)'
     else:
         return jsonify({'error': 'kind invalide (athlete_independent | coach_tier)'}), 400
 
@@ -411,10 +411,10 @@ def create_checkout():
 @billing_bp.post('/me/subscription/confirm')
 @login_required
 def confirm_checkout():
-    """AprÃ¨s retour app : vÃ©rifie la session Stripe et upgrade si payÃ©e."""
+    """Après retour app : vérifie la session Stripe et upgrade si payée."""
     user = request.current_user
     if not _stripe_ready():
-        return jsonify({'error': 'Stripe non configurÃ©', 'code': 'STRIPE_NOT_CONFIGURED'}), 503
+        return jsonify({'error': 'Stripe non configuré', 'code': 'STRIPE_NOT_CONFIGURED'}), 503
     data = request.get_json(silent=True) or {}
     session_id = (data.get('session_id') or '').strip()
     if not session_id:
@@ -432,7 +432,7 @@ def confirm_checkout():
         return jsonify({'error': f'Session Stripe invalide : {e}'}), 502
 
     if session.payment_status != 'paid' and session.status != 'complete':
-        return jsonify({'error': 'Paiement pas encore confirmÃ©', 'payment_status': session.payment_status}), 402
+        return jsonify({'error': 'Paiement pas encore confirmé', 'payment_status': session.payment_status}), 402
 
     try:
         _fulfill_payment(pay, payment_intent=getattr(session, 'payment_intent', None))
@@ -516,7 +516,7 @@ def cancel_pending_subscription():
 @billing_bp.post('/me/subscription/downgrade')
 @login_required
 def downgrade_subscription():
-    """Passage Free / tier 0 immÃ©diat (gratuit), tracÃ© dans lâ€™historique."""
+    """Passage Free / tier 0 immédiat (gratuit), tracé dans l’historique."""
     user = request.current_user
     data = request.get_json(silent=True) or {}
     kind = (data.get('kind') or '').strip()
@@ -603,7 +603,7 @@ def stripe_webhook():
 
 @billing_bp.get('/billing/return')
 def billing_return_page():
-    """Page web aprÃ¨s Checkout (ouvre lâ€™app via deep link si possible)."""
+    """Page web après Checkout (ouvre l’app via deep link si possible)."""
     status = request.args.get('status', 'success')
     session_id = request.args.get('session_id', '')
     deep = f'farmness://subscription?status={status}'
@@ -613,8 +613,8 @@ def billing_return_page():
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <style>body{{font-family:system-ui;background:#0D0F12;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;text-align:center}}
     a{{color:#5EEAD4}}</style></head><body>
-    <div><h1>{'Paiement reÃ§u' if status == 'success' else 'Paiement annulÃ©'}</h1>
-    <p>Tu peux revenir dans lâ€™application Farmness.</p>
+    <div><h1>{'Paiement reçu' if status == 'success' else 'Paiement annulé'}</h1>
+    <p>Tu peux revenir dans l’application Farmness.</p>
     <p><a href="{deep}">Ouvrir Farmness</a></p>
     <script>setTimeout(function(){{window.location="{deep}"}},400);</script>
     </div></body></html>"""
@@ -641,13 +641,13 @@ def accept_payment(payment_id):
     admin = request.current_user
     pay = SubscriptionPayment.query.get_or_404(payment_id)
     if pay.status != 'pending':
-        return jsonify({'error': 'Cette demande nâ€™est plus en attente'}), 400
+        return jsonify({'error': 'Cette demande n’est plus en attente'}), 400
     try:
         _fulfill_payment(pay)
-        # Demande manuelle validÃ©e â†’ classÃ©e comme passage admin
+        # Demande manuelle validée → classée comme passage admin
         if pay.source == 'manual_request':
             pay.source = 'admin_manual'
-            pay.note = ((pay.note or 'Demande') + ' â€” validÃ© admin').strip()
+            pay.note = ((pay.note or 'Demande') + ' — validé admin').strip()
         pay.resolved_by_id = admin.id
         db.session.commit()
     except Exception as e:
@@ -663,11 +663,11 @@ def refuse_payment(payment_id):
     admin = request.current_user
     pay = SubscriptionPayment.query.get_or_404(payment_id)
     if pay.status != 'pending':
-        return jsonify({'error': 'Cette demande nâ€™est plus en attente'}), 400
+        return jsonify({'error': 'Cette demande n’est plus en attente'}), 400
     pay.status = 'refused'
     pay.resolved_at = datetime.utcnow()
     pay.resolved_by_id = admin.id
-    pay.note = f"{(pay.note or 'Demande').rstrip()} â€” refusÃ© admin"
+    pay.note = f"{(pay.note or 'Demande').rstrip()} — refusé admin"
     db.session.commit()
     return jsonify({'ok': True, 'payment': pay.to_dict()})
 
