@@ -38,6 +38,11 @@ class User(db.Model):
     contact_channel = db.Column(db.String(32), nullable=True)  # phone|whatsapp|email|instagram|other
     contact_value = db.Column(db.String(255), nullable=True)
     profile_completed_at = db.Column(db.DateTime, nullable=True)
+    # YouTube OAuth (coach) — refresh token jamais exposé dans to_dict
+    youtube_refresh_token = db.Column(db.Text, nullable=True)
+    youtube_channel_id = db.Column(db.String(128), nullable=True)
+    youtube_channel_title = db.Column(db.String(255), nullable=True)
+    youtube_connected_at = db.Column(db.DateTime, nullable=True)
 
     coach = db.relationship('User', remote_side=[id], foreign_keys=[coach_id], backref='athletes')
 
@@ -72,6 +77,8 @@ class User(db.Model):
             data['coach_name'] = self.coach.display_name or self.coach.username
         if self.role in ('coach', 'admin'):
             data.update(self.coach_profile_public_dict())
+            data['youtube_connected'] = bool(self.youtube_refresh_token)
+            data['youtube_channel_title'] = self.youtube_channel_title
         return data
 
     def coach_profile_is_complete(self):

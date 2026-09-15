@@ -3808,6 +3808,153 @@ def get_coach_profile():
     return jsonify(data)
 
 
+@api_bp.get('/coach/youtube/status')
+@coach_required
+def coach_youtube_status():
+    from app.youtube_oauth import youtube_oauth_configured
+    user = request.current_user
+    return jsonify({
+        'configured': youtube_oauth_configured(),
+        'connected': bool(user.youtube_refresh_token),
+        'channel_id': user.youtube_channel_id,
+        'channel_title': user.youtube_channel_title,
+        'connected_at': user.youtube_connected_at.isoformat() if user.youtube_connected_at else None,
+        'note': (
+            'Les vidéos privées restent visibles seulement pour ton compte Google. '
+            'Pour tes athlètes, utilise des vidéos non répertoriées ou publiques.'
+        ),
+    })
+
+
+@api_bp.get('/coach/youtube/auth-url')
+@coach_required
+def coach_youtube_auth_url():
+    from app.youtube_oauth import build_authorize_url, youtube_oauth_configured
+    if not youtube_oauth_configured():
+        return jsonify({
+            'error': 'YouTube non configuré côté serveur (GOOGLE_OAUTH_CLIENT_ID / SECRET)',
+            'code': 'YOUTUBE_OAUTH_MISSING',
+        }), 503
+    try:
+        url = build_authorize_url(request.current_user.id)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 503
+    return jsonify({'url': url})
+
+
+@api_bp.get('/coach/youtube/callback')
+def coach_youtube_callback():
+    """Redirect Google OAuth → stocke le refresh token → deep link app."""
+    from app.youtube_oauth import (
+        exchange_code_for_tokens, fetch_channel_info, parse_oauth_state,
+    )
+    err = request.args.get('error')
+    if err:
+        return (
+            '<!doctype html><html><body style="font-family:sans-serif;padding:24px">'
+            f'<h2>Connexion YouTube annulée</h2><p>{err}</p>'
+            '<p><a href="farmness://youtube-connected?ok=0">Retour à l’app</a></p>'
+            '</body></html>'
+        ), 400
+
+    code = request.args.get('code')
+    state = request.args.get('state')
+    if not code or not state:
+        return jsonify({'error': 'code/state manquants'}), 400
+    try:
+        user_id = parse_oauth_state(state)
+    except Exception:
+        return jsonify({'error': 'state invalide ou expiré'}), 400
+
+    user = User.query.get(user_id)
+    if not user or user.role not in ('coach', 'admin'):
+        return jsonify({'error': 'Utilisateur invalide'}), 400
+
+    try:
+        tokens = exchange_code_for_tokens(code)
+        access = tokens.get('access_token')
+        refresh = tokens.get('refresh_token') or user.youtube_refresh_token
+        if not refresh:
+            return (
+                '<!doctype html><html><body style="font-family:sans-serif;padding:24px">'
+                '<h2>Pas de refresh token</h2>'
+                '<p>Réessaie en révoquant l’accès Farmness dans ton compte Google, puis reconnecte.</p>'
+                '<p><a href="farmness://youtube-connected?ok=0">Retour à l’app</a></p>'
+                '</body></html>'
+            ), 400
+        info = fetch_channel_info(access)
+        items = info.get('items') or []
+        ch = items[0] if items else {}
+        user.youtube_refresh_token = refresh
+        user.youtube_channel_id = ch.get('id')
+        user.youtube_channel_title = ((ch.get('snippet') or {}).get('title'))
+        user.youtube_connected_at = datetime.utcnow()
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return (
+            '<!doctype html><html><body style="font-family:sans-serif;padding:24px">'
+            f'<h2>Erreur YouTube</h2><p>{exc}</p>'
+            '<p><a href="farmness://youtube-connected?ok=0">Retour à l’app</a></p>'
+            '</body></html>'
+        ), 502
+
+    return (
+        '<!doctype html><html><body style="font-family:sans-serif;padding:24px;text-align:center">'
+        '<h2>YouTube connecté</h2>'
+        '<p>Tu peux fermer cette page et revenir dans Farmness.</p>'
+        '<script>location.href="farmness://youtube-connected?ok=1";</script>'
+        '<p><a href="farmness://youtube-connected?ok=1">Ouvrir l’app</a></p>'
+        '</body></html>'
+    )
+
+
+@api_bp.delete('/coach/youtube')
+@coach_required
+def coach_youtube_disconnect():
+    user = request.current_user
+    user.youtube_refresh_token = None
+    user.youtube_channel_id = None
+    user.youtube_channel_title = None
+    user.youtube_connected_at = None
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@api_bp.get('/coach/youtube/videos')
+@coach_required
+def coach_youtube_videos():
+    from app.youtube_oauth import enrich_privacy, list_my_videos, refresh_access_token, youtube_oauth_configured
+    user = request.current_user
+    if not youtube_oauth_configured():
+        return jsonify({'error': 'YouTube non configuré', 'code': 'YOUTUBE_OAUTH_MISSING'}), 503
+    if not user.youtube_refresh_token:
+        return jsonify({'error': 'YouTube non connecté', 'code': 'YOUTUBE_NOT_CONNECTED'}), 401
+    try:
+        tok = refresh_access_token(user.youtube_refresh_token)
+        access = tok.get('access_token')
+        if tok.get('refresh_token'):
+            user.youtube_refresh_token = tok['refresh_token']
+            db.session.commit()
+        page = request.args.get('page_token') or None
+        raw = list_my_videos(access, page_token=page, max_results=int(request.args.get('limit') or 24))
+        videos = enrich_privacy(access, raw.get('videos') or [])
+        if raw.get('channel_title') and not user.youtube_channel_title:
+            user.youtube_channel_title = raw['channel_title']
+            db.session.commit()
+        return jsonify({
+            'videos': videos,
+            'next_page_token': raw.get('next_page_token'),
+            'channel_title': user.youtube_channel_title or raw.get('channel_title'),
+            'note': (
+                'Privé = toi seul. Non répertorié = OK pour tes athlètes avec le lien. '
+                'Public = visible partout.'
+            ),
+        })
+    except Exception as exc:
+        return jsonify({'error': f'YouTube API : {exc}'}), 502
+
+
 @api_bp.put('/coach/profile')
 @coach_required
 def put_coach_profile():

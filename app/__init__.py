@@ -234,6 +234,10 @@ def create_app():
                 ('profile_completed_at', "ALTER TABLE `user` ADD COLUMN profile_completed_at DATETIME NULL"),
                 ('is_demo', "ALTER TABLE `user` ADD COLUMN is_demo TINYINT(1) NOT NULL DEFAULT 0"),
                 ('demo_seeded_at', "ALTER TABLE `user` ADD COLUMN demo_seeded_at DATETIME NULL"),
+                ('youtube_refresh_token', "ALTER TABLE `user` ADD COLUMN youtube_refresh_token TEXT NULL"),
+                ('youtube_channel_id', "ALTER TABLE `user` ADD COLUMN youtube_channel_id VARCHAR(128) NULL"),
+                ('youtube_channel_title', "ALTER TABLE `user` ADD COLUMN youtube_channel_title VARCHAR(255) NULL"),
+                ('youtube_connected_at', "ALTER TABLE `user` ADD COLUMN youtube_connected_at DATETIME NULL"),
             ]:
                 if col not in user_cols:
                     db.session.execute(db.text(ddl))
