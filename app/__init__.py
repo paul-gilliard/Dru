@@ -61,13 +61,25 @@ def create_app():
     
     db.init_app(app)
     migrate.init_app(app, db)
+    # Expo web (localhost) against prod API — native APK ignores CORS.
+    LOCAL_WEB_ORIGINS = (
+        'http://localhost:8081',
+        'http://127.0.0.1:8081',
+        'http://localhost:19006',
+        'http://127.0.0.1:19006',
+    )
     cors_raw = (os.environ.get('CORS_ORIGINS') or '').strip()
     if cors_raw:
         origins = [o.strip() for o in cors_raw.split(',') if o.strip()]
     elif _is_development():
         origins = '*'
     else:
+        # Prod sans liste : pas d'ouvert total — l'app mobile n'a pas besoin de CORS navigateur.
         origins = [public] if public else []
+    if origins != '*':
+        for o in LOCAL_WEB_ORIGINS:
+            if o not in origins:
+                origins.append(o)
     CORS(app, resources={r"/api/*": {"origins": origins or []}, r"/health": {"origins": origins or []}})
     
     # Créer les tables au démarrage si elles n'existent pas
