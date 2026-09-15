@@ -3371,6 +3371,156 @@ def _get_or_create_marking(athlete_id, week_start, done=False):
     return marking
 
 
+# ------------------------------------------------------------- METABOLISM ---
+
+def _latest_journal_weight(athlete_id: int):
+    row = (
+        JournalEntry.query
+        .filter(JournalEntry.athlete_id == athlete_id, JournalEntry.weight.isnot(None))
+        .order_by(JournalEntry.entry_date.desc(), JournalEntry.id.desc())
+        .first()
+    )
+    return float(row.weight) if row and row.weight is not None else None
+
+
+def _parse_optional_date(raw):
+    if raw is None or raw == '':
+        return None
+    if isinstance(raw, date) and not isinstance(raw, datetime):
+        return raw
+    return datetime.strptime(str(raw)[:10], '%Y-%m-%d').date()
+
+
+def _parse_optional_float(raw, *, lo=None, hi=None):
+    if raw is None or raw == '':
+        return None
+    v = float(raw)
+    if lo is not None and v < lo:
+        raise ValueError(f'valeur < {lo}')
+    if hi is not None and v > hi:
+        raise ValueError(f'valeur > {hi}')
+    return v
+
+
+def _parse_optional_int(raw, *, lo=None, hi=None):
+    if raw is None or raw == '':
+        return None
+    v = int(round(float(raw)))
+    if lo is not None and v < lo:
+        raise ValueError(f'valeur < {lo}')
+    if hi is not None and v > hi:
+        raise ValueError(f'valeur > {hi}')
+    return v
+
+
+@api_bp.get('/athlete/metabolism')
+@login_required
+def get_athlete_metabolism():
+    from app.metabolism import ACTIVITY_LABELS, GOAL_LABELS, TENDENCY_LABELS, compute_metabolism, energy_balance_report
+    user = request.current_user
+    if user.role != 'athlete':
+        return jsonify({'error': 'Réservé à l\'athlète'}), 403
+    if not _has_independent(user):
+        return jsonify({'error': 'Module Indépendant requis', 'code': 'INDEPENDENT_REQUIRED'}), 403
+
+    journal_w = _latest_journal_weight(user.id)
+    weight = journal_w if journal_w is not None else user.profile_weight_kg
+    meta = compute_metabolism(user, weight_kg=float(weight) if weight is not None else None)
+    meta['weight_source'] = (
+        'journal' if journal_w is not None
+        else 'profile' if user.profile_weight_kg is not None
+        else None
+    )
+
+    balance = None
+    start = user.energy_balance_start_date
+    if start and meta.get('target_kcal'):
+        entries = (
+            JournalEntry.query
+            .filter(
+                JournalEntry.athlete_id == user.id,
+                JournalEntry.entry_date >= start,
+                JournalEntry.kcals.isnot(None),
+            )
+            .order_by(JournalEntry.entry_date.asc())
+            .all()
+        )
+        balance = energy_balance_report(entries, target_kcal=meta['target_kcal'], start=start)
+
+    return jsonify({
+        'metabolism': meta,
+        'balance': balance,
+        'options': {
+            'activity_levels': [{'value': k, 'label': v} for k, v in ACTIVITY_LABELS.items()],
+            'tendencies': [{'value': k, 'label': v} for k, v in TENDENCY_LABELS.items()],
+            'goals': [{'value': k, 'label': v} for k, v in GOAL_LABELS.items()],
+        },
+    })
+
+
+@api_bp.put('/athlete/metabolism')
+@login_required
+def put_athlete_metabolism():
+    from app.metabolism import ACTIVITY_FACTORS, GOAL_LABELS, TENDENCY_FACTORS, clamp_goal_delta, compute_metabolism
+    user = request.current_user
+    if user.role != 'athlete':
+        return jsonify({'error': 'Réservé à l\'athlète'}), 403
+    if not _has_independent(user):
+        return jsonify({'error': 'Module Indépendant requis', 'code': 'INDEPENDENT_REQUIRED'}), 403
+
+    data = request.get_json(silent=True) or {}
+    try:
+        if 'sex' in data:
+            sex = (data.get('sex') or '').strip().lower() or None
+            if sex in ('male', 'man', 'homme'):
+                sex = 'm'
+            elif sex in ('female', 'woman', 'femme'):
+                sex = 'f'
+            if sex not in (None, 'm', 'f'):
+                return jsonify({'error': 'sex invalide (m|f)'}), 400
+            user.sex = sex
+        if 'height_cm' in data:
+            user.height_cm = _parse_optional_float(data.get('height_cm'), lo=100, hi=250)
+        if 'birth_date' in data:
+            user.birth_date = _parse_optional_date(data.get('birth_date'))
+        if 'profile_weight_kg' in data:
+            user.profile_weight_kg = _parse_optional_float(data.get('profile_weight_kg'), lo=30, hi=300)
+        if 'body_fat_pct' in data:
+            user.body_fat_pct = _parse_optional_float(data.get('body_fat_pct'), lo=3, hi=60)
+        if 'activity_level' in data:
+            act = data.get('activity_level') or None
+            if act and act not in ACTIVITY_FACTORS:
+                return jsonify({'error': 'activity_level invalide'}), 400
+            user.activity_level = act
+        if 'metabolic_tendency' in data:
+            ten = data.get('metabolic_tendency') or None
+            if ten and ten not in TENDENCY_FACTORS:
+                return jsonify({'error': 'metabolic_tendency invalide'}), 400
+            user.metabolic_tendency = ten
+        if 'bmr_override' in data:
+            user.bmr_override = _parse_optional_int(data.get('bmr_override'), lo=800, hi=5000)
+        if 'tdee_override' in data:
+            user.tdee_override = _parse_optional_int(data.get('tdee_override'), lo=1000, hi=8000)
+        if 'energy_goal' in data:
+            goal = data.get('energy_goal') or None
+            if goal and goal not in GOAL_LABELS:
+                return jsonify({'error': 'energy_goal invalide'}), 400
+            user.energy_goal = goal
+        if 'energy_goal_delta' in data:
+            raw = data.get('energy_goal_delta')
+            user.energy_goal_delta = clamp_goal_delta(raw) if raw not in (None, '') else None
+        if 'energy_balance_start_date' in data:
+            user.energy_balance_start_date = _parse_optional_date(data.get('energy_balance_start_date'))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+
+    db.session.commit()
+    journal_w = _latest_journal_weight(user.id)
+    weight = journal_w if journal_w is not None else user.profile_weight_kg
+    meta = compute_metabolism(user, weight_kg=float(weight) if weight is not None else None)
+    return jsonify({'metabolism': meta, 'user': user.to_dict()})
+
+
 @api_bp.get('/athlete/bilan-hebdo')
 @login_required
 def athlete_weekly_bilan():

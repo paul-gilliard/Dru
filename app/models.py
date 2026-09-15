@@ -43,6 +43,19 @@ class User(db.Model):
     youtube_channel_id = db.Column(db.String(128), nullable=True)
     youtube_channel_title = db.Column(db.String(255), nullable=True)
     youtube_connected_at = db.Column(db.DateTime, nullable=True)
+    # Métabolisme (athlète Indépendant)
+    sex = db.Column(db.String(8), nullable=True)
+    height_cm = db.Column(db.Float, nullable=True)
+    birth_date = db.Column(db.Date, nullable=True)
+    profile_weight_kg = db.Column(db.Float, nullable=True)
+    body_fat_pct = db.Column(db.Float, nullable=True)
+    activity_level = db.Column(db.String(32), nullable=True)
+    metabolic_tendency = db.Column(db.String(32), nullable=True)
+    bmr_override = db.Column(db.Integer, nullable=True)
+    tdee_override = db.Column(db.Integer, nullable=True)
+    energy_goal = db.Column(db.String(16), nullable=True)
+    energy_goal_delta = db.Column(db.Integer, nullable=True)
+    energy_balance_start_date = db.Column(db.Date, nullable=True)
 
     coach = db.relationship('User', remote_side=[id], foreign_keys=[coach_id], backref='athletes')
 
@@ -73,6 +86,21 @@ class User(db.Model):
             'bilan_weekday': int(self.bilan_weekday) if self.role == 'athlete' and self.bilan_weekday is not None else None,
             'is_demo': bool(self.is_demo) if self.role == 'athlete' else False,
         }
+        if self.role == 'athlete':
+            data['sex'] = self.sex
+            data['height_cm'] = self.height_cm
+            data['birth_date'] = self.birth_date.isoformat() if self.birth_date else None
+            data['profile_weight_kg'] = self.profile_weight_kg
+            data['body_fat_pct'] = self.body_fat_pct
+            data['activity_level'] = self.activity_level
+            data['metabolic_tendency'] = self.metabolic_tendency
+            data['bmr_override'] = self.bmr_override
+            data['tdee_override'] = self.tdee_override
+            data['energy_goal'] = self.energy_goal
+            data['energy_goal_delta'] = self.energy_goal_delta
+            data['energy_balance_start_date'] = (
+                self.energy_balance_start_date.isoformat() if self.energy_balance_start_date else None
+            )
         if self.role == 'athlete' and self.coach_id and self.coach:
             data['coach_name'] = self.coach.display_name or self.coach.username
         if self.role in ('coach', 'admin'):

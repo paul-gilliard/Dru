@@ -238,6 +238,18 @@ def create_app():
                 ('youtube_channel_id', "ALTER TABLE `user` ADD COLUMN youtube_channel_id VARCHAR(128) NULL"),
                 ('youtube_channel_title', "ALTER TABLE `user` ADD COLUMN youtube_channel_title VARCHAR(255) NULL"),
                 ('youtube_connected_at', "ALTER TABLE `user` ADD COLUMN youtube_connected_at DATETIME NULL"),
+                ('sex', "ALTER TABLE `user` ADD COLUMN sex VARCHAR(8) NULL"),
+                ('height_cm', "ALTER TABLE `user` ADD COLUMN height_cm FLOAT NULL"),
+                ('birth_date', "ALTER TABLE `user` ADD COLUMN birth_date DATE NULL"),
+                ('profile_weight_kg', "ALTER TABLE `user` ADD COLUMN profile_weight_kg FLOAT NULL"),
+                ('body_fat_pct', "ALTER TABLE `user` ADD COLUMN body_fat_pct FLOAT NULL"),
+                ('activity_level', "ALTER TABLE `user` ADD COLUMN activity_level VARCHAR(32) NULL"),
+                ('metabolic_tendency', "ALTER TABLE `user` ADD COLUMN metabolic_tendency VARCHAR(32) NULL"),
+                ('bmr_override', "ALTER TABLE `user` ADD COLUMN bmr_override INT NULL"),
+                ('tdee_override', "ALTER TABLE `user` ADD COLUMN tdee_override INT NULL"),
+                ('energy_goal', "ALTER TABLE `user` ADD COLUMN energy_goal VARCHAR(16) NULL"),
+                ('energy_goal_delta', "ALTER TABLE `user` ADD COLUMN energy_goal_delta INT NULL"),
+                ('energy_balance_start_date', "ALTER TABLE `user` ADD COLUMN energy_balance_start_date DATE NULL"),
             ]:
                 if col not in user_cols:
                     db.session.execute(db.text(ddl))
