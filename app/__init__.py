@@ -517,50 +517,131 @@ def create_app():
     h1 { font-size: 1.6rem; }
     h2 { font-size: 1.15rem; margin-top: 1.75rem; }
     .muted { color: #555; font-size: 0.95rem; }
+    a { color: #0b57d0; }
   </style>
 </head>
 <body>
   <h1>Politique de confidentialité — Farmness</h1>
-  <p class="muted">Dernière mise à jour : 15 août 2026 · Éditeur : Paul Gilliard · Contact : paul.gilliard.8@gmail.com</p>
+  <p class="muted">Dernière mise à jour : 16 septembre 2026 · Éditeur : Paul Gilliard · Contact : <a href="mailto:paul.gilliard.8@gmail.com">paul.gilliard.8@gmail.com</a></p>
+  <p class="muted">Voir aussi : <a href="/licenses">Licences &amp; attributions</a> · <a href="/support">Support</a></p>
 
   <h2>1. Qui sommes-nous</h2>
-  <p>Farmness est une application mobile de suivi sportif (programmes, journal, nutrition, performances) destinée aux athlètes et à leurs coachs.</p>
+  <p>Farmness est une application mobile de suivi sportif (programmes, journal, nutrition, performances) destinée aux athlètes et à leurs coachs. Responsable de traitement : Paul Gilliard (contact ci-dessus).</p>
 
   <h2>2. Données collectées</h2>
   <ul>
-    <li><strong>Compte</strong> : identifiant / e-mail, mot de passe (hashé), nom d’affichage, rôle (athlète, coach, admin).</li>
+    <li><strong>Compte</strong> : identifiant / e-mail, mot de passe (hashé), nom d’affichage, rôle (athlète, coach, admin), éléments de profil coach (ville, spécialité, coordonnées de contact si renseignées).</li>
     <li><strong>Données sportives</strong> : programmes, séances, performances, objectifs, disponibilités.</li>
     <li><strong>Journal / santé saisis</strong> : poids, sommeil, pas, hydratation, macros, sensations (énergie, stress, faim), notes.</li>
     <li><strong>Nutrition</strong> : plans alimentaires et aliments associés.</li>
-    <li><strong>Technique</strong> : jeton d’authentification stocké localement sur l’appareil, logs serveur usuels.</li>
+    <li><strong>Abonnement</strong> : statut d’offre, historique de paiement côté serveur (identifiants de session / facturation fournis par le prestataire de paiement — pas de numéro de carte stocké par Farmness).</li>
+    <li><strong>YouTube (coach, optionnel)</strong> : si un coach connecte son compte Google/YouTube, un jeton d’accès technique (refresh token) et des métadonnées de chaîne (id, titre) sont stockés pour lister ses vidéos (y compris privées pour lui seul) et proposer des liens avec miniature. Ce jeton n’est pas exposé aux athlètes.</li>
+    <li><strong>Médias exercices</strong> : liens YouTube ou GIF/WebP fournis par les coachs (après validation éventuelle), et identifiants d’illustrations d’exercices.</li>
+    <li><strong>Technique</strong> : jeton d’authentification stocké localement sur l’appareil, logs serveur usuels (sécurité, erreurs), événements de sécurité traités par l’admin.</li>
   </ul>
 
   <h2>3. Health Connect (Android uniquement)</h2>
-  <p>Avec ton accord explicite, Farmness peut lire via Health Connect : pas, sommeil et nutrition. Le poids n’est jamais synchronisé automatiquement. Tu peux révoquer ces permissions à tout moment dans Health Connect / les réglages Android.</p>
+  <p>Avec ton accord explicite, Farmness peut lire via Health Connect : pas, sommeil et nutrition. Le poids n’est jamais synchronisé automatiquement. Tu peux révoquer ces permissions à tout moment dans Health Connect / les réglages Android. Base légale : consentement.</p>
 
   <h2>4. Finalités</h2>
-  <p>Fournir le service (entraînement, suivi coach/athlète), améliorer la fiabilité de l’app, et assurer la sécurité des comptes. Pas de vente de données personnelles à des tiers publicitaires.</p>
+  <p>Fournir le service (entraînement, suivi coach/athlète, médias d’exercices, abonnements), améliorer la fiabilité de l’app, et assurer la sécurité des comptes. Pas de vente de données personnelles à des tiers publicitaires. Pas de publicité ciblée basée sur tes données de santé.</p>
 
-  <h2>5. Base légale</h2>
-  <p>Exécution du contrat (fourniture du service), consentement (Health Connect), et intérêt légitime (sécurité / prévention d’abus).</p>
+  <h2>5. Base légale (RGPD)</h2>
+  <ul>
+    <li><strong>Exécution du contrat</strong> : compte, programmes, journal, coaching, abonnement.</li>
+    <li><strong>Consentement</strong> : Health Connect ; connexion YouTube coach (révocable en déconnectant YouTube dans l’app / compte Google).</li>
+    <li><strong>Intérêt légitime</strong> : sécurité, prévention d’abus, journaux techniques.</li>
+    <li><strong>Obligations légales</strong> : le cas échéant (facturation / conservation minimale liée aux paiements).</li>
+  </ul>
 
   <h2>6. Hébergement &amp; conservation</h2>
-  <p>Les données applicatives sont hébergées sur l’infrastructure cloud utilisée pour l’API Farmness (Railway). Elles sont conservées tant que le compte existe, sauf demande de suppression.</p>
+  <p>Les données applicatives sont hébergées chez <strong>Railway</strong> (infrastructure cloud de l’API et de la base). Elles sont conservées tant que le compte existe, sauf demande de suppression. Les données de paiement détaillées (carte) restent chez le prestataire de paiement ; Farmness conserve surtout le statut d’abonnement et des références techniques de transaction.</p>
 
-  <h2>7. Partage</h2>
-  <p>Un athlète lié à un coach partage avec ce coach les données nécessaires au coaching (programmes, journal, perfs, etc.). Pas d’autre partage commercial.</p>
+  <h2>7. Destinataires &amp; sous-traitants / services tiers</h2>
+  <p>Nous ne vendons pas tes données. Des prestataires techniques interviennent uniquement pour faire fonctionner le service :</p>
+  <ul>
+    <li><strong>Railway</strong> — hébergement de l’API et de la base de données.</li>
+    <li><strong>Stripe</strong> — paiement des abonnements (Checkout). Stripe traite les données de paiement selon sa propre politique. Farmness ne stocke pas les numéros de carte.</li>
+    <li><strong>Google / YouTube</strong> — uniquement si un coach choisit de connecter YouTube (OAuth, scope lecture). Permet de lister les vidéos du coach et d’afficher des miniatures. Les athlètes ne reçoivent que le lien choisi par le coach (une vidéo privée YouTube reste inaccessible aux non-propriétaires).</li>
+    <li><strong>jsDelivr (CDN)</strong> — diffusion des images d’illustration d’exercices du pack open source (pas de compte utilisateur transmis volontairement ; requête réseau classique vers le CDN lors de l’affichage).</li>
+    <li><strong>Apple / Google</strong> — distribution des apps (stores) ; notifications / permissions système selon l’OS.</li>
+  </ul>
+  <p>Un athlète lié à un coach partage avec ce coach les données nécessaires au coaching (programmes, séances, journal, perfs, etc.).</p>
 
-  <h2>8. Tes droits</h2>
-  <p>Tu peux demander l’accès, la rectification ou la suppression de ton compte / données en écrivant à <a href="mailto:paul.gilliard.8@gmail.com">paul.gilliard.8@gmail.com</a>. Tu peux aussi te désinscrire / te déconnecter dans l’app.</p>
+  <h2>8. Bibliothèques, contenus &amp; licences externes</h2>
+  <p>Farmness utilise des bibliothèques logicielles et des contenus sous licence. Les plus notables côté utilisateur :</p>
+  <ul>
+    <li><strong>Illustrations d’exercices</strong> : pack <em>Workout Guide</em> (Bryl Lim / @bryllim/workout-guide), dérivé d’Everkinetic — licence <strong>CC BY-SA 4.0</strong>. Attribution affichée dans l’app et détaillée sur <a href="/licenses">/licenses</a>.</li>
+    <li><strong>Liens YouTube / GIF coach</strong> : le coach reste responsable des droits sur les médias qu’il propose ; Farmness ouvre le lien ou affiche le fichier validé, sans se substituer aux conditions YouTube ou aux droits d’auteur du contenu.</li>
+  </ul>
+  <p>La liste à jour des attributions et licences figure sur <a href="/licenses">la page Licences</a>.</p>
 
-  <h2>9. Sécurité</h2>
+  <h2>9. Transferts hors UE</h2>
+  <p>Certains prestataires (notamment Stripe, Google, CDN) peuvent traiter des données depuis des pays hors Union européenne. Dans ce cas, le transfert s’appuie sur les mécanismes prévus par le RGPD (clauses contractuelles types / règles applicables du prestataire) et se limite à ce qui est nécessaire au service.</p>
+
+  <h2>10. Tes droits</h2>
+  <p>Conformément au RGPD, tu peux demander l’accès, la rectification, l’effacement, la limitation, la portabilité (lorsque applicable) ou t’opposer à certains traitements, et retirer ton consentement (Health Connect, YouTube) sans affecter la licéité du traitement avant retrait. Écris à <a href="mailto:paul.gilliard.8@gmail.com">paul.gilliard.8@gmail.com</a>. Tu peux aussi te déconnecter dans l’app. Tu peux introduire une réclamation auprès de la CNIL (<a href="https://www.cnil.fr" rel="noopener">cnil.fr</a>).</p>
+
+  <h2>11. Sécurité</h2>
   <p>Authentification JWT, mots de passe hashés, communications HTTPS vers l’API. Aucune sécurité n’est absolue ; signale tout incident suspect au contact ci-dessus.</p>
 
-  <h2>10. Mineurs</h2>
+  <h2>12. Mineurs</h2>
   <p>L’app s’adresse à un public adulte ou sous supervision d’un coach / parent. Pas destinée aux enfants de moins de 13 ans.</p>
 
-  <h2>11. Modifications</h2>
+  <h2>13. Modifications</h2>
   <p>Cette politique peut évoluer. La date en tête de page sera mise à jour. En cas de changement important, une information pourra être affichée dans l’app.</p>
+</body>
+</html>"""
+        return Response(html, mimetype='text/html; charset=utf-8')
+
+    @app.get('/licenses')
+    def licenses_page():
+        """Attributions open-source / CC — exigence CC BY-SA + transparence stores."""
+        from flask import Response
+        html = """<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Farmness — Licences &amp; attributions</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1.25rem; line-height: 1.55; color: #111; }
+    h1, h2 { line-height: 1.25; }
+    h1 { font-size: 1.6rem; }
+    h2 { font-size: 1.15rem; margin-top: 1.75rem; }
+    .muted { color: #555; font-size: 0.95rem; }
+    a { color: #0b57d0; }
+    code { font-size: 0.9em; }
+  </style>
+</head>
+<body>
+  <h1>Licences &amp; attributions — Farmness</h1>
+  <p class="muted">Dernière mise à jour : 16 septembre 2026 · <a href="/privacy">Politique de confidentialité</a> · <a href="/support">Support</a></p>
+
+  <h2>Illustrations d’exercices (CC BY-SA 4.0)</h2>
+  <p>
+    Les animations / frames d’exercices par défaut proviennent du projet
+    <a href="https://github.com/bryllim/workout-guide" rel="noopener">Workout Guide</a>
+    (@bryllim/workout-guide), basées sur les données / poses
+    <a href="https://github.com/everkinetic/data" rel="noopener">Everkinetic</a>.
+  </p>
+  <p><strong>Attribution :</strong> Illustrations d’exercices : Workout Guide (Bryl Lim), basées sur Everkinetic — licence
+    <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener">Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)</a>.
+  </p>
+  <p>Cette attribution est aussi affichée dans l’application (écrans médias / banque d’exercices). Toute réutilisation dérivée des assets doit respecter les conditions CC BY-SA (notamment share-alike).</p>
+  <p>Diffusion des fichiers via le CDN jsDelivr (<code>cdn.jsdelivr.net/npm/@bryllim/workout-guide@…</code>).</p>
+
+  <h2>Médias proposés par les coachs</h2>
+  <ul>
+    <li><strong>YouTube</strong> : Farmness n’héberge pas la vidéo ; le coach fournit un lien. Les conditions d’utilisation YouTube / Google et les droits sur le contenu restent applicables.</li>
+    <li><strong>GIF / WebP</strong> : contenus uploadés sous la responsabilité du coach, publication commune éventuelle après validation interne.</li>
+  </ul>
+
+  <h2>Logiciels &amp; dépendances</h2>
+  <p>L’application mobile et le serveur utilisent de nombreuses bibliothèques open source (React Native / Expo, Flask, etc.) sous leurs licences respectives (MIT, Apache 2.0, BSD, etc.). La liste complète figure dans les manifests du projet (<code>package.json</code>, <code>requirements.txt</code>).</p>
+
+  <h2>Contact</h2>
+  <p>Questions licences ou privacy : <a href="mailto:paul.gilliard.8@gmail.com">paul.gilliard.8@gmail.com</a></p>
 </body>
 </html>"""
         return Response(html, mimetype='text/html; charset=utf-8')
@@ -576,13 +657,14 @@ def create_app():
   <title>Farmness — Support</title>
   <style>
     body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1.25rem; line-height: 1.55; }
+    a { color: #0b57d0; }
   </style>
 </head>
 <body>
   <h1>Support Farmness</h1>
   <p>Pour toute question, bug ou demande liée à ton compte :</p>
   <p><a href="mailto:paul.gilliard.8@gmail.com">paul.gilliard.8@gmail.com</a></p>
-  <p><a href="/privacy">Politique de confidentialité</a></p>
+  <p><a href="/privacy">Politique de confidentialité</a> · <a href="/licenses">Licences &amp; attributions</a></p>
 </body>
 </html>"""
         return Response(html, mimetype='text/html; charset=utf-8')
