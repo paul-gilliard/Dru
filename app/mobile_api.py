@@ -4,6 +4,7 @@ import threading
 
 from flask import Blueprint, current_app, request, jsonify
 
+from app.tonnage import effective_load_kg, series_tonnage
 from app import db
 from app.mobile_auth import generate_token, login_required, coach_required, admin_required
 from app.models import (
@@ -2031,10 +2032,10 @@ def stats_tonnage_by_muscle():
     totals = {}
     trend = {}
     for e in entries:
-        if not e.reps or not e.load:
+        if e.reps is None or e.load is None:
             continue
         muscle = muscle_by_name.get(e.exercise, 'Autre') or 'Autre'
-        tonnage = e.reps * e.load
+        tonnage = series_tonnage(e.reps, e.load)
         totals[muscle] = totals.get(muscle, 0) + tonnage
         d = e.entry_date.isoformat()
         trend[d] = trend.get(d, 0) + tonnage
@@ -2175,8 +2176,8 @@ def _classify_exercise(cur_series, prev_series, cur_date, prev_date):
         if c_load is not None and p_load is not None and c_reps is not None and p_reps is not None:
             same_load = c_load == p_load
             same_reps = c_reps == p_reps
-            cur_tonnage += c_load * c_reps
-            prev_tonnage += p_load * p_reps
+            cur_tonnage += series_tonnage(c_reps, c_load)
+            prev_tonnage += series_tonnage(p_reps, p_load)
             if c_load < p_load or (same_load and c_reps < p_reps):
                 row_verdict = 'regression'
                 count_regression += 1
@@ -2293,10 +2294,10 @@ def _health_metrics_for_range(athlete_id, start, end):
 def _muscle_tonnage_from_rows(perf, muscle_by_name):
     muscle_totals, exercise_totals = {}, {}
     for e in perf:
-        if not e.reps or not e.load:
+        if e.reps is None or e.load is None:
             continue
         muscle = muscle_by_name.get(e.exercise, 'Autre') or 'Autre'
-        tonnage = e.reps * e.load
+        tonnage = series_tonnage(e.reps, e.load)
         muscle_totals[muscle] = muscle_totals.get(muscle, 0) + tonnage
         exercise_totals.setdefault(muscle, {})
         exercise_totals[muscle][e.exercise] = exercise_totals[muscle].get(e.exercise, 0) + tonnage
@@ -2490,7 +2491,7 @@ def stats_exercises_by_muscle():
         if e.entry_date and (meta['last'] is None or e.entry_date > meta['last']):
             meta['last'] = e.entry_date
         if e.load is not None and e.reps is not None:
-            meta['tonnage'] += e.load * e.reps
+            meta['tonnage'] += series_tonnage(e.reps, e.load)
     by_muscle = {}
     for name, meta in ex_meta.items():
         muscle = muscle_by_name.get(name, 'Autre') or 'Autre'
@@ -2540,7 +2541,7 @@ def stats_exercise_history():
         if e.reps is not None:
             bucket['reps'].append(e.reps)
         if e.load is not None and e.reps is not None:
-            bucket['tonnage'] += e.load * e.reps
+            bucket['tonnage'] += series_tonnage(e.reps, e.load)
         bucket['series'] += 1
         bucket['series_rows'].append({
             'series_number': e.series_number,
@@ -2607,7 +2608,7 @@ def stats_series_breakdown():
         bucket = buckets.setdefault(key, {
             'key': key, 'label': label, 'tonnage': 0.0, 'series_count': 0, 'series': [],
         })
-        ton = (e.load * e.reps) if (e.load is not None and e.reps is not None) else 0
+        ton = series_tonnage(e.reps, e.load)
         bucket['tonnage'] += ton
         bucket['series_count'] += 1
         total_tonnage += ton
@@ -2660,7 +2661,7 @@ def stats_daily_activity():
         bucket = by_date.setdefault(d, {'series': 0, 'tonnage': 0.0, 'exercises': set()})
         bucket['series'] += 1
         if e.load is not None and e.reps is not None:
-            bucket['tonnage'] += e.load * e.reps
+            bucket['tonnage'] += series_tonnage(e.reps, e.load)
         if e.exercise:
             bucket['exercises'].add(e.exercise)
 
@@ -2716,7 +2717,7 @@ def stats_coach_bootstrap():
         bucket = by_date.setdefault(d, {'series': 0, 'tonnage': 0.0, 'exercises': set()})
         bucket['series'] += 1
         if e.load is not None and e.reps is not None:
-            bucket['tonnage'] += e.load * e.reps
+            bucket['tonnage'] += series_tonnage(e.reps, e.load)
         if e.exercise:
             bucket['exercises'].add(e.exercise)
     daily_activity = []
@@ -2794,7 +2795,7 @@ def stats_coach_bootstrap():
         if e.entry_date > meta['last']:
             meta['last'] = e.entry_date
         if e.load is not None and e.reps is not None:
-            meta['tonnage'] += e.load * e.reps
+            meta['tonnage'] += series_tonnage(e.reps, e.load)
     for name, meta in ex_meta.items():
         muscle = muscle_by_name.get(name, 'Autre') or 'Autre'
         bucket = by_muscle.setdefault(muscle, {'tonnage': 0.0, 'exercises': []})
