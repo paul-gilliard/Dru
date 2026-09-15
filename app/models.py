@@ -423,6 +423,12 @@ class Exercise(db.Model):
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    # Médias (pack open-source + propositions coach)
+    animation_slug = db.Column(db.String(128), nullable=True)
+    youtube_url = db.Column(db.String(512), nullable=True)
+    custom_gif_url = db.Column(db.String(512), nullable=True)
+    # none | personal | pending | approved
+    media_status = db.Column(db.String(16), nullable=False, default='none')
 
     owner = db.relationship('User', foreign_keys=[owner_id])
 
@@ -436,6 +442,11 @@ class Exercise(db.Model):
             'muscle_group': self.muscle_group,
             'owner_id': self.owner_id,
             'is_personal': self.owner_id is not None,
+            'animation_slug': self.animation_slug,
+            'youtube_url': self.youtube_url,
+            'custom_gif_url': self.custom_gif_url,
+            'media_status': self.media_status or 'none',
+            'has_media': bool(self.animation_slug or self.youtube_url or self.custom_gif_url),
         }
 
 class Food(db.Model):

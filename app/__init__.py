@@ -321,6 +321,18 @@ def create_app():
                     db.session.execute(db.text("ALTER TABLE exercise ADD COLUMN owner_id INT NULL"))
                     db.session.commit()
                     print("✓ exercise.owner_id OK")
+                    ecols = {c['name'] for c in inspector_bank.get_columns('exercise')}
+                for col, ddl in (
+                    ('animation_slug', "ALTER TABLE exercise ADD COLUMN animation_slug VARCHAR(128) NULL"),
+                    ('youtube_url', "ALTER TABLE exercise ADD COLUMN youtube_url VARCHAR(512) NULL"),
+                    ('custom_gif_url', "ALTER TABLE exercise ADD COLUMN custom_gif_url VARCHAR(512) NULL"),
+                    ('media_status', "ALTER TABLE exercise ADD COLUMN media_status VARCHAR(16) NOT NULL DEFAULT 'none'"),
+                ):
+                    if col not in ecols:
+                        db.session.execute(db.text(ddl))
+                        db.session.commit()
+                        print(f"✓ exercise.{col} OK")
+                        ecols.add(col)
             if 'food' in inspector_bank.get_table_names():
                 fcols = {c['name'] for c in inspector_bank.get_columns('food')}
                 if 'owner_id' not in fcols:
@@ -330,6 +342,16 @@ def create_app():
         except Exception as e:
             db.session.rollback()
             print(f"⚠️ bank owner_id alter skipped: {e}")
+
+        try:
+            from app.models import Exercise
+            from app.exercise_animation_map import backfill_animation_slugs
+            n = backfill_animation_slugs(db.session, Exercise)
+            if n:
+                print(f"✓ backfill animation_slug: {n} exercices")
+        except Exception as e:
+            db.session.rollback()
+            print(f"⚠️ animation_slug backfill skipped: {e}")
 
         # Créer / migrer les comptes admin & coach
         from app.models import User

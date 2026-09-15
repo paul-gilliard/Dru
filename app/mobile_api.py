@@ -185,6 +185,10 @@ def _queue_promote_to_common(kind, target, requester):
             'action': 'promote_to_common',
             'name': public_name,
             'muscle_group': target.muscle_group,
+            'animation_slug': target.animation_slug,
+            'youtube_url': target.youtube_url,
+            'custom_gif_url': target.custom_gif_url,
+            'media_status': 'approved' if (target.youtube_url or target.custom_gif_url or target.animation_slug) else 'none',
         }
     else:
         payload = {
@@ -229,9 +233,37 @@ def _promote_personal_to_common(kind, target, payload):
         existing = Exercise.query.filter_by(name=public_name).first()
         if existing:
             if existing.owner_id is None:
+                # Fusionne les médias proposés sur la commune déjà existante
+                slug = payload.get('animation_slug') or target.animation_slug
+                yt = payload.get('youtube_url') or target.youtube_url
+                gif = payload.get('custom_gif_url') or target.custom_gif_url
+                if slug:
+                    existing.animation_slug = slug
+                if yt:
+                    existing.youtube_url = yt
+                if gif:
+                    existing.custom_gif_url = gif
+                if existing.animation_slug or existing.youtube_url or existing.custom_gif_url:
+                    existing.media_status = 'approved'
                 return existing, None
             return None, (jsonify({'error': f'Nom « {public_name} » déjà pris (perso)'}), 409)
-        common = Exercise(name=public_name, muscle_group=muscle, owner_id=None)
+        common = Exercise(
+            name=public_name,
+            muscle_group=muscle,
+            owner_id=None,
+            animation_slug=payload.get('animation_slug') or target.animation_slug,
+            youtube_url=payload.get('youtube_url') or target.youtube_url,
+            custom_gif_url=payload.get('custom_gif_url') or target.custom_gif_url,
+            media_status=(
+                payload.get('media_status')
+                or (
+                    'approved'
+                    if (payload.get('youtube_url') or payload.get('custom_gif_url') or payload.get('animation_slug')
+                        or target.youtube_url or target.custom_gif_url or target.animation_slug)
+                    else 'none'
+                )
+            ),
+        )
         db.session.add(common)
         db.session.flush()
         return common, None
@@ -1488,7 +1520,30 @@ def create_exercise_bank():
         name = _ensure_personal_name(name, user)
     if Exercise.query.filter_by(name=name).first():
         return jsonify({'error': 'Cet exercice existe déjà'}), 409
-    exercise = Exercise(name=name, muscle_group=muscle_group, owner_id=owner_id)
+
+    from app.exercise_media import normalize_youtube_url
+    youtube_url = None
+    try:
+        youtube_url = normalize_youtube_url(data.get('youtube_url'))
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    animation_slug = (data.get('animation_slug') or '').strip() or None
+    custom_gif_url = (data.get('custom_gif_url') or '').strip() or None
+    has_media = bool(animation_slug or youtube_url or custom_gif_url)
+    if as_common:
+        media_status = 'approved' if has_media else 'none'
+    else:
+        media_status = 'personal' if has_media else 'none'
+
+    exercise = Exercise(
+        name=name,
+        muscle_group=muscle_group,
+        owner_id=owner_id,
+        animation_slug=animation_slug if user.role == 'admin' else None,
+        youtube_url=youtube_url,
+        custom_gif_url=custom_gif_url,
+        media_status=media_status,
+    )
     db.session.add(exercise)
     db.session.flush()
     if owner_id is not None:
@@ -1515,8 +1570,151 @@ def update_exercise_bank(exercise_id):
         exercise.name = data['name']
     if data.get('muscle_group') in MUSCLE_GROUPS:
         exercise.muscle_group = data['muscle_group']
+    from app.exercise_media import normalize_youtube_url
+    if 'youtube_url' in data:
+        try:
+            exercise.youtube_url = normalize_youtube_url(data.get('youtube_url'))
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
+    if 'custom_gif_url' in data and user.role == 'admin':
+        exercise.custom_gif_url = (data.get('custom_gif_url') or '').strip() or None
+    if 'animation_slug' in data and user.role == 'admin':
+        exercise.animation_slug = (data.get('animation_slug') or '').strip() or None
+    if exercise.animation_slug or exercise.youtube_url or exercise.custom_gif_url:
+        if exercise.owner_id is None:
+            exercise.media_status = 'approved'
+        elif exercise.media_status == 'none':
+            exercise.media_status = 'personal'
+    else:
+        exercise.media_status = 'none'
     db.session.commit()
     return jsonify(exercise.to_dict())
+
+
+@api_bp.post('/exercise-bank/<int:exercise_id>/media')
+@login_required
+def update_exercise_bank_media(exercise_id):
+    """Coach : propose YouTube / GIF sur une entrée perso (ou fork implicite)."""
+    from app.exercise_media import normalize_youtube_url, save_gif_upload
+
+    exercise = Exercise.query.get_or_404(exercise_id)
+    user = request.current_user
+    # JSON ou multipart
+    data = request.get_json(silent=True) or {}
+    form = request.form or {}
+
+    if exercise.owner_id is None:
+        # Fork perso pour proposer un média sans toucher la commune
+        base_name = _ensure_personal_name(exercise.name, user)
+        existing = Exercise.query.filter_by(name=base_name, owner_id=user.id).first()
+        if existing:
+            exercise = existing
+        else:
+            exercise = Exercise(
+                name=base_name,
+                muscle_group=exercise.muscle_group,
+                owner_id=user.id,
+                animation_slug=None,
+                youtube_url=None,
+                custom_gif_url=None,
+                media_status='none',
+            )
+            db.session.add(exercise)
+            db.session.flush()
+    elif exercise.owner_id != user.id and user.role != 'admin':
+        return _deny_manage()
+
+    youtube_raw = data.get('youtube_url') if 'youtube_url' in data else form.get('youtube_url')
+    if youtube_raw is not None:
+        try:
+            exercise.youtube_url = normalize_youtube_url(youtube_raw)
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
+
+    upload = request.files.get('gif') or request.files.get('file')
+    if upload and upload.filename:
+        try:
+            exercise.custom_gif_url = save_gif_upload(upload)
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
+
+    gif_url_raw = data.get('custom_gif_url') if 'custom_gif_url' in data else form.get('custom_gif_url')
+    if gif_url_raw is not None and not upload:
+        text = (gif_url_raw or '').strip()
+        exercise.custom_gif_url = text or None
+
+    if exercise.youtube_url or exercise.custom_gif_url or exercise.animation_slug:
+        exercise.media_status = 'pending' if exercise.owner_id else 'approved'
+    else:
+        exercise.media_status = 'none'
+
+    queue = str(data.get('queue_promote') or form.get('queue_promote') or '1') not in ('0', 'false', 'False')
+    if queue and exercise.owner_id is not None:
+        req = _queue_promote_to_common('exercise', exercise, user)
+        if req and (exercise.youtube_url or exercise.custom_gif_url):
+            try:
+                payload = json.loads(req.payload or '{}')
+            except (TypeError, ValueError):
+                payload = {}
+            payload['action'] = 'promote_to_common'
+            payload['youtube_url'] = exercise.youtube_url
+            payload['custom_gif_url'] = exercise.custom_gif_url
+            payload['animation_slug'] = exercise.animation_slug
+            payload['media_status'] = 'approved'
+            req.payload = json.dumps(payload, ensure_ascii=False)
+            req.message = 'Publication média (YouTube / GIF) en banque commune'
+            exercise.media_status = 'pending'
+
+    db.session.commit()
+    return jsonify(exercise.to_dict())
+
+
+@api_bp.get('/exercises/media')
+@login_required
+def lookup_exercise_media():
+    """Résout le média d'un exo de séance par nom (commune prioritaire, puis perso)."""
+    from app.exercise_media import media_dict_from_exercise
+
+    name = (request.args.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'name requis'}), 400
+    user = request.current_user
+    common = Exercise.query.filter_by(name=name, owner_id=None).first()
+    if common and (common.animation_slug or common.youtube_url or common.custom_gif_url):
+        return jsonify(media_dict_from_exercise(common))
+    personal = None
+    if user.role in ('coach', 'admin', 'athlete'):
+        personal = Exercise.query.filter_by(name=name, owner_id=user.id).first()
+        if not personal:
+            # match sans suffixe exact : chercher perso contenant le nom public
+            personal = (
+                Exercise.query.filter(
+                    Exercise.owner_id == user.id,
+                    Exercise.name.ilike(f'%{name}%'),
+                ).order_by(Exercise.id.desc()).first()
+            )
+    if personal and (personal.animation_slug or personal.youtube_url or personal.custom_gif_url):
+        return jsonify(media_dict_from_exercise(personal))
+    if common:
+        return jsonify(media_dict_from_exercise(common))
+    return jsonify({
+        'name': name,
+        'animation_slug': None,
+        'youtube_url': None,
+        'custom_gif_url': None,
+        'media_status': 'none',
+        'has_media': False,
+    })
+
+
+@api_bp.get('/media/exercises/<path:filename>')
+def serve_exercise_media(filename):
+    from flask import send_from_directory
+    from app.exercise_media import is_safe_media_filename, media_storage_dir
+
+    if not is_safe_media_filename(filename):
+        return jsonify({'error': 'Fichier invalide'}), 400
+    return send_from_directory(media_storage_dir(), filename)
 
 
 @api_bp.delete('/exercise-bank/<int:exercise_id>')
@@ -3009,6 +3207,14 @@ def approve_bank_change_request(req_id):
             target.name = payload['name']
         if payload.get('muscle_group') in MUSCLE_GROUPS:
             target.muscle_group = payload['muscle_group']
+        if 'youtube_url' in payload:
+            target.youtube_url = payload.get('youtube_url') or None
+        if 'custom_gif_url' in payload:
+            target.custom_gif_url = payload.get('custom_gif_url') or None
+        if 'animation_slug' in payload and payload.get('animation_slug'):
+            target.animation_slug = payload.get('animation_slug')
+        if target.animation_slug or target.youtube_url or target.custom_gif_url:
+            target.media_status = 'approved'
     else:
         for field in ('name', 'brand', 'kcal', 'proteins', 'lipids', 'saturated_fats', 'carbs',
                       'simple_sugars', 'fiber', 'salt'):
