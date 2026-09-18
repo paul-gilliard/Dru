@@ -990,3 +990,24 @@ class SubscriptionPayment(db.Model):
             'resolved_by_id': self.resolved_by_id,
             'resolved_by_name': (rb.display_name or rb.username) if rb else None,
         }
+
+
+class CoachAthletePrivateNote(db.Model):
+    """Note libre privée du coach sur un athlète (invisible côté athlète)."""
+    __tablename__ = 'coach_athlete_private_note'
+    id = db.Column(db.Integer, primary_key=True)
+    coach_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    body = db.Column(db.Text, nullable=False, default='')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('coach_id', 'athlete_id', name='uq_coach_athlete_private_note'),
+    )
+
+    def to_dict(self):
+        return {
+            'athlete_id': self.athlete_id,
+            'note': self.body or '',
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }

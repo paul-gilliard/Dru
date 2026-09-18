@@ -11,7 +11,7 @@ from app.models import (
     User, Availability, Program, ProgramSession, ExerciseEntry,
     JournalEntry, PerformanceEntry, Exercise, Food, MealPlan, MealEntry,
     Objective, MobileWeeklyBilanMarking, CoachingInvitation, BankChangeRequest, MUSCLE_GROUPS,
-    WeeklyBilanMarking, SubscriptionPayment, SecurityEvent,
+    WeeklyBilanMarking, SubscriptionPayment, SecurityEvent, CoachAthletePrivateNote,
 )
 from app.auth_security import (
     honeypot_triggered, hit, looks_like_bot_identity, rate_limited,
@@ -4259,6 +4259,51 @@ def put_athlete_bilan_settings(athlete_id):
     })
 
 
+_PRIVATE_NOTE_MAX = 8000
+
+
+@api_bp.get('/coach/athletes/<int:athlete_id>/private-note')
+@coach_required
+def get_athlete_private_note(athlete_id):
+    user = request.current_user
+    if not _can_manage_athlete(athlete_id, user):
+        return jsonify({'error': 'Athlète non autorisé'}), 403
+    row = CoachAthletePrivateNote.query.filter_by(
+        coach_id=user.id, athlete_id=int(athlete_id),
+    ).first()
+    if not row:
+        return jsonify({'athlete_id': int(athlete_id), 'note': '', 'updated_at': None})
+    return jsonify(row.to_dict())
+
+
+@api_bp.put('/coach/athletes/<int:athlete_id>/private-note')
+@coach_required
+def put_athlete_private_note(athlete_id):
+    user = request.current_user
+    if not _can_manage_athlete(athlete_id, user):
+        return jsonify({'error': 'Athlète non autorisé'}), 403
+    athlete = User.query.get_or_404(athlete_id)
+    if athlete.role != 'athlete':
+        return jsonify({'error': 'Utilisateur non athlète'}), 400
+    data = request.get_json(silent=True) or {}
+    if 'note' not in data:
+        return jsonify({'error': 'note requis'}), 400
+    body = str(data.get('note') or '')
+    if len(body) > _PRIVATE_NOTE_MAX:
+        return jsonify({'error': f'Note trop longue (max {_PRIVATE_NOTE_MAX} caractères)'}), 400
+    row = CoachAthletePrivateNote.query.filter_by(
+        coach_id=user.id, athlete_id=int(athlete_id),
+    ).first()
+    if row is None:
+        row = CoachAthletePrivateNote(coach_id=user.id, athlete_id=int(athlete_id), body=body)
+        db.session.add(row)
+    else:
+        row.body = body
+    row.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify(row.to_dict())
+
+
 @api_bp.put('/coach/bilan-settings')
 @coach_required
 def put_bilan_settings_compat():
@@ -4267,7 +4312,6 @@ def put_bilan_settings_compat():
     if not athlete_id:
         return jsonify({'error': 'athlete_id requis — le jour de bilan se choisit par athlète'}), 400
     return put_athlete_bilan_settings(int(athlete_id))
-
 
 @api_bp.post('/coach/bilan-hebdo/mark')
 @coach_required
