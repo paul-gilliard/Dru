@@ -780,6 +780,12 @@ class MealEntry(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     food = db.relationship('Food', backref='meal_entries')
+    equivalents = db.relationship(
+        'MealEntryEquivalent',
+        back_populates='meal_entry',
+        cascade='all, delete-orphan',
+        lazy='joined',
+    )
 
     __table_args__ = (
         db.UniqueConstraint('meal_plan_id', 'food_id', 'meal_number', 'position', name='uq_meal_entry'),
@@ -799,8 +805,40 @@ class MealEntry(db.Model):
             'kcals': (self.food.kcal or 0) * quantity_factor if self.food else 0,
             'proteins': (self.food.proteins or 0) * quantity_factor if self.food else 0,
             'lipids': (self.food.lipids or 0) * quantity_factor if self.food else 0,
-            'carbs': (self.food.carbs or 0) * quantity_factor if self.food else 0
+            'carbs': (self.food.carbs or 0) * quantity_factor if self.food else 0,
+            'equivalents': [eq.to_dict() for eq in (self.equivalents or [])],
         }
+
+
+class MealEntryEquivalent(db.Model):
+    """Aliment de substitution accepté pour une entrée de repas."""
+    __tablename__ = 'meal_entry_equivalent'
+    id = db.Column(db.Integer, primary_key=True)
+    meal_entry_id = db.Column(
+        db.Integer, db.ForeignKey('meal_entry.id', ondelete='CASCADE'), nullable=False, index=True,
+    )
+    food_id = db.Column(db.Integer, db.ForeignKey('food.id'), nullable=False)
+    quantity = db.Column(db.Float, nullable=False, default=100)
+
+    food = db.relationship('Food')
+    meal_entry = db.relationship('MealEntry', back_populates='equivalents')
+
+    __table_args__ = (
+        db.UniqueConstraint('meal_entry_id', 'food_id', name='uq_meal_entry_equiv'),
+    )
+
+    def to_dict(self):
+        factor = (self.quantity or 100) / 100.0
+        return {
+            'food_id': self.food_id,
+            'food_name': self.food.name if self.food else '',
+            'quantity': self.quantity,
+            'kcals': (self.food.kcal or 0) * factor if self.food else 0,
+            'proteins': (self.food.proteins or 0) * factor if self.food else 0,
+            'lipids': (self.food.lipids or 0) * factor if self.food else 0,
+            'carbs': (self.food.carbs or 0) * factor if self.food else 0,
+        }
+
 
 class WeeklyBilanMarking(db.Model):
     """Track which athletes have had their weekly bilan reviewed by a coach"""

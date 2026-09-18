@@ -10,8 +10,9 @@ from app.mobile_auth import generate_token, login_required, coach_required, admi
 from app.models import (
     User, Availability, Program, ProgramSession, ExerciseEntry,
     JournalEntry, PerformanceEntry, Exercise, Food, MealPlan, MealEntry,
-    Objective, MobileWeeklyBilanMarking, CoachingInvitation, BankChangeRequest, MUSCLE_GROUPS,
-    WeeklyBilanMarking, SubscriptionPayment, SecurityEvent, CoachAthletePrivateNote,
+    MealEntryEquivalent, Objective, MobileWeeklyBilanMarking, CoachingInvitation,
+    BankChangeRequest, MUSCLE_GROUPS, WeeklyBilanMarking, SubscriptionPayment,
+    SecurityEvent, CoachAthletePrivateNote,
 )
 from app.auth_security import (
     honeypot_triggered, hit, looks_like_bot_identity, rate_limited,
@@ -601,8 +602,25 @@ def _clone_program(source, *, athlete_id, coach_id, name, is_template=False):
     return new_program
 
 
+def _copy_meal_entries_with_equivalents(source_meals, target_plan_id):
+    """Copie les entrées + équivalents vers un plan cible (déjà flushé)."""
+    for meal in source_meals:
+        new_entry = MealEntry(
+            meal_plan_id=target_plan_id, food_id=meal.food_id, meal_number=meal.meal_number,
+            quantity=meal.quantity, position=meal.position,
+        )
+        db.session.add(new_entry)
+        db.session.flush()
+        for eq in (meal.equivalents or []):
+            db.session.add(MealEntryEquivalent(
+                meal_entry_id=new_entry.id,
+                food_id=eq.food_id,
+                quantity=eq.quantity,
+            ))
+
+
 def _clone_meal_plan(source, *, athlete_id, coach_id, name, is_template=False):
-    """Deep-copy meals + times/labels. Ne commit pas."""
+    """Deep-copy meals + times/labels + équivalents. Ne commit pas."""
     new_plan = MealPlan(
         name=(name or source.name).strip()[:128],
         athlete_id=athlete_id,
@@ -615,12 +633,39 @@ def _clone_meal_plan(source, *, athlete_id, coach_id, name, is_template=False):
     )
     db.session.add(new_plan)
     db.session.flush()
-    for meal in source.meals:
-        db.session.add(MealEntry(
-            meal_plan_id=new_plan.id, food_id=meal.food_id, meal_number=meal.meal_number,
-            quantity=meal.quantity, position=meal.position,
-        ))
+    _copy_meal_entries_with_equivalents(source.meals, new_plan.id)
     return new_plan
+
+
+def _set_meal_entry_equivalents(entry, items):
+    """Remplace les équivalents d'une entrée. `items` = [{food_id, quantity}, ...]."""
+    MealEntryEquivalent.query.filter_by(meal_entry_id=entry.id).delete()
+    seen = set()
+    for raw in items or []:
+        if not isinstance(raw, dict):
+            continue
+        try:
+            food_id = int(raw.get('food_id'))
+        except (TypeError, ValueError):
+            continue
+        if food_id == entry.food_id or food_id in seen:
+            continue
+        food = Food.query.get(food_id)
+        if food is None:
+            continue
+        try:
+            qty = float(raw.get('quantity') or 100)
+        except (TypeError, ValueError):
+            qty = 100.0
+        qty = max(1.0, min(2000.0, qty))
+        seen.add(food_id)
+        db.session.add(MealEntryEquivalent(
+            meal_entry_id=entry.id,
+            food_id=food_id,
+            quantity=qty,
+        ))
+    db.session.flush()
+    return entry
 
 
 def _library_version_name(base_name, athlete, day):
@@ -658,10 +703,18 @@ def _replace_meal_plan_template_from_source(target, source):
         setattr(target, f'meal_label_{i}', getattr(source, f'meal_label_{i}'))
     db.session.flush()
     for meal in source.meals:
-        db.session.add(MealEntry(
+        new_entry = MealEntry(
             meal_plan_id=target.id, food_id=meal.food_id, meal_number=meal.meal_number,
             quantity=meal.quantity, position=meal.position,
-        ))
+        )
+        db.session.add(new_entry)
+        db.session.flush()
+        for eq in (meal.equivalents or []):
+            db.session.add(MealEntryEquivalent(
+                meal_entry_id=new_entry.id,
+                food_id=eq.food_id,
+                quantity=eq.quantity,
+            ))
 
 
 def _sync_program_to_coach_library(program, *, actor=None, force=False):
@@ -3247,6 +3300,40 @@ def list_foods():
     return jsonify([f.to_dict() for f in foods])
 
 
+@api_bp.get('/foods/equivalents')
+@login_required
+def list_food_equivalents():
+    """Candidats équivalents (kcal calées + macros ±20 %) pour un aliment + grammage."""
+    from app.food_equivalents import find_food_equivalents, portion_macros
+
+    try:
+        food_id = int(request.args.get('food_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'food_id requis'}), 400
+    try:
+        quantity = float(request.args.get('quantity') or 100)
+    except (TypeError, ValueError):
+        quantity = 100.0
+    food = Food.query.get_or_404(food_id)
+    owner_scope = _bank_owner_scope_id()
+    candidates = (
+        Food.query.filter(_bank_visibility_filter(Food, owner_scope))
+        .order_by(Food.name)
+        .limit(800)
+        .all()
+    )
+    items = find_food_equivalents(food, quantity, candidates)
+    return jsonify({
+        'source': {
+            'food_id': food.id,
+            'food_name': food.name,
+            'quantity': quantity,
+            **{k: round(v, 1) for k, v in portion_macros(food, quantity).items()},
+        },
+        'equivalents': items,
+    })
+
+
 @api_bp.post('/foods')
 @login_required
 def create_food():
@@ -3435,11 +3522,7 @@ def duplicate_meal_plan(plan_id):
     db.session.add(new_plan)
     db.session.flush()
 
-    for meal in source.meals:
-        db.session.add(MealEntry(
-            meal_plan_id=new_plan.id, food_id=meal.food_id, meal_number=meal.meal_number,
-            quantity=meal.quantity, position=meal.position,
-        ))
+    _copy_meal_entries_with_equivalents(source.meals, new_plan.id)
 
     db.session.commit()
     return jsonify(new_plan.to_dict()), 201
@@ -3464,6 +3547,9 @@ def add_meal_entry(plan_id):
         quantity=data.get('quantity', 100), position=(max_position or 0) + 1,
     )
     db.session.add(entry)
+    db.session.flush()
+    if 'equivalents' in data:
+        _set_meal_entry_equivalents(entry, data.get('equivalents') or [])
     db.session.commit()
     return jsonify(entry.to_dict()), 201
 
@@ -3478,6 +3564,24 @@ def update_meal_entry(entry_id):
     data = request.get_json(silent=True) or {}
     if 'quantity' in data:
         entry.quantity = data['quantity']
+    if 'equivalents' in data:
+        _set_meal_entry_equivalents(entry, data.get('equivalents') or [])
+    db.session.commit()
+    return jsonify(entry.to_dict())
+
+
+@api_bp.put('/meal-entries/<int:entry_id>/equivalents')
+@login_required
+def replace_meal_entry_equivalents(entry_id):
+    entry = MealEntry.query.get_or_404(entry_id)
+    plan = MealPlan.query.get_or_404(entry.meal_plan_id)
+    if not _can_manage_athlete(plan.athlete_id):
+        return _deny_manage()
+    data = request.get_json(silent=True) or {}
+    items = data.get('equivalents') if isinstance(data, dict) else None
+    if items is None and isinstance(data, list):
+        items = data
+    _set_meal_entry_equivalents(entry, items or [])
     db.session.commit()
     return jsonify(entry.to_dict())
 
