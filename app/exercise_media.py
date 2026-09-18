@@ -31,10 +31,20 @@ def normalize_youtube_url(raw: str | None) -> str | None:
 
 
 def media_storage_dir() -> str:
-    root = os.environ.get('EXERCISE_MEDIA_DIR') or os.path.join(
-        current_app.instance_path if current_app else os.getcwd(),
-        'exercise_media',
-    )
+    preferred = os.environ.get('EXERCISE_MEDIA_DIR')
+    candidates = [
+        preferred,
+        os.path.join(current_app.instance_path if current_app else os.getcwd(), 'exercise_media'),
+    ]
+    for root in candidates:
+        if not root:
+            continue
+        try:
+            os.makedirs(root, exist_ok=True)
+            return root
+        except OSError:
+            continue
+    root = os.path.join(os.getcwd(), 'exercise_media')
     os.makedirs(root, exist_ok=True)
     return root
 
@@ -88,4 +98,27 @@ def media_dict_from_exercise(ex) -> dict:
         'media_status': ex.media_status or 'none',
         'has_media': bool(ex.animation_slug or ex.youtube_url or ex.custom_gif_url),
         'is_personal': ex.owner_id is not None,
+    }
+
+
+def media_dict_from_slug(name: str, slug: str) -> dict:
+    return {
+        'name': name,
+        'animation_slug': slug,
+        'youtube_url': None,
+        'custom_gif_url': None,
+        'media_status': 'approved',
+        'has_media': True,
+        'is_personal': False,
+    }
+
+
+def empty_media_dict(name: str) -> dict:
+    return {
+        'name': name,
+        'animation_slug': None,
+        'youtube_url': None,
+        'custom_gif_url': None,
+        'media_status': 'none',
+        'has_media': False,
     }

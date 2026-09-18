@@ -1751,7 +1751,14 @@ def get_session(session_id):
         athlete = User.query.get(program.athlete_id)
         if not athlete or athlete.coach_id != user.id:
             return jsonify({'error': 'Accès refusé'}), 403
-    return jsonify(session_obj.to_dict(with_exercises=True))
+    data = session_obj.to_dict(with_exercises=True)
+    for ex in data.get('exercises') or []:
+        media = _resolve_exercise_media_payload(ex.get('name') or '', user)
+        ex['animation_slug'] = media.get('animation_slug')
+        ex['youtube_url'] = media.get('youtube_url')
+        ex['custom_gif_url'] = media.get('custom_gif_url')
+        ex['has_media'] = bool(media.get('has_media'))
+    return jsonify(data)
 
 
 @api_bp.put('/sessions/<int:session_id>')
@@ -2015,39 +2022,54 @@ def update_exercise_bank_media(exercise_id):
 @api_bp.get('/exercises/media')
 @login_required
 def lookup_exercise_media():
-    """Résout le média d'un exo de séance par nom (commune prioritaire, puis perso)."""
-    from app.exercise_media import media_dict_from_exercise
-
+    """Résout le média d'un exo de séance par nom (commune prioritaire, puis perso, puis map FR)."""
     name = (request.args.get('name') or '').strip()
     if not name:
         return jsonify({'error': 'name requis'}), 400
-    user = request.current_user
+    return jsonify(_resolve_exercise_media_payload(name, request.current_user))
+
+
+def _resolve_exercise_media_payload(name, user):
+    from app.exercise_animation_map import slug_for_exercise_name
+    from app.exercise_media import (
+        empty_media_dict, media_dict_from_exercise, media_dict_from_slug,
+    )
+
+    name = (name or '').strip()
+    if not name:
+        return empty_media_dict('')
+    public_name = name
+    try:
+        public_name = _public_name_from_personal(name)
+    except Exception:
+        public_name = name
     common = Exercise.query.filter_by(name=name, owner_id=None).first()
+    if not common and public_name != name:
+        common = Exercise.query.filter_by(name=public_name, owner_id=None).first()
     if common and (common.animation_slug or common.youtube_url or common.custom_gif_url):
-        return jsonify(media_dict_from_exercise(common))
+        return media_dict_from_exercise(common)
     personal = None
-    if user.role in ('coach', 'admin', 'athlete'):
+    if user is not None and getattr(user, 'role', None) in ('coach', 'admin', 'athlete'):
         personal = Exercise.query.filter_by(name=name, owner_id=user.id).first()
+        if not personal and public_name != name:
+            personal = Exercise.query.filter_by(name=public_name, owner_id=user.id).first()
         if not personal:
-            # match sans suffixe exact : chercher perso contenant le nom public
             personal = (
                 Exercise.query.filter(
                     Exercise.owner_id == user.id,
-                    Exercise.name.ilike(f'%{name}%'),
+                    Exercise.name.ilike(f'%{public_name}%'),
                 ).order_by(Exercise.id.desc()).first()
             )
     if personal and (personal.animation_slug or personal.youtube_url or personal.custom_gif_url):
-        return jsonify(media_dict_from_exercise(personal))
+        return media_dict_from_exercise(personal)
+    if common and (common.animation_slug or common.youtube_url or common.custom_gif_url):
+        return media_dict_from_exercise(common)
+    slug = slug_for_exercise_name(name) or slug_for_exercise_name(public_name)
+    if slug:
+        return media_dict_from_slug(name, slug)
     if common:
-        return jsonify(media_dict_from_exercise(common))
-    return jsonify({
-        'name': name,
-        'animation_slug': None,
-        'youtube_url': None,
-        'custom_gif_url': None,
-        'media_status': 'none',
-        'has_media': False,
-    })
+        return media_dict_from_exercise(common)
+    return empty_media_dict(name)
 
 
 @api_bp.get('/media/exercises/<path:filename>')
