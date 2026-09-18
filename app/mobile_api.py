@@ -3301,21 +3301,35 @@ def list_foods():
 
 
 @api_bp.get('/foods/equivalents')
+@api_bp.post('/foods/equivalents')
 @login_required
 def list_food_equivalents():
-    """Candidats équivalents (kcal calées + macros ±20 %) pour un aliment + grammage."""
+    """Candidats équivalents (kcal calées + macros ±20 %) pour un aliment + grammage.
+
+    GET ?food_id=&quantity=  ou  POST JSON {food_id, quantity}
+    """
     from app.food_equivalents import find_food_equivalents, portion_macros
 
+    data = request.get_json(silent=True) or {}
+    raw_id = data.get('food_id') if 'food_id' in data else request.args.get('food_id')
+    raw_qty = data.get('quantity') if 'quantity' in data else request.args.get('quantity')
     try:
-        food_id = int(request.args.get('food_id'))
+        food_id = int(raw_id)
     except (TypeError, ValueError):
         return jsonify({'error': 'food_id requis'}), 400
     try:
-        quantity = float(request.args.get('quantity') or 100)
+        quantity = float(raw_qty if raw_qty is not None else 100)
     except (TypeError, ValueError):
         quantity = 100.0
-    food = Food.query.get_or_404(food_id)
+    if quantity <= 0:
+        quantity = 100.0
+
+    food = Food.query.get(food_id)
+    if food is None:
+        return jsonify({'error': 'Aliment introuvable'}), 404
+
     owner_scope = _bank_owner_scope_id()
+    # Colonnes utiles uniquement — évite de trop charger la session SQLAlchemy
     candidates = (
         Food.query.filter(_bank_visibility_filter(Food, owner_scope))
         .order_by(Food.name)
