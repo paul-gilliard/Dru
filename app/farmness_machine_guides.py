@@ -69,27 +69,27 @@ def install_farmness_machine_guides(*, force: bool = False) -> int:
             ordered.append(n)
 
         for n in ordered:
-            ex = Exercise.query.filter_by(name=n, owner_id=None).first()
+            # `Exercise.name` est unique globalement (pas par owner).
+            ex = Exercise.query.filter_by(name=n).first()
             if ex is None:
                 ex = Exercise(
-                    name=n[:128],
-                    muscle_group=(muscle or '')[:64] or None,
+                    name=n[:192],
+                    muscle_group=(muscle or 'AUTRE')[:64],
                     owner_id=None,
-                    is_suggested=False,
                 )
                 db.session.add(ex)
             # Préférer notre GIF machine si pas déjà un custom coach
             if force or not ex.custom_gif_url or ex.custom_gif_url.endswith(stored):
                 ex.custom_gif_url = rel_url
-            if muscle and not ex.muscle_group:
+            if muscle and (not ex.muscle_group or ex.muscle_group == 'AUTRE'):
                 ex.muscle_group = muscle[:64]
             if not ex.animation_slug:
-                # slug workout-guide proche en complément éventuel
                 from app.exercise_animation_map import slug_for_exercise_name
                 suggested = slug_for_exercise_name(n)
                 if suggested:
                     ex.animation_slug = suggested
-            ex.media_status = 'approved'
+            if ex.media_status in (None, '', 'none'):
+                ex.media_status = 'approved'
             touched += 1
 
     if touched:
