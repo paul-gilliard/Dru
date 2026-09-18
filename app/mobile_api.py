@@ -1944,7 +1944,7 @@ def update_exercise_bank(exercise_id):
 @api_bp.post('/exercise-bank/<int:exercise_id>/media')
 @login_required
 def update_exercise_bank_media(exercise_id):
-    """Coach : propose YouTube / GIF sur une entrée perso (ou fork implicite)."""
+    """Média YouTube / GIF : admin édite la commune ; coach édite son perso (fork si besoin)."""
     from app.exercise_media import normalize_youtube_url, save_gif_upload
 
     exercise = Exercise.query.get_or_404(exercise_id)
@@ -1954,23 +1954,27 @@ def update_exercise_bank_media(exercise_id):
     form = request.form or {}
 
     if exercise.owner_id is None:
-        # Fork perso pour proposer un média sans toucher la commune
-        base_name = _ensure_personal_name(exercise.name, user)
-        existing = Exercise.query.filter_by(name=base_name, owner_id=user.id).first()
-        if existing:
-            exercise = existing
+        if user.role == 'admin':
+            # Superadmin : détache / remplace directement sur la banque partagée
+            pass
         else:
-            exercise = Exercise(
-                name=base_name,
-                muscle_group=exercise.muscle_group,
-                owner_id=user.id,
-                animation_slug=None,
-                youtube_url=None,
-                custom_gif_url=None,
-                media_status='none',
-            )
-            db.session.add(exercise)
-            db.session.flush()
+            # Coach / athlète : fork perso pour poser sa propre vidéo sans toucher la commune
+            base_name = _ensure_personal_name(exercise.name, user)
+            existing = Exercise.query.filter_by(name=base_name, owner_id=user.id).first()
+            if existing:
+                exercise = existing
+            else:
+                exercise = Exercise(
+                    name=base_name,
+                    muscle_group=exercise.muscle_group,
+                    owner_id=user.id,
+                    animation_slug=None,
+                    youtube_url=None,
+                    custom_gif_url=None,
+                    media_status='none',
+                )
+                db.session.add(exercise)
+                db.session.flush()
     elif exercise.owner_id != user.id and user.role != 'admin':
         return _deny_manage()
 
@@ -1994,7 +1998,10 @@ def update_exercise_bank_media(exercise_id):
         exercise.custom_gif_url = text or None
 
     if exercise.youtube_url or exercise.custom_gif_url or exercise.animation_slug:
-        exercise.media_status = 'pending' if exercise.owner_id else 'approved'
+        if exercise.owner_id is None:
+            exercise.media_status = 'approved'
+        elif exercise.media_status == 'none':
+            exercise.media_status = 'personal'
     else:
         exercise.media_status = 'none'
 
@@ -2022,11 +2029,50 @@ def update_exercise_bank_media(exercise_id):
 @api_bp.get('/exercises/media')
 @login_required
 def lookup_exercise_media():
-    """Résout le média d'un exo de séance par nom (commune prioritaire, puis perso, puis map FR)."""
+    """Résout le média : YouTube perso (coach/athlète) prioritaire, sinon commune, sinon map FR."""
     name = (request.args.get('name') or '').strip()
     if not name:
         return jsonify({'error': 'name requis'}), 400
     return jsonify(_resolve_exercise_media_payload(name, request.current_user))
+
+
+def _personal_media_owners(user):
+    """Ids dont le média perso peut s’appliquer (soi + coach pour un athlète)."""
+    if user is None:
+        return []
+    owners = []
+    role = getattr(user, 'role', None)
+    if role in ('coach', 'admin', 'athlete'):
+        owners.append(int(user.id))
+    if role == 'athlete' and getattr(user, 'coach_id', None):
+        owners.append(int(user.coach_id))
+    # dédup en préservant l’ordre (perso d’abord, puis coach)
+    seen = set()
+    ordered = []
+    for oid in owners:
+        if oid in seen:
+            continue
+        seen.add(oid)
+        ordered.append(oid)
+    return ordered
+
+
+def _find_personal_exercise_for_media(name, public_name, user):
+    for oid in _personal_media_owners(user):
+        personal = Exercise.query.filter_by(name=name, owner_id=oid).first()
+        if personal:
+            return personal
+        if public_name and public_name != name:
+            personal = Exercise.query.filter_by(name=public_name, owner_id=oid).first()
+            if personal:
+                return personal
+        owner = User.query.get(oid)
+        if owner is not None:
+            suffixed = _ensure_personal_name(public_name or name, owner)
+            personal = Exercise.query.filter_by(name=suffixed, owner_id=oid).first()
+            if personal:
+                return personal
+    return None
 
 
 def _resolve_exercise_media_payload(name, user):
@@ -2046,22 +2092,22 @@ def _resolve_exercise_media_payload(name, user):
     common = Exercise.query.filter_by(name=name, owner_id=None).first()
     if not common and public_name != name:
         common = Exercise.query.filter_by(name=public_name, owner_id=None).first()
-    if common and (common.animation_slug or common.youtube_url or common.custom_gif_url):
-        return media_dict_from_exercise(common)
-    personal = None
-    if user is not None and getattr(user, 'role', None) in ('coach', 'admin', 'athlete'):
-        personal = Exercise.query.filter_by(name=name, owner_id=user.id).first()
-        if not personal and public_name != name:
-            personal = Exercise.query.filter_by(name=public_name, owner_id=user.id).first()
-        if not personal:
-            personal = (
-                Exercise.query.filter(
-                    Exercise.owner_id == user.id,
-                    Exercise.name.ilike(f'%{public_name}%'),
-                ).order_by(Exercise.id.desc()).first()
-            )
+    personal = _find_personal_exercise_for_media(name, public_name, user)
+
+    # YouTube / GIF perso prioritaire ; on complète avec l’illustration commune si besoin
     if personal and (personal.animation_slug or personal.youtube_url or personal.custom_gif_url):
-        return media_dict_from_exercise(personal)
+        payload = media_dict_from_exercise(personal)
+        if common:
+            if not payload.get('youtube_url') and common.youtube_url:
+                payload['youtube_url'] = common.youtube_url
+            if not payload.get('custom_gif_url') and common.custom_gif_url:
+                payload['custom_gif_url'] = common.custom_gif_url
+            if not payload.get('animation_slug') and common.animation_slug:
+                payload['animation_slug'] = common.animation_slug
+            payload['has_media'] = bool(
+                payload.get('animation_slug') or payload.get('youtube_url') or payload.get('custom_gif_url')
+            )
+        return payload
     if common and (common.animation_slug or common.youtube_url or common.custom_gif_url):
         return media_dict_from_exercise(common)
     slug = slug_for_exercise_name(name) or slug_for_exercise_name(public_name)
