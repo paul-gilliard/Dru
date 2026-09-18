@@ -295,6 +295,8 @@ def create_app():
                 ('energy_goal', "ALTER TABLE `user` ADD COLUMN energy_goal VARCHAR(16) NULL"),
                 ('energy_goal_delta', "ALTER TABLE `user` ADD COLUMN energy_goal_delta INT NULL"),
                 ('energy_balance_start_date', "ALTER TABLE `user` ADD COLUMN energy_balance_start_date DATE NULL"),
+                ('avatar_url', "ALTER TABLE `user` ADD COLUMN avatar_url VARCHAR(512) NULL"),
+                ('logo_url', "ALTER TABLE `user` ADD COLUMN logo_url VARCHAR(512) NULL"),
             ]:
                 if col not in user_cols:
                     db.session.execute(db.text(ddl))

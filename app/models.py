@@ -143,6 +143,10 @@ class User(db.Model):
     energy_goal = db.Column(db.String(16), nullable=True)
     energy_goal_delta = db.Column(db.Integer, nullable=True)
     energy_balance_start_date = db.Column(db.Date, nullable=True)
+    # Photo de profil (athlète & coach) — URL relative /api/media/avatars/…
+    avatar_url = db.Column(db.String(512), nullable=True)
+    # Logo marque / salle (coach) — même stockage avatars
+    logo_url = db.Column(db.String(512), nullable=True)
 
     coach = db.relationship('User', remote_side=[id], foreign_keys=[coach_id], backref='athletes')
 
@@ -176,12 +180,15 @@ class User(db.Model):
         return normalized
 
     def to_dict(self):
+        from app.exercise_media import public_absolute_url
         data = {
             'id': self.id,
             'username': self.username,
             'email': self.email,
             'role': self.role,
             'display_name': self.display_name or self.username,
+            'avatar_url': public_absolute_url(self.avatar_url),
+            'logo_url': public_absolute_url(self.logo_url) if self.role in ('coach', 'admin') else None,
             'coach_id': self.coach_id,
             'coach_associated_at': self.coach_associated_at.isoformat() if self.coach_associated_at else None,
             'subscription_tier': int(self.subscription_tier or 0) if self.role in ('coach', 'admin') else None,
@@ -230,6 +237,7 @@ class User(db.Model):
 
     def coach_profile_public_dict(self):
         """Champs visibles en recherche (sans contact en clair)."""
+        from app.exercise_media import public_absolute_url
         complete = self.coach_profile_is_complete()
         return {
             'first_name': self.first_name,
@@ -241,6 +249,8 @@ class User(db.Model):
             'lat': self.lat,
             'lng': self.lng,
             'contact_channel': self.contact_channel,
+            'avatar_url': public_absolute_url(self.avatar_url),
+            'logo_url': public_absolute_url(self.logo_url),
             'profile_complete': complete,
             'profile_completed_at': self.profile_completed_at.isoformat() if self.profile_completed_at else None,
         }

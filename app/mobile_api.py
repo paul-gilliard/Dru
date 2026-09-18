@@ -639,7 +639,16 @@ def _clone_meal_plan(source, *, athlete_id, coach_id, name, is_template=False):
 
 def _set_meal_entry_equivalents(entry, items):
     """Remplace les équivalents d'une entrée. `items` = [{food_id, quantity}, ...]."""
-    MealEntryEquivalent.query.filter_by(meal_entry_id=entry.id).delete()
+    try:
+        MealEntryEquivalent.query.filter_by(meal_entry_id=entry.id).delete()
+    except Exception:
+        db.session.rollback()
+        try:
+            db.create_all()
+            MealEntryEquivalent.query.filter_by(meal_entry_id=entry.id).delete()
+        except Exception:
+            db.session.rollback()
+            raise
     seen = set()
     for raw in items or []:
         if not isinstance(raw, dict):
@@ -947,6 +956,98 @@ def register():
 @login_required
 def me():
     return jsonify(request.current_user.to_dict())
+
+
+@api_bp.post('/auth/me/avatar')
+@login_required
+def upload_my_avatar():
+    """Photo de profil (athlète ou coach) — multipart `avatar` ou `file`."""
+    from app.avatar_media import delete_avatar_file, save_avatar_upload
+    from app.exercise_media import public_absolute_url
+
+    user = request.current_user
+    upload = request.files.get('avatar') or request.files.get('file') or request.files.get('photo')
+    if not upload or not upload.filename:
+        return jsonify({'error': 'Fichier image requis (avatar)'}), 400
+    try:
+        relative = save_avatar_upload(upload)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    old = user.avatar_url
+    user.avatar_url = relative
+    db.session.commit()
+    if old and old != relative:
+        delete_avatar_file(old)
+    return jsonify({
+        'ok': True,
+        'avatar_url': public_absolute_url(relative),
+        'user': user.to_dict(),
+    })
+
+
+@api_bp.delete('/auth/me/avatar')
+@login_required
+def delete_my_avatar():
+    from app.avatar_media import delete_avatar_file
+
+    user = request.current_user
+    if user.avatar_url:
+        delete_avatar_file(user.avatar_url)
+        user.avatar_url = None
+        db.session.commit()
+    return jsonify({'ok': True, 'avatar_url': None, 'user': user.to_dict()})
+
+
+@api_bp.post('/auth/me/logo')
+@login_required
+@coach_required
+def upload_my_logo():
+    """Logo coach (marque / salle) — multipart `logo` ou `file`."""
+    from app.avatar_media import delete_avatar_file, save_avatar_upload
+    from app.exercise_media import public_absolute_url
+
+    user = request.current_user
+    upload = request.files.get('logo') or request.files.get('file') or request.files.get('image')
+    if not upload or not upload.filename:
+        return jsonify({'error': 'Fichier image requis (logo)'}), 400
+    try:
+        relative = save_avatar_upload(upload)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    old = user.logo_url
+    user.logo_url = relative
+    db.session.commit()
+    if old and old != relative:
+        delete_avatar_file(old)
+    return jsonify({
+        'ok': True,
+        'logo_url': public_absolute_url(relative),
+        'user': user.to_dict(),
+    })
+
+
+@api_bp.delete('/auth/me/logo')
+@login_required
+@coach_required
+def delete_my_logo():
+    from app.avatar_media import delete_avatar_file
+
+    user = request.current_user
+    if user.logo_url:
+        delete_avatar_file(user.logo_url)
+        user.logo_url = None
+        db.session.commit()
+    return jsonify({'ok': True, 'logo_url': None, 'user': user.to_dict()})
+
+
+@api_bp.get('/media/avatars/<path:filename>')
+def serve_avatar_media(filename):
+    from flask import send_from_directory
+    from app.avatar_media import avatar_storage_dir, is_safe_avatar_filename
+
+    if not is_safe_avatar_filename(filename):
+        return jsonify({'error': 'Fichier invalide'}), 400
+    return send_from_directory(avatar_storage_dir(), filename)
 
 
 # ------------------------------------------------------------- DASHBOARD ---
@@ -3328,21 +3429,26 @@ def list_food_equivalents():
     if food is None:
         return jsonify({'error': 'Aliment introuvable'}), 404
 
+    from app.food_equivalents import MIN_G, MAX_G
+
+    target = portion_macros(food, quantity)
+    target_kcals = float(target['kcals'] or 0)
+    # Préfiltre SQL : seuls les aliments dont 10–500 g peuvent viser les kcal cibles
     owner_scope = _bank_owner_scope_id()
-    # Colonnes utiles uniquement — évite de trop charger la session SQLAlchemy
-    candidates = (
-        Food.query.filter(_bank_visibility_filter(Food, owner_scope))
-        .order_by(Food.name)
-        .limit(800)
-        .all()
-    )
+    q = Food.query.filter(_bank_visibility_filter(Food, owner_scope))
+    if target_kcals > 0:
+        # kcal/100g ∈ [target/MAX_G*100, target/MIN_G*100] (±15 % marge)
+        kcal_lo = max(1.0, target_kcals / MAX_G * 100.0 * 0.85)
+        kcal_hi = target_kcals / MIN_G * 100.0 * 1.15
+        q = q.filter(Food.kcal.isnot(None), Food.kcal >= kcal_lo, Food.kcal <= kcal_hi)
+    candidates = q.order_by(Food.name).limit(400).all()
     items = find_food_equivalents(food, quantity, candidates)
     return jsonify({
         'source': {
             'food_id': food.id,
             'food_name': food.name,
             'quantity': quantity,
-            **{k: round(v, 1) for k, v in portion_macros(food, quantity).items()},
+            **{k: round(v, 1) for k, v in target.items()},
         },
         'equivalents': items,
     })

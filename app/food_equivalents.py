@@ -5,7 +5,13 @@ from typing import Any, Iterable
 
 
 REL_TOL = 0.20
-ABS_MIN_G = 2.0
+# Plancher absolu par macro (g) — lipids trop larges → vinaigre ≈ riz
+ABS_MIN = {
+    'proteins': 3.0,
+    'carbs': 5.0,
+    'lipids': 1.0,
+    'kcals': 15.0,
+}
 MIN_G = 10.0
 MAX_G = 500.0
 TOP_N = 20
@@ -36,17 +42,17 @@ def suggest_quantity(target_kcals: float, kcal_per_100g: float) -> float | None:
     return float(max(MIN_G, min(MAX_G, grams)))
 
 
-def _within_tol(target: float, actual: float) -> bool:
+def _within_tol(target: float, actual: float, *, abs_min: float) -> bool:
     target = abs(target)
     actual = abs(actual)
-    tol = max(ABS_MIN_G, target * REL_TOL)
+    tol = max(abs_min, target * REL_TOL)
     return abs(actual - target) <= tol
 
 
-def _rel_error(target: float, actual: float) -> float:
+def _rel_error(target: float, actual: float, *, abs_min: float) -> float:
     target = abs(target)
-    if target < ABS_MIN_G:
-        return abs(actual - target) / ABS_MIN_G
+    if target < abs_min:
+        return abs(actual - target) / abs_min
     return abs(actual - target) / target
 
 
@@ -86,23 +92,33 @@ def find_food_equivalents(
     for food in candidates:
         if food is None or getattr(food, 'id', None) == source_id:
             continue
+        # Même aliment sous un autre id (ex. marque) : déjà géré côté nom côté UI si besoin
         kcal100 = _f(getattr(food, 'kcal', 0))
         g = suggest_quantity(target['kcals'], kcal100)
         if g is None:
             continue
         macros = portion_macros(food, g)
         if not (
-            _within_tol(target['proteins'], macros['proteins'])
-            and _within_tol(target['carbs'], macros['carbs'])
-            and _within_tol(target['lipids'], macros['lipids'])
+            _within_tol(target['kcals'], macros['kcals'], abs_min=ABS_MIN['kcals'])
+            and _within_tol(target['proteins'], macros['proteins'], abs_min=ABS_MIN['proteins'])
+            and _within_tol(target['carbs'], macros['carbs'], abs_min=ABS_MIN['carbs'])
+            and _within_tol(target['lipids'], macros['lipids'], abs_min=ABS_MIN['lipids'])
         ):
             continue
+        # Profil macro dominant : un féculent ne match pas un assaisonnement
+        t_sum = target['proteins'] + target['carbs'] + target['lipids']
+        m_sum = macros['proteins'] + macros['carbs'] + macros['lipids']
+        if t_sum >= 10 and m_sum >= 10:
+            t_carb_share = target['carbs'] / t_sum
+            m_carb_share = macros['carbs'] / m_sum
+            if abs(t_carb_share - m_carb_share) > 0.25:
+                continue
         score = (
-            _rel_error(target['proteins'], macros['proteins'])
-            + _rel_error(target['carbs'], macros['carbs'])
-            + _rel_error(target['lipids'], macros['lipids'])
-            + 0.25 * _rel_error(target['kcals'], macros['kcals'])
-        ) / 3.25
+            _rel_error(target['proteins'], macros['proteins'], abs_min=ABS_MIN['proteins'])
+            + _rel_error(target['carbs'], macros['carbs'], abs_min=ABS_MIN['carbs'])
+            + _rel_error(target['lipids'], macros['lipids'], abs_min=ABS_MIN['lipids'])
+            + 0.35 * _rel_error(target['kcals'], macros['kcals'], abs_min=ABS_MIN['kcals'])
+        ) / 3.35
         results.append(candidate_dict(food, g, target, score))
 
     results.sort(key=lambda r: (r['score'], abs(r['delta_kcals']), r['food_name'].lower()))
