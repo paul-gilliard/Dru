@@ -410,6 +410,12 @@ def create_app():
             n = backfill_animation_slugs(db.session, Exercise)
             if n:
                 print(f"✓ backfill animation_slug: {n} exercices")
+            try:
+                from app.farmness_machine_guides import install_farmness_machine_guides
+                install_farmness_machine_guides()
+            except Exception as e:
+                db.session.rollback()
+                print(f"⚠️ farmness machine guides skipped: {e}")
         except Exception as e:
             db.session.rollback()
             print(f"⚠️ animation_slug backfill skipped: {e}")

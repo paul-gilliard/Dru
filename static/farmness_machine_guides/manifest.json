@@ -1,0 +1,106 @@
+[
+  {
+    "slug": "chest-press",
+    "name": "Développé couché machine guidée",
+    "muscle_group": "PEC",
+    "aliases": [
+      "Développé couché Hammer",
+      "Développé couché Hammer Strength",
+      "Chest press Hammer",
+      "Chest press machine",
+      "Presse pecs guidée",
+      "Iso-lateral chest press",
+      "Développé couché Panatta",
+      "Développé couché Technogym",
+      "Développé couché Matrix",
+      "Développé couché Nautilus"
+    ]
+  },
+  {
+    "slug": "incline-press",
+    "name": "Développé incliné machine guidée",
+    "muscle_group": "PEC",
+    "aliases": [
+      "Développé incliné Hammer",
+      "Développé incliné Hammer Strength",
+      "Incline chest press Hammer",
+      "Développé incliné machine",
+      "Développé incliné Technogym",
+      "Développé incliné Panatta"
+    ]
+  },
+  {
+    "slug": "shoulder-press",
+    "name": "Développé épaules machine",
+    "muscle_group": "EPAULES",
+    "aliases": [
+      "Développé militaire Hammer",
+      "Shoulder press Hammer",
+      "Presse épaules guidée",
+      "Développé militaire Technogym",
+      "Développé militaire Nautilus",
+      "Iso-lateral shoulder press"
+    ]
+  },
+  {
+    "slug": "leg-press",
+    "name": "Presse à cuisses",
+    "muscle_group": "QUAD",
+    "aliases": [
+      "Leg press Hammer",
+      "Presse à jambes",
+      "Presse à cuisses Technogym",
+      "Presse à cuisses Matrix",
+      "Iso-lateral leg press Hammer"
+    ]
+  },
+  {
+    "slug": "lat-pulldown",
+    "name": "Tirage vertical machine",
+    "muscle_group": "DOS",
+    "aliases": [
+      "Lat pulldown",
+      "Tirage poitrine",
+      "Front pulldown Hammer",
+      "Tirage vertical Technogym",
+      "Lat machine Technogym",
+      "Pulldown Hammer"
+    ]
+  },
+  {
+    "slug": "seated-row",
+    "name": "Rowing machine assis",
+    "muscle_group": "DOS",
+    "aliases": [
+      "Rowing Hammer",
+      "Low row Hammer",
+      "Iso-lateral row Hammer",
+      "Tirage horizontal",
+      "Low row Technogym",
+      "Seated row Matrix"
+    ]
+  },
+  {
+    "slug": "hack-squat",
+    "name": "Hack squat",
+    "muscle_group": "QUAD",
+    "aliases": [
+      "Hack squat Panatta",
+      "Hack squat Hammer",
+      "Hack squat Matrix",
+      "Hack squat Technogym"
+    ]
+  },
+  {
+    "slug": "leg-extension",
+    "name": "Leg extension machine",
+    "muscle_group": "QUAD",
+    "aliases": [
+      "Extension de jambes",
+      "Leg extension Hammer",
+      "Leg extension Technogym",
+      "Leg extension Nautilus",
+      "Extension jambes machine"
+    ]
+  }
+]
