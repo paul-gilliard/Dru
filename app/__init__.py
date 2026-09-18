@@ -93,8 +93,17 @@ def create_app():
         
         print("Creating database tables...")
         from app import models as _models  # noqa: F401 — register models (incl. SubscriptionPayment)
-        db.create_all()
-        print("✓ Database tables created")
+        try:
+            db.create_all()
+            print("✓ Database tables created")
+        except Exception as e:
+            # Race multi-workers gunicorn : un autre worker a déjà créé la table.
+            db.session.rollback()
+            msg = str(e).lower()
+            if 'already exists' in msg or '1050' in msg:
+                print(f"✓ Database tables already present ({e.__class__.__name__})")
+            else:
+                raise
         
         # Fix Food table schema if needed (proteins and lipids should be nullable)
         try:
