@@ -760,18 +760,22 @@ def _backfill_coach_library(coach):
     """Importe les progs / diètes actuels de l’équipe dans la bibliothèque (1 version / jour)."""
     if not coach or coach.role not in ('coach', 'admin'):
         return 0
-    coach_id = int(coach.id)
-    n = 0
-    athletes = (
-        _coach_team_query(coach_id)
-        .filter(User.is_demo.isnot(True))
-        .all()
-    )
-    for athlete in athletes:
-        n += _snapshot_athlete_content_to_coach_library(coach_id, athlete)
-    if n:
-        db.session.commit()
-    return n
+    try:
+        coach_id = int(coach.id)
+        n = 0
+        athletes = (
+            _coach_team_query(coach_id)
+            .filter(User.is_demo.isnot(True))
+            .all()
+        )
+        for athlete in athletes:
+            n += _snapshot_athlete_content_to_coach_library(coach_id, athlete)
+        if n:
+            db.session.commit()
+        return n
+    except Exception:
+        db.session.rollback()
+        return 0
 
 
 def _can_access_program(program, user=None):

@@ -191,6 +191,38 @@ def create_app():
             db.session.rollback()
             print(f"⚠️ meal_plan.is_active alter skipped: {e}")
 
+        # Coach library templates (is_template / library_* / athlete_id NULL)
+        try:
+            inspector_lib = db.inspect(db.engine)
+            for table in ('program', 'meal_plan'):
+                if table not in inspector_lib.get_table_names():
+                    continue
+                cols = {c['name'] for c in inspector_lib.get_columns(table)}
+                alters = []
+                if 'is_template' not in cols:
+                    alters.append(f"ALTER TABLE `{table}` ADD COLUMN is_template TINYINT(1) NOT NULL DEFAULT 0")
+                if 'library_source_id' not in cols:
+                    alters.append(f"ALTER TABLE `{table}` ADD COLUMN library_source_id INT NULL")
+                if 'library_day' not in cols:
+                    alters.append(f"ALTER TABLE `{table}` ADD COLUMN library_day DATE NULL")
+                for ddl in alters:
+                    try:
+                        db.session.execute(db.text(ddl))
+                        db.session.commit()
+                    except Exception:
+                        db.session.rollback()
+                try:
+                    db.session.execute(db.text(
+                        f"ALTER TABLE `{table}` MODIFY COLUMN athlete_id INT NULL"
+                    ))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+            print("✓ coach library columns OK")
+        except Exception as e:
+            db.session.rollback()
+            print(f"⚠️ coach library alter skipped: {e}")
+
         # Roles / coach-athlete association / subscription
         try:
             from sqlalchemy import inspect as sa_inspect6
@@ -219,6 +251,10 @@ def create_app():
             if 'bilan_weekday' not in user_cols:
                 db.session.execute(db.text(
                     "ALTER TABLE `user` ADD COLUMN bilan_weekday INT NULL"
+                ))
+            if 'bilan_note_questions' not in user_cols:
+                db.session.execute(db.text(
+                    "ALTER TABLE `user` ADD COLUMN bilan_note_questions TEXT NULL"
                 ))
             for col, ddl in [
                 ('first_name', "ALTER TABLE `user` ADD COLUMN first_name VARCHAR(64) NULL"),

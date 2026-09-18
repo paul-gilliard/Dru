@@ -3,6 +3,91 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from app import db
 from datetime import date, datetime
 
+import json as _json
+import re as _re
+import uuid as _uuid
+
+BUILTIN_BILAN_QUESTION_KEYS = (
+    'hunger', 'fatigue', 'energy_crash', 'energy_crash_time',
+    'exercise_difficulty', 'other',
+)
+
+DEFAULT_BILAN_NOTE_QUESTIONS = [
+    {'key': 'hunger', 'label': 'Sensation de faim', 'enabled': True, 'builtin': True},
+    {'key': 'fatigue', 'label': 'Fatigue', 'enabled': True, 'builtin': True},
+    {'key': 'energy_crash', 'label': 'Coup de barre', 'enabled': True, 'builtin': True},
+    {'key': 'energy_crash_time', 'label': 'Heure du coup de barre', 'enabled': True, 'builtin': True},
+    {'key': 'exercise_difficulty', 'label': 'Difficulté sur un exo', 'enabled': True, 'builtin': True},
+    {'key': 'other', 'label': 'Autre', 'enabled': True, 'builtin': True},
+]
+
+_BILAN_DEFAULT_LABELS = {q['key']: q['label'] for q in DEFAULT_BILAN_NOTE_QUESTIONS}
+MAX_BILAN_NOTE_QUESTIONS = 12
+
+
+def resolve_bilan_note_questions(raw):
+    """Liste persistée, ou [] si jamais configuré (pas de questions par défaut)."""
+    if not raw:
+        return []
+    try:
+        data = _json.loads(raw) if isinstance(raw, str) else raw
+    except Exception:
+        return []
+    if not isinstance(data, list):
+        return []
+    if not data:
+        return []
+    try:
+        return normalize_bilan_note_questions(data)
+    except ValueError:
+        return []
+
+
+def normalize_bilan_note_questions(questions):
+    if not isinstance(questions, list):
+        raise ValueError('questions doit être une liste')
+    if len(questions) > MAX_BILAN_NOTE_QUESTIONS:
+        raise ValueError(f'Maximum {MAX_BILAN_NOTE_QUESTIONS} questions')
+    out = []
+    seen = set()
+    for item in questions:
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get('label') or '').strip()[:80]
+        if not label:
+            continue
+        raw_key = str(item.get('key') or '').strip().lower()
+        builtin = raw_key in BUILTIN_BILAN_QUESTION_KEYS
+        if builtin:
+            key = raw_key
+        else:
+            if _re.fullmatch(r'custom_[a-z0-9]{6,16}', raw_key):
+                key = raw_key
+            else:
+                key = f'custom_{_uuid.uuid4().hex[:8]}'
+            builtin = False
+        if key in seen:
+            continue
+        enabled = item.get('enabled', True)
+        if isinstance(enabled, str):
+            enabled = enabled.lower() in ('1', 'true', 'yes', 'on')
+        else:
+            enabled = bool(enabled)
+        out.append({
+            'key': key,
+            'label': label if not builtin else (label or _BILAN_DEFAULT_LABELS.get(key, key)),
+            'enabled': enabled,
+            'builtin': builtin,
+        })
+        seen.add(key)
+    if len(out) > MAX_BILAN_NOTE_QUESTIONS:
+        raise ValueError(f'Maximum {MAX_BILAN_NOTE_QUESTIONS} questions')
+    if out and not any(q['enabled'] for q in out):
+        raise ValueError('Au moins une question doit être active')
+    return out
+
+
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     # Pseudo / login legacy (peut être un email pour les nouveaux athlètes)
@@ -22,6 +107,8 @@ class User(db.Model):
     independent_module = db.Column(db.Boolean, nullable=False, default=False)
     # Athlete: jour de bilan hebdo choisi par le coach (0=lundi … 6=dimanche)
     bilan_weekday = db.Column(db.Integer, nullable=True)
+    # Athlete: questions du mot de bilan (JSON). null = template par défaut.
+    bilan_note_questions = db.Column(db.Text, nullable=True)
     # Athlete de démonstration : ne compte pas dans le quota du coach, supprimable
     is_demo = db.Column(db.Boolean, nullable=False, default=False)
     # Coach : date de création de son athlète démo (empêche de le recréer après suppression)
@@ -71,6 +158,23 @@ class User(db.Model):
         """Nombre max d'athlètes pour un coach (None = illimité)."""
         return self.SUBSCRIPTION_LIMITS.get(int(self.subscription_tier or 0), 0)
 
+    def get_bilan_note_questions(self, *, enabled_only=False):
+        qs = resolve_bilan_note_questions(self.bilan_note_questions)
+        if enabled_only:
+            qs = [q for q in qs if q.get('enabled')]
+        return qs
+
+    def set_bilan_note_questions(self, questions):
+        if questions is None:
+            self.bilan_note_questions = None
+            return []
+        normalized = normalize_bilan_note_questions(questions)
+        if not normalized:
+            self.bilan_note_questions = None
+            return []
+        self.bilan_note_questions = _json.dumps(normalized, ensure_ascii=False)
+        return normalized
+
     def to_dict(self):
         data = {
             'id': self.id,
@@ -87,6 +191,7 @@ class User(db.Model):
             'is_demo': bool(self.is_demo) if self.role == 'athlete' else False,
         }
         if self.role == 'athlete':
+            data['bilan_note_questions'] = self.get_bilan_note_questions()
             data['sex'] = self.sex
             data['height_cm'] = self.height_cm
             data['birth_date'] = self.birth_date.isoformat() if self.birth_date else None
@@ -222,9 +327,12 @@ class Availability(db.Model):
 class Program(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), nullable=False)
-    athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
     coach_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=False)
+    is_template = db.Column(db.Boolean, nullable=False, default=False)
+    library_source_id = db.Column(db.Integer, nullable=True, index=True)
+    library_day = db.Column(db.Date, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
 
@@ -239,6 +347,9 @@ class Program(db.Model):
             'athlete_id': self.athlete_id,
             'coach_id': self.coach_id,
             'is_active': bool(self.is_active),
+            'is_template': bool(self.is_template),
+            'library_source_id': self.library_source_id,
+            'library_day': self.library_day.isoformat() if self.library_day else None,
         }
         if with_sessions:
             data['sessions'] = [s.to_dict() for s in self.sessions]
@@ -578,9 +689,12 @@ class MealPlan(db.Model):
     """Plan alimentaire pour un athlète"""
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(128), nullable=False)
-    athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
     coach_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     is_active = db.Column(db.Boolean, nullable=False, default=False)
+    is_template = db.Column(db.Boolean, nullable=False, default=False)
+    library_source_id = db.Column(db.Integer, nullable=True, index=True)
+    library_day = db.Column(db.Date, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -634,6 +748,9 @@ class MealPlan(db.Model):
             'athlete_id': self.athlete_id,
             'coach_id': self.coach_id,
             'is_active': bool(self.is_active),
+            'is_template': bool(self.is_template),
+            'library_source_id': self.library_source_id,
+            'library_day': self.library_day.isoformat() if self.library_day else None,
             'meal_count': self.meal_count or 6,
             'meal_times': [getattr(self, f'meal_time_{i}') for i in range(1, 7)],
             'meal_labels': [getattr(self, f'meal_label_{i}') for i in range(1, 7)],
@@ -756,18 +873,21 @@ class MobileWeeklyBilanMarking(db.Model):
                 payload = json.loads(self.athlete_note_json)
             except Exception:
                 payload = None
+        if not isinstance(payload, dict):
+            payload = {}
         if not self.athlete_note and not payload:
             return None
-        return {
+        data = {
             'summary': self.athlete_note,
-            'hunger': (payload or {}).get('hunger'),
-            'fatigue': (payload or {}).get('fatigue'),
-            'energy_crash': (payload or {}).get('energy_crash'),
-            'energy_crash_time': (payload or {}).get('energy_crash_time'),
-            'exercise_difficulty': (payload or {}).get('exercise_difficulty'),
-            'other': (payload or {}).get('other'),
+            'answers': payload,
             'updated_at': self.athlete_note_updated_at.isoformat() if self.athlete_note_updated_at else None,
         }
+        for key in (
+            'hunger', 'fatigue', 'energy_crash', 'energy_crash_time',
+            'exercise_difficulty', 'other',
+        ):
+            data[key] = payload.get(key)
+        return data
 
     def to_dict(self):
         return {
