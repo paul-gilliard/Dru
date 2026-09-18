@@ -428,6 +428,11 @@ def _purge_user_data(user_id):
         {'coach_id': None, 'coach_associated_at': None}, synchronize_session=False,
     )
 
+    # Bibliothèque templates du coach
+    for tmpl in Program.query.filter_by(coach_id=user_id, is_template=True).all():
+        db.session.delete(tmpl)
+    for tmpl in MealPlan.query.filter_by(coach_id=user_id, is_template=True).all():
+        db.session.delete(tmpl)
     programs = Program.query.filter_by(athlete_id=user_id).all()
     for program in programs:
         session_ids = [s.id for s in program.sessions]
@@ -554,14 +559,242 @@ def _enforce_coach_quota_or_trim(coach, prefer_keep_ids=None):
         removed = []
         for a in athletes:
             if a.id not in kept_ids:
+                _snapshot_athlete_content_to_coach_library(coach.id, a)
                 _link_athlete_to_coach(a, None)
                 removed.append(a.id)
         return removed
     removed = []
     for a in athletes[limit:]:
+        _snapshot_athlete_content_to_coach_library(coach.id, a)
         _link_athlete_to_coach(a, None)
         removed.append(a.id)
     return removed
+
+
+
+def _clone_program(source, *, athlete_id, coach_id, name, is_template=False):
+    """Deep-copy sessions/exercises. Ne commit pas."""
+    new_program = Program(
+        name=(name or source.name).strip()[:128],
+        athlete_id=athlete_id,
+        coach_id=coach_id,
+        is_active=False,
+        is_template=bool(is_template),
+    )
+    db.session.add(new_program)
+    db.session.flush()
+    for sess in source.sessions:
+        new_session = ProgramSession(
+            program_id=new_program.id,
+            day_of_week=sess.day_of_week,
+            session_name=sess.session_name,
+        )
+        db.session.add(new_session)
+        db.session.flush()
+        for ex in sess.exercises:
+            db.session.add(ExerciseEntry(
+                session_id=new_session.id, position=ex.position, name=ex.name, sets=ex.sets,
+                reps=ex.reps, rest=ex.rest, rir=ex.rir, intensification=ex.intensification,
+                muscle=ex.muscle, remark=ex.remark, series_description=ex.series_description,
+                main_series=ex.main_series,
+            ))
+    return new_program
+
+
+def _clone_meal_plan(source, *, athlete_id, coach_id, name, is_template=False):
+    """Deep-copy meals + times/labels. Ne commit pas."""
+    new_plan = MealPlan(
+        name=(name or source.name).strip()[:128],
+        athlete_id=athlete_id,
+        coach_id=coach_id,
+        is_active=False,
+        is_template=bool(is_template),
+        meal_count=source.meal_count,
+        **{f'meal_time_{i}': getattr(source, f'meal_time_{i}') for i in range(1, 7)},
+        **{f'meal_label_{i}': getattr(source, f'meal_label_{i}') for i in range(1, 7)},
+    )
+    db.session.add(new_plan)
+    db.session.flush()
+    for meal in source.meals:
+        db.session.add(MealEntry(
+            meal_plan_id=new_plan.id, food_id=meal.food_id, meal_number=meal.meal_number,
+            quantity=meal.quantity, position=meal.position,
+        ))
+    return new_plan
+
+
+def _library_version_name(base_name, athlete, day):
+    label = (athlete.display_name or athlete.username or 'athlète').strip()[:32]
+    return f'{base_name} · {label} · {day.strftime("%d/%m/%Y")}'[:128]
+
+
+def _replace_program_template_from_source(target, source):
+    for sess in list(target.sessions):
+        db.session.delete(sess)
+    db.session.flush()
+    for sess in source.sessions:
+        new_session = ProgramSession(
+            program_id=target.id,
+            day_of_week=sess.day_of_week,
+            session_name=sess.session_name,
+        )
+        db.session.add(new_session)
+        db.session.flush()
+        for ex in sess.exercises:
+            db.session.add(ExerciseEntry(
+                session_id=new_session.id, position=ex.position, name=ex.name, sets=ex.sets,
+                reps=ex.reps, rest=ex.rest, rir=ex.rir, intensification=ex.intensification,
+                muscle=ex.muscle, remark=ex.remark, series_description=ex.series_description,
+                main_series=ex.main_series,
+            ))
+
+
+def _replace_meal_plan_template_from_source(target, source):
+    for meal in list(target.meals):
+        db.session.delete(meal)
+    target.meal_count = source.meal_count
+    for i in range(1, 7):
+        setattr(target, f'meal_time_{i}', getattr(source, f'meal_time_{i}'))
+        setattr(target, f'meal_label_{i}', getattr(source, f'meal_label_{i}'))
+    db.session.flush()
+    for meal in source.meals:
+        db.session.add(MealEntry(
+            meal_plan_id=target.id, food_id=meal.food_id, meal_number=meal.meal_number,
+            quantity=meal.quantity, position=meal.position,
+        ))
+
+
+def _sync_program_to_coach_library(program, *, actor=None, force=False):
+    if not program or getattr(program, 'is_template', False) or not program.athlete_id:
+        return None
+    if not force:
+        actor = actor or getattr(request, 'current_user', None)
+        if not actor or actor.role not in ('coach', 'admin'):
+            return None
+    athlete = User.query.get(program.athlete_id)
+    if not athlete or getattr(athlete, 'is_demo', False):
+        return None
+    coach_id = program.coach_id or athlete.coach_id
+    if not coach_id:
+        return None
+    if not program.coach_id:
+        program.coach_id = int(coach_id)
+    day = date.today()
+    name = _library_version_name(program.name, athlete, day)
+    existing = Program.query.filter_by(
+        coach_id=int(coach_id),
+        is_template=True,
+        library_source_id=program.id,
+        library_day=day,
+    ).first()
+    if existing:
+        _replace_program_template_from_source(existing, program)
+        existing.name = name
+        existing.updated_at = datetime.utcnow()
+        return existing
+    tmpl = _clone_program(
+        program, athlete_id=None, coach_id=int(coach_id), name=name, is_template=True,
+    )
+    tmpl.library_source_id = program.id
+    tmpl.library_day = day
+    return tmpl
+
+
+def _sync_meal_plan_to_coach_library(plan, *, actor=None, force=False):
+    if not plan or getattr(plan, 'is_template', False) or not plan.athlete_id:
+        return None
+    if not force:
+        actor = actor or getattr(request, 'current_user', None)
+        if not actor or actor.role not in ('coach', 'admin'):
+            return None
+    athlete = User.query.get(plan.athlete_id)
+    if not athlete or getattr(athlete, 'is_demo', False):
+        return None
+    coach_id = plan.coach_id or athlete.coach_id
+    if not coach_id:
+        return None
+    if not plan.coach_id:
+        plan.coach_id = int(coach_id)
+    day = date.today()
+    name = _library_version_name(plan.name, athlete, day)
+    existing = MealPlan.query.filter_by(
+        coach_id=int(coach_id),
+        is_template=True,
+        library_source_id=plan.id,
+        library_day=day,
+    ).first()
+    if existing:
+        _replace_meal_plan_template_from_source(existing, plan)
+        existing.name = name
+        return existing
+    tmpl = _clone_meal_plan(
+        plan, athlete_id=None, coach_id=int(coach_id), name=name, is_template=True,
+    )
+    tmpl.library_source_id = plan.id
+    tmpl.library_day = day
+    return tmpl
+
+
+def _snapshot_athlete_content_to_coach_library(coach_id, athlete):
+    """Dernière version du jour (ou création) avant détachement."""
+    if not coach_id or not athlete or getattr(athlete, 'is_demo', False):
+        return 0
+    n = 0
+    # Ne pas exiger program.coach_id : les anciens programmes l’ont souvent à NULL.
+    programs = Program.query.filter_by(athlete_id=athlete.id, is_template=False).all()
+    for p in programs:
+        if p.coach_id not in (None, int(coach_id)):
+            continue
+        if _sync_program_to_coach_library(p, force=True):
+            n += 1
+    plans = MealPlan.query.filter_by(athlete_id=athlete.id, is_template=False).all()
+    for plan in plans:
+        if plan.coach_id not in (None, int(coach_id)):
+            continue
+        if _sync_meal_plan_to_coach_library(plan, force=True):
+            n += 1
+    return n
+
+
+def _backfill_coach_library(coach):
+    """Importe les progs / diètes actuels de l’équipe dans la bibliothèque (1 version / jour)."""
+    if not coach or coach.role not in ('coach', 'admin'):
+        return 0
+    coach_id = int(coach.id)
+    n = 0
+    athletes = (
+        _coach_team_query(coach_id)
+        .filter(User.is_demo.isnot(True))
+        .all()
+    )
+    for athlete in athletes:
+        n += _snapshot_athlete_content_to_coach_library(coach_id, athlete)
+    if n:
+        db.session.commit()
+    return n
+
+
+def _can_access_program(program, user=None):
+    user = user or request.current_user
+    if getattr(program, 'is_template', False):
+        if user.role == 'admin':
+            return True
+        return user.role == 'coach' and program.coach_id == user.id
+    if program.athlete_id is None:
+        return False
+    return _can_manage_athlete(program.athlete_id, user)
+
+
+def _can_access_meal_plan(plan, user=None):
+    user = user or request.current_user
+    if getattr(plan, 'is_template', False):
+        if user.role == 'admin':
+            return True
+        return user.role == 'coach' and plan.coach_id == user.id
+    if plan.athlete_id is None:
+        return False
+    return _can_manage_athlete(plan.athlete_id, user)
+
 
 
 # ---------------------------------------------------------------- AUTH -----
@@ -697,16 +930,33 @@ def dashboard():
     week_sessions = []
     if program:
         today_session = next((s for s in program.sessions if s.day_of_week == today.weekday()), None)
-        for s in sorted(program.sessions, key=lambda s: s.day_of_week):
-            last_log = (PerformanceEntry.query.filter_by(athlete_id=user.id, program_session_id=s.id)
-                        .order_by(PerformanceEntry.entry_date.desc()).first())
+        sessions = sorted(program.sessions, key=lambda s: s.day_of_week)
+        session_ids = [s.id for s in sessions]
+        last_by_session = {}
+        if session_ids:
+            from sqlalchemy import func
+            rows = (
+                db.session.query(
+                    PerformanceEntry.program_session_id,
+                    func.max(PerformanceEntry.entry_date),
+                )
+                .filter(
+                    PerformanceEntry.athlete_id == user.id,
+                    PerformanceEntry.program_session_id.in_(session_ids),
+                )
+                .group_by(PerformanceEntry.program_session_id)
+                .all()
+            )
+            last_by_session = {sid: d for sid, d in rows if sid is not None}
+        for s in sessions:
+            last_date = last_by_session.get(s.id)
             week_sessions.append({
                 'id': s.id,
                 'day_of_week': s.day_of_week,
                 'session_name': s.session_name,
                 'exercise_count': len(s.exercises),
                 'is_today': s.day_of_week == today.weekday(),
-                'last_logged_date': last_log.entry_date.isoformat() if last_log else None,
+                'last_logged_date': last_date.isoformat() if last_date else None,
             })
 
     objectives = Objective.query.filter_by(athlete_id=user.id).order_by(Objective.created_at.desc()).limit(5).all()
@@ -748,6 +998,7 @@ def dashboard():
         'is_bilan_day': bilan_ctx['is_bilan_day'],
         'is_bilan_eve': bilan_ctx['is_bilan_eve'],
         'can_write_bilan_note': bilan_ctx['can_write_note'],
+        'bilan_note_questions': user.get_bilan_note_questions(enabled_only=True),
         'athlete_note': marking.note_dict() if marking else None,
         'week_start': current_week_start.isoformat(),
     })
@@ -843,6 +1094,10 @@ def unlink_athlete(athlete_id):
         db.session.delete(athlete)
         db.session.commit()
         return jsonify({'ok': True, 'deleted': True})
+    coach_id_for_snap = athlete.coach_id
+    if user.role == 'coach':
+        coach_id_for_snap = user.id
+    _snapshot_athlete_content_to_coach_library(coach_id_for_snap, athlete)
     _link_athlete_to_coach(athlete, None)
     if user.role == 'coach':
         CoachingInvitation.query.filter_by(
@@ -850,6 +1105,78 @@ def unlink_athlete(athlete_id):
         ).update({'status': 'refused'}, synchronize_session=False)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+@api_bp.get('/coach/library/programs')
+@coach_required
+def list_coach_program_library():
+    user = request.current_user
+    _backfill_coach_library(user)
+    q = Program.query.filter_by(is_template=True)
+    if user.role == 'coach':
+        q = q.filter_by(coach_id=user.id)
+    programs = q.order_by(Program.created_at.desc()).all()
+    return jsonify([p.to_dict(with_sessions=False) for p in programs])
+
+
+@api_bp.post('/coach/library/programs/<int:program_id>/assign')
+@coach_required
+def assign_library_program(program_id):
+    source = Program.query.get_or_404(program_id)
+    if not source.is_template or not _can_access_program(source):
+        return jsonify({'error': 'Modèle introuvable'}), 404
+    data = request.get_json(silent=True) or {}
+    athlete_id = data.get('athlete_id')
+    if not athlete_id:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    athlete_id = int(athlete_id)
+    if not _can_manage_athlete(athlete_id):
+        return _deny_manage()
+    name = (data.get('name') or source.name).strip()
+    new_program = _clone_program(
+        source, athlete_id=athlete_id, coach_id=_coach_id_for_create(athlete_id),
+        name=name, is_template=False,
+    )
+    db.session.flush()
+    _sync_program_to_coach_library(new_program)
+    db.session.commit()
+    return jsonify(new_program.to_dict(with_sessions=True)), 201
+
+
+@api_bp.get('/coach/library/meal-plans')
+@coach_required
+def list_coach_meal_plan_library():
+    user = request.current_user
+    _backfill_coach_library(user)
+    q = MealPlan.query.filter_by(is_template=True)
+    if user.role == 'coach':
+        q = q.filter_by(coach_id=user.id)
+    plans = q.order_by(MealPlan.created_at.desc()).all()
+    return jsonify([p.to_dict(with_meals=False) for p in plans])
+
+
+@api_bp.post('/coach/library/meal-plans/<int:plan_id>/assign')
+@coach_required
+def assign_library_meal_plan(plan_id):
+    source = MealPlan.query.get_or_404(plan_id)
+    if not source.is_template or not _can_access_meal_plan(source):
+        return jsonify({'error': 'Modèle introuvable'}), 404
+    data = request.get_json(silent=True) or {}
+    athlete_id = data.get('athlete_id')
+    if not athlete_id:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    athlete_id = int(athlete_id)
+    if not _can_manage_athlete(athlete_id):
+        return _deny_manage()
+    name = (data.get('name') or source.name).strip()
+    new_plan = _clone_meal_plan(
+        source, athlete_id=athlete_id, coach_id=_coach_id_for_create(athlete_id),
+        name=name, is_template=False,
+    )
+    db.session.flush()
+    _sync_meal_plan_to_coach_library(new_plan)
+    db.session.commit()
+    return jsonify(new_plan.to_dict()), 201
 
 
 @api_bp.post('/coach/quota/resolve')
@@ -1094,6 +1421,7 @@ def update_user(user_id):
     if user.role == 'athlete' and 'coach_id' in data:
         coach_id = data.get('coach_id')
         if coach_id in (None, '', 0, 'null'):
+            _snapshot_athlete_content_to_coach_library(user.coach_id, user)
             _link_athlete_to_coach(user, None)
         else:
             coach = User.query.filter_by(id=int(coach_id), role='coach').first()
@@ -1234,7 +1562,7 @@ def list_programs():
     if athlete_id is None:
         return jsonify({'error': 'athlete_id requis'}), 400
     programs = (
-        Program.query.filter_by(athlete_id=athlete_id)
+        Program.query.filter_by(athlete_id=athlete_id, is_template=False)
         .order_by(Program.is_active.desc(), Program.created_at.desc())
         .all()
     )
@@ -1260,14 +1588,17 @@ def create_program():
         return jsonify({'error': 'name et athlete_id requis'}), 400
     if not _can_manage_athlete(athlete_id):
         return _deny_manage()
-    has_any = Program.query.filter_by(athlete_id=athlete_id).count() > 0
+    has_any = Program.query.filter_by(athlete_id=athlete_id, is_template=False).count() > 0
     program = Program(
         name=name,
         athlete_id=athlete_id,
         coach_id=_coach_id_for_create(athlete_id),
         is_active=not has_any,
+        is_template=False,
     )
     db.session.add(program)
+    db.session.flush()
+    _sync_program_to_coach_library(program)
     db.session.commit()
     return jsonify(program.to_dict(with_sessions=True)), 201
 
@@ -1305,6 +1636,7 @@ def rename_program(program_id):
     if not name:
         return jsonify({'error': 'name requis'}), 400
     program.name = name
+    _sync_program_to_coach_library(program)
     db.session.commit()
     return jsonify(program.to_dict())
 
@@ -1315,9 +1647,11 @@ def activate_program(program_id):
     """Mark a program as the athlete's current one (shown on home)."""
     program = Program.query.get_or_404(program_id)
     user = request.current_user
+    if getattr(program, 'is_template', False) or not program.athlete_id:
+        return jsonify({'error': "Impossible d'activer un modèle bibliothèque"}), 400
     if not _can_manage_athlete(program.athlete_id, user):
         return _deny_manage(program.athlete_id)
-    Program.query.filter_by(athlete_id=program.athlete_id, is_active=True).update(
+    Program.query.filter_by(athlete_id=program.athlete_id, is_active=True, is_template=False).update(
         {'is_active': False}, synchronize_session=False,
     )
     program.is_active = True
@@ -1329,33 +1663,37 @@ def activate_program(program_id):
 @login_required
 def duplicate_program(program_id):
     source = Program.query.get_or_404(program_id)
-    if not _can_manage_athlete(source.athlete_id):
+    if not _can_access_program(source):
         return _deny_manage()
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or f'{source.name} (copie)').strip()
+    as_template = bool(data.get('as_template'))
+    user = request.current_user
+
+    if as_template or (getattr(source, 'is_template', False) and data.get('athlete_id') is None and user.role == 'coach'):
+        if user.role not in ('coach', 'admin'):
+            return jsonify({'error': 'Réservé au coach'}), 403
+        coach_id = user.id if user.role == 'coach' else (source.coach_id or user.id)
+        new_program = _clone_program(
+            source, athlete_id=None, coach_id=coach_id, name=name, is_template=True,
+        )
+        new_program.library_source_id = source.library_source_id or source.id
+        new_program.library_day = date.today()
+        db.session.commit()
+        return jsonify(new_program.to_dict(with_sessions=True)), 201
+
     athlete_id = data.get('athlete_id') or source.athlete_id
+    if not athlete_id:
+        return jsonify({'error': 'athlete_id requis'}), 400
     athlete_id = int(athlete_id)
     if not _can_manage_athlete(athlete_id):
         return _deny_manage()
-
-    new_program = Program(name=name, athlete_id=athlete_id, coach_id=_coach_id_for_create(athlete_id))
-    db.session.add(new_program)
+    new_program = _clone_program(
+        source, athlete_id=athlete_id, coach_id=_coach_id_for_create(athlete_id),
+        name=name, is_template=False,
+    )
     db.session.flush()
-
-    for sess in source.sessions:
-        new_session = ProgramSession(
-            program_id=new_program.id, day_of_week=sess.day_of_week, session_name=sess.session_name,
-        )
-        db.session.add(new_session)
-        db.session.flush()
-        for ex in sess.exercises:
-            db.session.add(ExerciseEntry(
-                session_id=new_session.id, position=ex.position, name=ex.name, sets=ex.sets,
-                reps=ex.reps, rest=ex.rest, rir=ex.rir, intensification=ex.intensification,
-                muscle=ex.muscle, remark=ex.remark, series_description=ex.series_description,
-                main_series=ex.main_series,
-            ))
-
+    _sync_program_to_coach_library(new_program)
     db.session.commit()
     return jsonify(new_program.to_dict(with_sessions=True)), 201
 
@@ -2911,14 +3249,12 @@ def list_meal_plans():
     athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
     if athlete_id is None:
         return jsonify({'error': 'athlete_id requis'}), 400
-    from sqlalchemy.orm import selectinload, joinedload
     with_meals = str(request.args.get('with_meals', '0')).lower() in ('1', 'true', 'yes')
-    plans = (
-        MealPlan.query.filter_by(athlete_id=athlete_id)
-        .options(selectinload(MealPlan.meals).joinedload(MealEntry.food))
-        .order_by(MealPlan.is_active.desc(), MealPlan.created_at.desc())
-        .all()
-    )
+    q = MealPlan.query.filter_by(athlete_id=athlete_id, is_template=False)
+    if with_meals:
+        from sqlalchemy.orm import selectinload, joinedload
+        q = q.options(selectinload(MealPlan.meals).joinedload(MealEntry.food))
+    plans = q.order_by(MealPlan.is_active.desc(), MealPlan.created_at.desc()).all()
     return jsonify([p.to_dict(with_meals=with_meals) for p in plans])
 
 
@@ -2941,12 +3277,14 @@ def create_meal_plan():
         return jsonify({'error': 'name et athlete_id requis'}), 400
     if not _can_manage_athlete(athlete_id):
         return _deny_manage()
-    has_any = MealPlan.query.filter_by(athlete_id=athlete_id).count() > 0
+    has_any = MealPlan.query.filter_by(athlete_id=athlete_id, is_template=False).count() > 0
     plan = MealPlan(
         name=name, athlete_id=athlete_id, coach_id=_coach_id_for_create(athlete_id),
-        meal_count=data.get('meal_count', 6), is_active=not has_any,
+        meal_count=data.get('meal_count', 6), is_active=not has_any, is_template=False,
     )
     db.session.add(plan)
+    db.session.flush()
+    _sync_meal_plan_to_coach_library(plan)
     db.session.commit()
     return jsonify(plan.to_dict()), 201
 
@@ -2999,6 +3337,7 @@ def rename_meal_plan(plan_id):
     if not name:
         return jsonify({'error': 'name requis'}), 400
     plan.name = name
+    _sync_meal_plan_to_coach_library(plan)
     db.session.commit()
     return jsonify(plan.to_dict())
 
@@ -3260,37 +3599,49 @@ def _clean_note_text(value, max_len=500):
     return text[:max_len]
 
 
-def _build_athlete_note_summary(payload):
+def _build_athlete_note_summary(payload, questions=None):
+    answers = payload if isinstance(payload, dict) else {}
+    qs = questions if isinstance(questions, list) else []
     lines = []
-    hunger = _clean_note_text(payload.get('hunger'))
-    fatigue = _clean_note_text(payload.get('fatigue'))
-    crash = _clean_note_text(payload.get('energy_crash'))
-    crash_time = _clean_note_text(payload.get('energy_crash_time'), 32)
-    exo = _clean_note_text(payload.get('exercise_difficulty'))
-    other = _clean_note_text(payload.get('other'))
-    if hunger:
-        lines.append(f'Faim : {hunger}')
-    if fatigue:
-        lines.append(f'Fatigue : {fatigue}')
-    if crash or crash_time:
-        if crash and crash_time:
-            lines.append(f'Coup de barre ({crash_time}) : {crash}')
-        elif crash_time:
-            lines.append(f'Coup de barre à {crash_time}')
-        else:
-            lines.append(f'Coup de barre : {crash}')
-    if exo:
-        lines.append(f'Difficulté exo : {exo}')
-    if other:
-        lines.append(f'Autre : {other}')
+    seen = set()
+    for q in qs:
+        if not q.get('enabled', True):
+            continue
+        key = q.get('key')
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        max_len = 32 if key == 'energy_crash_time' else 500
+        value = _clean_note_text(answers.get(key), max_len)
+        if not value:
+            continue
+        label = (q.get('label') or key).strip()
+        lines.append(f'{label} : {value}')
+    for key, raw in answers.items():
+        if key in seen:
+            continue
+        value = _clean_note_text(raw, 32 if key == 'energy_crash_time' else 500)
+        if value:
+            lines.append(f'{key} : {value}')
     return '\n'.join(lines) if lines else None
+
+
+def _extract_bilan_note_answers(data, questions):
+    answers = {}
+    enabled = [q for q in (questions or []) if q.get('enabled', True) and q.get('key')]
+    source = data.get('answers') if isinstance(data.get('answers'), dict) else data
+    for q in enabled:
+        key = q['key']
+        max_len = 32 if key == 'energy_crash_time' else 500
+        answers[key] = _clean_note_text(source.get(key), max_len)
+    return answers
 
 
 
 def _journal_streak(athlete_id, today):
     """Jours consecutifs avec journal. Si aujourd'hui vide, part d'hier."""
     dates = {
-        j.entry_date for j in JournalEntry.query.filter(
+        d for (d,) in db.session.query(JournalEntry.entry_date).filter(
             JournalEntry.athlete_id == athlete_id,
             JournalEntry.entry_date >= today - timedelta(days=120),
         ).all()
@@ -3311,14 +3662,21 @@ def _training_week_streak(athlete_id, program, today):
     if not session_days:
         return 0
     oldest = today - timedelta(days=24 * 7)
-    logs = PerformanceEntry.query.filter(
-        PerformanceEntry.athlete_id == athlete_id,
-        PerformanceEntry.entry_date >= oldest,
-    ).all()
-    logged_dates = {e.entry_date for e in logs}
+    logs = (
+        db.session.query(
+            PerformanceEntry.entry_date,
+            PerformanceEntry.program_session_id,
+        )
+        .filter(
+            PerformanceEntry.athlete_id == athlete_id,
+            PerformanceEntry.entry_date >= oldest,
+        )
+        .all()
+    )
+    logged_dates = {e[0] for e in logs}
     logged_by_session_date = {
-        (e.program_session_id, e.entry_date)
-        for e in logs if e.program_session_id is not None
+        (e[1], e[0])
+        for e in logs if e[1] is not None
     }
 
     def week_complete(week_start):
@@ -3354,12 +3712,13 @@ def _athlete_bilan_context(user, today=None):
     today = today or date.today()
     weekday = int(user.bilan_weekday) if user.bilan_weekday is not None else None
     j_minus_1 = ((weekday - 1) % 7) if weekday is not None else None
+    has_questions = bool(user.get_bilan_note_questions(enabled_only=True))
     return {
         'bilan_weekday': weekday,
         'bilan_day_label': DAY_NAMES_FR[weekday] if weekday is not None else None,
         'is_bilan_day': weekday is not None and today.weekday() == weekday,
         'is_bilan_eve': j_minus_1 is not None and today.weekday() == j_minus_1,
-        'can_write_note': weekday is not None and user.coach_id is not None,
+        'can_write_note': weekday is not None and user.coach_id is not None and has_questions,
     }
 
 
@@ -3601,15 +3960,11 @@ def athlete_save_bilan_note():
 
     data = request.get_json(silent=True) or {}
     week_start = _parse_date(data.get('week_start')) or _week_start(date.today())
-    payload = {
-        'hunger': _clean_note_text(data.get('hunger')),
-        'fatigue': _clean_note_text(data.get('fatigue')),
-        'energy_crash': _clean_note_text(data.get('energy_crash')),
-        'energy_crash_time': _clean_note_text(data.get('energy_crash_time'), 32),
-        'exercise_difficulty': _clean_note_text(data.get('exercise_difficulty')),
-        'other': _clean_note_text(data.get('other')),
-    }
-    summary = _build_athlete_note_summary(payload)
+    questions = user.get_bilan_note_questions(enabled_only=True)
+    if not questions:
+        return jsonify({'error': "Ton coach n'a pas encore configuré les questions de bilan"}), 400
+    payload = _extract_bilan_note_answers(data, questions)
+    summary = _build_athlete_note_summary(payload, questions)
     if not summary:
         return jsonify({'error': 'Écris au moins un élément de bilan'}), 400
 
@@ -3850,6 +4205,7 @@ def get_athlete_bilan_settings(athlete_id):
         'bilan_weekday': weekday,
         'bilan_day_label': DAY_NAMES_FR[weekday] if weekday is not None else None,
         'required': True,
+        'questions': athlete.get_bilan_note_questions(),
     })
 
 
@@ -3862,19 +4218,39 @@ def put_athlete_bilan_settings(athlete_id):
     if athlete.role != 'athlete':
         return jsonify({'error': 'Utilisateur non athlète'}), 400
     data = request.get_json(silent=True) or {}
-    try:
-        weekday = int(data.get('bilan_weekday'))
-    except (TypeError, ValueError):
-        return jsonify({'error': 'bilan_weekday requis (0=lundi … 6=dimanche)'}), 400
-    if weekday < 0 or weekday > 6:
-        return jsonify({'error': 'bilan_weekday doit être entre 0 et 6'}), 400
-    athlete.bilan_weekday = weekday
+    touched = False
+    weekday = int(athlete.bilan_weekday) if athlete.bilan_weekday is not None else None
+
+    if 'bilan_weekday' in data and data.get('bilan_weekday') is not None:
+        try:
+            weekday = int(data.get('bilan_weekday'))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'bilan_weekday requis (0=lundi … 6=dimanche)'}), 400
+        if weekday < 0 or weekday > 6:
+            return jsonify({'error': 'bilan_weekday doit être entre 0 et 6'}), 400
+        athlete.bilan_weekday = weekday
+        touched = True
+
+    if 'questions' in data:
+        try:
+            if data.get('questions') is None:
+                athlete.set_bilan_note_questions(None)
+            else:
+                athlete.set_bilan_note_questions(data.get('questions'))
+        except ValueError as err:
+            return jsonify({'error': str(err)}), 400
+        touched = True
+
+    if not touched:
+        return jsonify({'error': 'bilan_weekday ou questions requis'}), 400
+
     db.session.commit()
     return jsonify({
         'athlete_id': athlete.id,
         'bilan_weekday': weekday,
-        'bilan_day_label': DAY_NAMES_FR[weekday],
+        'bilan_day_label': DAY_NAMES_FR[weekday] if weekday is not None else None,
         'required': True,
+        'questions': athlete.get_bilan_note_questions(),
         'athlete': athlete.to_dict(),
     })
 
@@ -4214,6 +4590,7 @@ def athlete_leave_coach():
     if not user.coach_id:
         return jsonify({'error': "Tu n'as pas de coach"}), 400
     coach_id = user.coach_id
+    _snapshot_athlete_content_to_coach_library(coach_id, user)
     _link_athlete_to_coach(user, None)
     CoachingInvitation.query.filter_by(
         coach_id=coach_id, athlete_id=user.id, status='pending',
