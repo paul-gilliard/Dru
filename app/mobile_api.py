@@ -164,6 +164,167 @@ def _public_name_from_personal(name, user=None):
     return name
 
 
+def _fold_bank_name(name: str) -> str:
+    """Minuscules + retire les accents courants (FR) pour comparer les noms."""
+    table = {
+        ord('à'): 'a', ord('â'): 'a', ord('ä'): 'a', ord('á'): 'a', ord('ã'): 'a',
+        ord('å'): 'a', ord('ā'): 'a',
+        ord('é'): 'e', ord('è'): 'e', ord('ê'): 'e', ord('ë'): 'e', ord('ę'): 'e',
+        ord('ė'): 'e', ord('ē'): 'e',
+        ord('î'): 'i', ord('ï'): 'i', ord('í'): 'i', ord('ī'): 'i', ord('į'): 'i',
+        ord('ì'): 'i',
+        ord('ô'): 'o', ord('ö'): 'o', ord('ó'): 'o', ord('ō'): 'o', ord('õ'): 'o',
+        ord('ø'): 'o', ord('ò'): 'o',
+        ord('û'): 'u', ord('ü'): 'u', ord('ú'): 'u', ord('ū'): 'u', ord('ù'): 'u',
+        ord('ÿ'): 'y', ord('ý'): 'y',
+        ord('ç'): 'c', ord('ń'): 'n', ord('ñ'): 'n',
+    }
+    return (name or '').lower().translate(table)
+
+
+def _bank_name_tokens(name: str) -> set[str]:
+    raw = re.sub(r'[^a-z0-9\s\-]', ' ', _fold_bank_name(name))
+    return {t for t in re.split(r'[\s\-]+', raw) if len(t) >= 2}
+
+
+def _bank_name_similarity(query: str, candidate: str) -> float:
+    """Score 0–100 : exact, sous-chaîne, ou chevauchement de mots."""
+    q = _fold_bank_name(query).strip()
+    c = _fold_bank_name(candidate).strip()
+    if not q or not c:
+        return 0.0
+    if q == c:
+        return 100.0
+    if q in c or c in q:
+        shorter, longer = (q, c) if len(q) <= len(c) else (c, q)
+        return 72.0 + 18.0 * (len(shorter) / max(len(longer), 1))
+    qt, ct = _bank_name_tokens(q), _bank_name_tokens(c)
+    if not qt or not ct:
+        return 0.0
+    overlap = len(qt & ct)
+    if overlap == 0:
+        return 0.0
+    return 55.0 * overlap / max(len(qt), len(ct)) + 20.0 * overlap / len(qt | ct)
+
+
+def _exercise_similar_dict(ex: Exercise, reason: str, score: float) -> dict:
+    return {
+        'id': ex.id,
+        'name': ex.name,
+        'muscle_group': ex.muscle_group,
+        'reason': reason,
+        'score': round(score, 1),
+        'is_personal': ex.owner_id is not None,
+        'has_media': bool(ex.animation_slug or ex.youtube_url or ex.custom_gif_url),
+        'youtube_url': ex.youtube_url,
+        'animation_slug': ex.animation_slug,
+        'media_status': ex.media_status or 'none',
+    }
+
+
+def _food_similar_dict(food: Food, reason: str, score: float) -> dict:
+    return {
+        'id': food.id,
+        'name': food.name,
+        'brand': food.brand,
+        'kcal': food.kcal,
+        'proteins': food.proteins,
+        'carbs': food.carbs,
+        'lipids': food.lipids,
+        'reason': reason,
+        'score': round(score, 1),
+        'is_personal': food.owner_id is not None,
+    }
+
+
+def _find_similar_bank_items(kind: str, name: str, *, muscle_group=None, brand=None, exclude_id=None, limit=10):
+    """Entrées déjà en banque (surtout communes) proches du nom proposé — aide Superadmin."""
+    name = _public_name_from_personal(name or '')
+    if not name:
+        return []
+    tokens = sorted(_bank_name_tokens(name), key=len, reverse=True)[:5]
+    results: list[dict] = []
+    seen: set[int] = set()
+    if exclude_id is not None:
+        seen.add(int(exclude_id))
+
+    def push(item: dict):
+        iid = item['id']
+        if iid in seen:
+            return
+        seen.add(iid)
+        results.append(item)
+
+    if kind == 'exercise':
+        common = Exercise.query.filter(Exercise.owner_id.is_(None))
+        if exclude_id is not None:
+            common = common.filter(Exercise.id != exclude_id)
+
+        name_conds = [Exercise.name.ilike(f'%{name}%')]
+        for t in tokens:
+            if len(t) >= 3:
+                name_conds.append(Exercise.name.ilike(f'%{t}%'))
+        candidates = {
+            ex.id: ex for ex in common.filter(db.or_(*name_conds)).limit(80).all()
+        }
+
+        scored = []
+        for ex in candidates.values():
+            score = _bank_name_similarity(name, ex.name)
+            if score < 28:
+                continue
+            reason = 'exact' if score >= 99.5 else 'close'
+            if muscle_group and ex.muscle_group == muscle_group:
+                score = min(100.0, score + 8)
+            scored.append((score, reason, ex))
+        scored.sort(key=lambda x: (-x[0], x[2].name.lower()))
+        for score, reason, ex in scored[:limit]:
+            push(_exercise_similar_dict(ex, reason, score))
+
+        # Contexte même muscle (catalogue existant), même si le nom diffère
+        if muscle_group and len(results) < limit:
+            same = (
+                common.filter(Exercise.muscle_group == muscle_group)
+                .order_by(Exercise.name.asc())
+                .limit(24)
+                .all()
+            )
+            for ex in same:
+                if len(results) >= limit:
+                    break
+                score = _bank_name_similarity(name, ex.name)
+                push(_exercise_similar_dict(ex, 'same_muscle', max(score, 10.0)))
+
+    else:
+        common = Food.query.filter(Food.owner_id.is_(None))
+        if exclude_id is not None:
+            common = common.filter(Food.id != exclude_id)
+        name_conds = [Food.name.ilike(f'%{name}%')]
+        for t in tokens:
+            if len(t) >= 3:
+                name_conds.append(Food.name.ilike(f'%{t}%'))
+        if brand:
+            name_conds.append(Food.brand.ilike(f'%{brand}%'))
+        candidates = {
+            f.id: f for f in common.filter(db.or_(*name_conds)).limit(80).all()
+        }
+        scored = []
+        for food in candidates.values():
+            score = _bank_name_similarity(name, food.name)
+            if brand and food.brand and brand.lower() in (food.brand or '').lower():
+                score = min(100.0, score + 12)
+            if score < 28:
+                continue
+            reason = 'exact' if score >= 99.5 else 'close'
+            scored.append((score, reason, food))
+        scored.sort(key=lambda x: (-x[0], x[2].name.lower()))
+        for score, reason, food in scored[:limit]:
+            push(_food_similar_dict(food, reason, score))
+
+    return results[:limit]
+
+
+
 def _queue_promote_to_common(kind, target, requester):
     """Crée (ou réutilise) une demande Superadmin pour publier une entrée perso en commune."""
     if target is None or getattr(target, 'owner_id', None) is None:
@@ -1993,6 +2154,332 @@ def delete_exercise_entry(entry_id):
     return jsonify({'ok': True})
 
 
+# ---------------------------------------------------- PROGRAM IMPORT (AI) -
+
+def _find_import_exercise_candidates(name: str, *, muscle_group=None, coach_id=None, limit=5):
+    """Commun + perso coach, triés par score (seuil un peu plus strict pour l'UI Oui/Non)."""
+    from app.program_import import normalize_muscle
+    muscle = normalize_muscle(muscle_group) or muscle_group
+    common = _find_similar_bank_items('exercise', name, muscle_group=muscle, limit=limit)
+    results = list(common)
+    seen = {r['id'] for r in results}
+    if coach_id is not None:
+        personal = Exercise.query.filter(Exercise.owner_id == int(coach_id)).all()
+        scored = []
+        for ex in personal:
+            score = _bank_name_similarity(name, _public_name_from_personal(ex.name))
+            if score < 35:
+                continue
+            if muscle and ex.muscle_group == muscle:
+                score = min(100.0, score + 8)
+            scored.append((score, ex))
+        scored.sort(key=lambda x: (-x[0], x[1].name.lower()))
+        for score, ex in scored:
+            if ex.id in seen:
+                continue
+            results.append(_exercise_similar_dict(ex, 'personal', score))
+            seen.add(ex.id)
+            if len(results) >= limit:
+                break
+    results.sort(key=lambda r: (-float(r.get('score') or 0), (r.get('name') or '').lower()))
+    return results[:limit]
+
+
+def _enrich_match_items(match_items: list, coach_id: int) -> list:
+    for item in match_items:
+        if item.get('resolution'):
+            continue
+        cands = _find_import_exercise_candidates(
+            item.get('source_name') or '',
+            muscle_group=item.get('muscle'),
+            coach_id=coach_id,
+            limit=5,
+        )
+        item['candidates'] = cands
+        suggested = None
+        if cands and float(cands[0].get('score') or 0) >= 55:
+            suggested = cands[0]
+        item['suggested'] = suggested
+    return match_items
+
+
+def _load_owned_import_job(job_id: str):
+    from app.program_import import load_job
+    meta = load_job(job_id)
+    if not meta:
+        return None, (jsonify({'error': 'Import introuvable'}), 404)
+    user = request.current_user
+    if user.role == 'coach' and int(meta.get('coach_id') or 0) != int(user.id):
+        return None, (jsonify({'error': 'Accès refusé'}), 403)
+    if user.role not in ('coach', 'admin'):
+        return None, (jsonify({'error': 'Réservé au coach'}), 403)
+    return meta, None
+
+
+@api_bp.post('/coach/program-imports')
+@coach_required
+def create_program_import():
+    """Upload Excel/CSV/PDF → job + détection onglets/pages."""
+    from app.program_import import create_upload_job, public_job_view
+    user = request.current_user
+    f = (
+        request.files.get('file')
+        or request.files.get('document')
+        or request.files.get('program')
+    )
+    if not f or not getattr(f, 'filename', None):
+        return jsonify({'error': 'Fichier requis (Excel, CSV ou PDF)'}), 400
+    raw = f.read()
+    try:
+        meta = create_upload_job(coach_id=user.id, filename=f.filename, file_bytes=raw)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify(public_job_view(meta)), 201
+
+
+@api_bp.get('/coach/program-imports/<job_id>')
+@coach_required
+def get_program_import(job_id):
+    from app.program_import import public_job_view
+    meta, err = _load_owned_import_job(job_id)
+    if err:
+        return err
+    return jsonify(public_job_view(meta))
+
+
+@api_bp.post('/coach/program-imports/<job_id>/parse')
+@coach_required
+def parse_program_import(job_id):
+    """Claude → draft Farmness + file de matching Oui/Non."""
+    from app.program_import import (
+        build_extract_payload, build_match_items, call_claude_parse,
+        public_job_view, save_job,
+    )
+    meta, err = _load_owned_import_job(job_id)
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    sheet = (data.get('sheet') or data.get('selected_sheet') or '').strip() or None
+    page = data.get('page') if 'page' in data else data.get('selected_page')
+    if page is not None:
+        try:
+            page = int(page)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'page doit être un entier (0-based)'}), 400
+    hint = (data.get('hint') or '').strip()[:2000] or None
+
+    sheets = meta.get('sheets') or []
+    if sheets and len(sheets) > 1 and not sheet:
+        return jsonify({
+            'error': 'Plusieurs onglets — précise sheet',
+            'sheets': sheets,
+            'code': 'SHEET_REQUIRED',
+        }), 400
+    page_count = meta.get('page_count')
+    if page_count and int(page_count) > 1 and page is None and meta.get('ext') == '.pdf':
+        # Autorisé : tout le PDF ; le sélecteur UI est optionnel
+        pass
+
+    try:
+        extract = build_extract_payload(meta, sheet=sheet, page=page)
+        draft = call_claude_parse(
+            extract=extract, hint=hint, filename=meta.get('filename') or 'upload',
+        )
+    except RuntimeError as exc:
+        return jsonify({'error': str(exc)}), 503
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception as exc:
+        current_app.logger.exception('program import parse failed')
+        return jsonify({'error': f'Analyse IA impossible : {exc}'}), 502
+
+    if not draft.get('sessions'):
+        return jsonify({
+            'error': 'Aucun exercice musculation détecté. Change d’onglet/page ou précise un hint.',
+            'warnings': draft.get('warnings') or [],
+        }), 422
+
+    match_items = _enrich_match_items(build_match_items(draft), meta['coach_id'])
+    meta['selected_sheet'] = extract.get('selected_sheet')
+    meta['selected_page'] = extract.get('selected_page')
+    meta['hint'] = hint
+    meta['draft'] = draft
+    meta['match_items'] = match_items
+    meta['warnings'] = draft.get('warnings') or []
+    meta['status'] = 'parsed'
+    save_job(meta)
+    return jsonify(public_job_view(meta))
+
+
+@api_bp.post('/coach/program-imports/<job_id>/resolve')
+@coach_required
+def resolve_program_import(job_id):
+    """Enregistre les Oui/Non (match existant / créer / choisir un candidat)."""
+    from app.program_import import public_job_view, save_job
+    meta, err = _load_owned_import_job(job_id)
+    if err:
+        return err
+    if meta.get('status') not in ('parsed', 'resolving'):
+        return jsonify({'error': 'Parse le fichier avant de résoudre les exercices'}), 400
+    data = request.get_json(silent=True) or {}
+    resolutions = data.get('resolutions')
+    if not isinstance(resolutions, list) or not resolutions:
+        return jsonify({'error': 'resolutions[] requis'}), 400
+
+    by_key = {m['key']: m for m in (meta.get('match_items') or [])}
+    for row in resolutions:
+        if not isinstance(row, dict):
+            continue
+        key = row.get('key')
+        item = by_key.get(key)
+        if not item:
+            continue
+        action = (row.get('action') or '').strip()
+        if action == 'match':
+            eid = row.get('exercise_id')
+            if eid is None and item.get('suggested'):
+                eid = item['suggested'].get('id')
+            if eid is None:
+                return jsonify({'error': f'exercise_id requis pour {key}'}), 400
+            ex = Exercise.query.get(int(eid))
+            if not ex:
+                return jsonify({'error': f'Exercice {eid} introuvable'}), 404
+            # Visible : commun ou perso du coach
+            if ex.owner_id is not None and ex.owner_id != meta['coach_id'] and request.current_user.role != 'admin':
+                return jsonify({'error': 'Exercice hors de ta banque'}), 403
+            item['resolution'] = {
+                'action': 'match',
+                'exercise_id': ex.id,
+                'name': ex.name,
+                'muscle_group': ex.muscle_group,
+            }
+        elif action == 'create':
+            muscle = row.get('muscle_group') or item.get('muscle')
+            from app.program_import import normalize_muscle
+            muscle = normalize_muscle(muscle) or muscle
+            if muscle not in MUSCLE_GROUPS:
+                return jsonify({'error': f'muscle_group invalide pour {key}'}), 400
+            name = (row.get('name') or item.get('source_name') or '').strip()[:160]
+            if not name:
+                return jsonify({'error': f'name requis pour créer {key}'}), 400
+            item['resolution'] = {
+                'action': 'create',
+                'exercise_id': None,
+                'name': name,
+                'muscle_group': muscle,
+            }
+        else:
+            return jsonify({'error': f'action invalide pour {key} (match|create)'}), 400
+
+    meta['match_items'] = list(by_key.values())
+    unresolved = [m for m in meta['match_items'] if not m.get('resolution')]
+    meta['status'] = 'resolved' if not unresolved else 'resolving'
+    save_job(meta)
+    return jsonify(public_job_view(meta))
+
+
+@api_bp.post('/coach/program-imports/<job_id>/commit')
+@coach_required
+def commit_program_import(job_id):
+    """Matérialise un template bibliothèque + crée les exos manquants (promote queue)."""
+    from app.program_import import public_job_view, save_job
+    meta, err = _load_owned_import_job(job_id)
+    if err:
+        return err
+    draft = meta.get('draft') or {}
+    match_items = meta.get('match_items') or []
+    if not draft.get('sessions'):
+        return jsonify({'error': 'Rien à commit — parse d’abord'}), 400
+    unresolved = [m for m in match_items if not m.get('resolution')]
+    if unresolved:
+        return jsonify({
+            'error': f'{len(unresolved)} exercice(s) sans confirmation',
+            'unresolved_keys': [m['key'] for m in unresolved],
+            'code': 'UNRESOLVED',
+        }), 400
+
+    user = request.current_user
+    coach_id = user.id if user.role == 'coach' else int(meta['coach_id'])
+    name_map = {}  # folded source_name → canonical program entry name + muscle
+    created_exercises = []
+    for item in match_items:
+        res = item['resolution']
+        src = item['source_name']
+        if res['action'] == 'match':
+            name_map[src] = {
+                'name': res['name'],
+                'muscle': res.get('muscle_group') or item.get('muscle'),
+            }
+        else:
+            # create personal + queue promote
+            public_name = (res.get('name') or src).strip()
+            muscle = res.get('muscle_group') or item.get('muscle')
+            if muscle not in MUSCLE_GROUPS:
+                return jsonify({'error': f'muscle invalide pour {src}'}), 400
+            personal_name = _ensure_personal_name(public_name, user)
+            existing = Exercise.query.filter_by(name=personal_name).first()
+            if existing:
+                ex = existing
+            else:
+                ex = Exercise(
+                    name=personal_name,
+                    muscle_group=muscle,
+                    owner_id=coach_id,
+                    media_status='none',
+                )
+                db.session.add(ex)
+                db.session.flush()
+                _queue_promote_to_common('exercise', ex, user)
+                created_exercises.append(ex.to_dict())
+            name_map[src] = {'name': ex.name, 'muscle': ex.muscle_group}
+
+    program_name = (draft.get('program_name') or 'Programme importé').strip()[:128]
+    program = Program(
+        name=program_name,
+        athlete_id=None,
+        coach_id=coach_id,
+        is_active=False,
+        is_template=True,
+    )
+    db.session.add(program)
+    db.session.flush()
+
+    for sess in draft['sessions']:
+        session_obj = ProgramSession(
+            program_id=program.id,
+            day_of_week=int(sess['day_of_week']),
+            session_name=(sess.get('session_name') or None),
+        )
+        db.session.add(session_obj)
+        db.session.flush()
+        for pos, ex in enumerate(sess.get('exercises') or [], start=1):
+            src = ex.get('name') or ''
+            mapped = name_map.get(src) or {'name': src, 'muscle': ex.get('muscle')}
+            db.session.add(ExerciseEntry(
+                session_id=session_obj.id,
+                position=pos,
+                name=mapped['name'],
+                sets=ex.get('sets'),
+                reps=ex.get('reps'),
+                rest=ex.get('rest'),
+                intensification=ex.get('intensification'),
+                muscle=mapped.get('muscle') or ex.get('muscle'),
+                remark=ex.get('remark'),
+            ))
+
+    db.session.commit()
+    meta['status'] = 'committed'
+    meta['program_id'] = program.id
+    save_job(meta)
+    return jsonify({
+        'ok': True,
+        'program': program.to_dict(with_sessions=True),
+        'created_exercises': created_exercises,
+        'import': public_job_view(meta),
+    }), 201
+
+
+
 # ---------------------------------------------------------- EXERCISE BANK -
 
 @api_bp.get('/exercise-bank')
@@ -2538,6 +3025,7 @@ def last_performance_for_exercises():
 @api_bp.post('/performance')
 @login_required
 def create_performance():
+    """Crée une série — idempotent : même athlète/date/exo/n° (et session) → update."""
     data = request.get_json(silent=True) or {}
     athlete_id = request.current_user.id if request.current_user.role == 'athlete' else data.get('athlete_id')
     exercise = (data.get('exercise') or '').strip()
@@ -2546,12 +3034,52 @@ def create_performance():
     if not _can_manage_athlete(athlete_id):
         return _deny_manage(athlete_id)
 
+    entry_date = _parse_date(data.get('entry_date'), date.today())
+    series_number = data.get('series_number')
+    session_id = data.get('program_session_id')
+    existing = None
+    if series_number is not None:
+        q = PerformanceEntry.query.filter_by(
+            athlete_id=athlete_id,
+            entry_date=entry_date,
+            exercise=exercise,
+            series_number=series_number,
+        )
+        if session_id is not None:
+            existing = (
+                q.filter(PerformanceEntry.program_session_id == session_id)
+                .order_by(PerformanceEntry.id.desc())
+                .first()
+            )
+            if existing is None:
+                existing = (
+                    q.filter(PerformanceEntry.program_session_id.is_(None))
+                    .order_by(PerformanceEntry.id.desc())
+                    .first()
+                )
+        else:
+            existing = q.order_by(PerformanceEntry.id.desc()).first()
+
+    if existing is not None:
+        if 'reps' in data:
+            existing.reps = data.get('reps')
+        if 'load' in data:
+            existing.load = data.get('load')
+        if 'rpe' in data:
+            existing.rpe = data.get('rpe')
+        if 'notes' in data:
+            existing.notes = data.get('notes')
+        if session_id is not None:
+            existing.program_session_id = session_id
+        db.session.commit()
+        return jsonify(existing.to_dict()), 200
+
     entry = PerformanceEntry(
         athlete_id=athlete_id,
-        entry_date=_parse_date(data.get('entry_date'), date.today()),
-        program_session_id=data.get('program_session_id'),
+        entry_date=entry_date,
+        program_session_id=session_id,
         exercise=exercise,
-        series_number=data.get('series_number'),
+        series_number=series_number,
         reps=data.get('reps'),
         load=data.get('load'),
         rpe=data.get('rpe'),
@@ -2855,9 +3383,26 @@ def _health_metrics_for_range(athlete_id, start, end):
     }
 
 
+def _dedupe_perf_series(perf):
+    """Garde la ligne au plus grand id par (athlète, date, exo, n° série, session)."""
+    best = {}
+    for e in perf:
+        key = (
+            getattr(e, 'athlete_id', None),
+            getattr(e, 'entry_date', None),
+            (getattr(e, 'exercise', None) or ''),
+            getattr(e, 'series_number', None),
+            getattr(e, 'program_session_id', None),
+        )
+        prev = best.get(key)
+        if prev is None or (getattr(e, 'id', 0) or 0) > (getattr(prev, 'id', 0) or 0):
+            best[key] = e
+    return list(best.values())
+
+
 def _muscle_tonnage_from_rows(perf, muscle_by_name):
     muscle_totals, exercise_totals = {}, {}
-    for e in perf:
+    for e in _dedupe_perf_series(perf):
         if e.reps is None or e.load is None:
             continue
         muscle = muscle_by_name.get(e.exercise, 'Autre') or 'Autre'
@@ -4318,6 +4863,7 @@ def _avg(values):
 
 
 def _weekly_metrics_from_rows(journal, perf):
+    perf = _dedupe_perf_series(perf)
     tonnage = sum((e.reps or 0) * (e.load or 0) for e in perf)
     sessions = len({e.entry_date for e in perf})
 

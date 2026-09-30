@@ -15,3 +15,8 @@ python-dotenv
 stripe
 
 pytest==8.3.3
+
+anthropic>=0.40.0
+openpyxl>=3.1.5
+pypdf>=5.0.0
+
