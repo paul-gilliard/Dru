@@ -86,10 +86,16 @@ def create_app():
     with app.app_context():
         # En production, supprimer et recréer les tables si nécessaire
         # (à utiliser une seule fois lors du nettoyage)
-        if os.environ.get('RECREATE_DB') == 'true':
+        # SÉCURITÉ : exige RECREATE_DB=true ET CONFIRM_RECREATE_DB=I_UNDERSTAND
+        if (
+            os.environ.get('RECREATE_DB') == 'true'
+            and os.environ.get('CONFIRM_RECREATE_DB') == 'I_UNDERSTAND'
+        ):
             print("⚠️ Dropping all tables...")
             db.drop_all()
             print("✓ Dropped")
+        elif os.environ.get('RECREATE_DB') == 'true':
+            print("⚠️ RECREATE_DB ignoré — définir aussi CONFIRM_RECREATE_DB=I_UNDERSTAND")
         
         print("Creating database tables...")
         from app import models as _models  # noqa: F401 — register models (incl. SubscriptionPayment)
@@ -106,22 +112,25 @@ def create_app():
                 raise
         
         # Fix Food table schema if needed (proteins and lipids should be nullable)
+        # NE PLUS DROP TABLE — risque de wipe banque aliments en prod.
+        # Migration soft : ALTER NULL si besoin (une fois).
         try:
             from sqlalchemy import inspect
-            from app.models import Food
             inspector = inspect(db.engine)
-            food_columns = {col['name']: col for col in inspector.get_columns('food')}
-            
-            # Check if proteins column is nullable (it should be)
-            if 'proteins' in food_columns and not food_columns['proteins']['nullable']:
-                print("\n🔧 Fixing Food table schema (proteins/lipids should be nullable)...")
-                db.session.execute(db.text("DROP TABLE IF EXISTS food"))
-                db.session.commit()
-                Food.__table__.create(db.engine)
-                db.session.commit()
-                print("✓ Food table schema fixed\n")
+            if 'food' in inspector.get_table_names():
+                food_columns = {col['name']: col for col in inspector.get_columns('food')}
+                if 'proteins' in food_columns and not food_columns['proteins']['nullable']:
+                    print("\n🔧 Soft-fix Food.proteins → NULL...")
+                    db.session.execute(db.text('ALTER TABLE food MODIFY COLUMN proteins FLOAT NULL'))
+                    db.session.commit()
+                if 'lipids' in food_columns and not food_columns['lipids']['nullable']:
+                    print("🔧 Soft-fix Food.lipids → NULL...")
+                    db.session.execute(db.text('ALTER TABLE food MODIFY COLUMN lipids FLOAT NULL'))
+                    db.session.commit()
+                    print("✓ Food table schema fixed\n")
         except Exception as e:
             # Silently continue if schema check fails
+            db.session.rollback()
             pass
 
         # Add meal_time columns to meal_plan if they don't exist
@@ -644,8 +653,10 @@ def create_app():
   <h2>9. Transferts hors UE</h2>
   <p>Certains prestataires (notamment Stripe, Google, CDN) peuvent traiter des données depuis des pays hors Union européenne. Dans ce cas, le transfert s’appuie sur les mécanismes prévus par le RGPD (clauses contractuelles types / règles applicables du prestataire) et se limite à ce qui est nécessaire au service.</p>
 
-  <h2>10. Tes droits</h2>
-  <p>Conformément au RGPD, tu peux demander l’accès, la rectification, l’effacement, la limitation, la portabilité (lorsque applicable) ou t’opposer à certains traitements, et retirer ton consentement (Health Connect, YouTube) sans affecter la licéité du traitement avant retrait. Écris à <a href="mailto:paul.gilliard.8@gmail.com">paul.gilliard.8@gmail.com</a>. Tu peux aussi te déconnecter dans l’app. Tu peux introduire une réclamation auprès de la CNIL (<a href="https://www.cnil.fr" rel="noopener">cnil.fr</a>).</p>
+  <h2>10. Tes droits &amp; suppression du compte</h2>
+  <p>Conformément au RGPD, tu peux demander l’accès, la rectification, l’effacement, la limitation, la portabilité (lorsque applicable) ou t’opposer à certains traitements, et retirer ton consentement (Health Connect, YouTube) sans affecter la licéité du traitement avant retrait.</p>
+  <p><strong>Suppression du compte dans l’app :</strong> onglet <em>Plus</em> → <em>Supprimer mon compte</em> → confirme. Effacement définitif du compte et des données associées côté Farmness.</p>
+  <p>Tu peux aussi écrire à <a href="mailto:paul.gilliard.8@gmail.com">paul.gilliard.8@gmail.com</a>. Tu peux introduire une réclamation auprès de la CNIL (<a href="https://www.cnil.fr" rel="noopener">cnil.fr</a>).</p>
 
   <h2>11. Sécurité</h2>
   <p>Authentification JWT, mots de passe hashés, communications HTTPS vers l’API. Aucune sécurité n’est absolue ; signale tout incident suspect au contact ci-dessus.</p>

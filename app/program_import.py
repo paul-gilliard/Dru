@@ -1,6 +1,8 @@
-"""Import de programmes coach depuis Excel / CSV / PDF via Claude.
+"""Import de programmes coach depuis Excel / CSV / PDF / images via Claude.
 
-Jobs stockés sous instance/program_imports/<id>/ (fichier + meta.json).
+Jobs stockés sous instance/program_imports/<id>/ (fichier(s) + meta.json).
+Les captures d'écran sont acceptées, y compris plusieurs images pour un
+même programme (elles sont envoyées dans l'ordre à Claude).
 """
 from __future__ import annotations
 
@@ -16,8 +18,30 @@ from typing import Any
 
 from app.models import MUSCLE_GROUPS
 
-ALLOWED_EXTENSIONS = {'.xlsx', '.xls', '.csv', '.pdf'}
+DOC_EXTENSIONS = {'.xlsx', '.xls', '.csv', '.pdf'}
+IMAGE_MEDIA_TYPES = {
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.jfif': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.gif': 'image/gif',
+    '.bmp': 'image/bmp',
+    '.tif': 'image/tiff',
+    '.tiff': 'image/tiff',
+    '.heic': 'image/heic',
+    '.heif': 'image/heif',
+}
+IMAGE_EXTENSIONS = set(IMAGE_MEDIA_TYPES)
+ALLOWED_EXTENSIONS = DOC_EXTENSIONS | IMAGE_EXTENSIONS
+# Formats acceptés nativement par l'API Anthropic (les autres sont convertis).
+CLAUDE_IMAGE_MEDIA = {'image/jpeg', 'image/png', 'image/gif', 'image/webp'}
+
 MAX_UPLOAD_BYTES = 12 * 1024 * 1024
+MAX_TOTAL_BYTES = 40 * 1024 * 1024
+MAX_IMAGES = 12
+# Au-delà, Claude n'y gagne rien et le coût de tokens explose.
+MAX_IMAGE_EDGE = 1800
 CLAUDE_MODEL = os.environ.get('ANTHROPIC_PROGRAM_IMPORT_MODEL', 'claude-sonnet-4-20250514')
 
 MUSCLE_ALIASES = {
@@ -48,10 +72,15 @@ DAY_ALIASES = {
     'dimanche': 6, 'sunday': 6, 'dim': 6, 'sun': 6,
 }
 
-SYSTEM_PROMPT = """Tu es un expert musculation qui convertit des programmes d'entraînement (Excel, CSV, PDF)
-vers le format Farmness. Extrais UNIQUEMENT les séances de musculation (ignore diètes, journaux, métriques).
+SYSTEM_PROMPT = """Tu es un expert musculation qui convertit des programmes d'entraînement (Excel, CSV, PDF,
+photos ou captures d'écran) vers le format Farmness. Extrais UNIQUEMENT les séances de musculation
+(ignore diètes, journaux, métriques).
 
 Règles:
+- Si plusieurs images sont fournies, elles forment UN SEUL programme découpé en morceaux : lis-les dans l'ordre,
+  fusionne les séances, et ne duplique pas une séance qui apparaît à cheval sur deux images.
+- Sur une image, respecte la structure visuelle (colonnes, blocs de couleur, en-têtes de séance).
+  Si un texte est illisible, ne l'invente pas : mets-le dans warnings.
 - day_of_week: 0=lundi … 6=dimanche. Si "Jour 1/2/3" sans jour nommé, mappe 0,1,2… en gardant l'ordre.
 - Muscle Farmness UNIQUEMENT parmi: ABDOS, ADDUCTEUR, AVANT-BRAS, BICEPS, DOS, EPAULES, FESSIERS, ISCHIO, LEGS, MOLLET, PEC, QUAD, TRICEPS.
   Mappe Pectoraux→PEC, Deltoïde/Épaules→EPAULES, etc. Si absent, déduis du mouvement.
@@ -95,8 +124,16 @@ def _imports_root() -> str:
     return root
 
 
+def _assert_safe_job_id(job_id: str) -> str:
+    jid = (job_id or '').strip()
+    if not re.fullmatch(r'[a-f0-9]{32}', jid):
+        raise ValueError('import id invalide')
+    return jid
+
+
 def _job_dir(job_id: str) -> str:
-    path = os.path.join(_imports_root(), job_id)
+    jid = _assert_safe_job_id(job_id)
+    path = os.path.join(_imports_root(), jid)
     os.makedirs(path, exist_ok=True)
     return path
 
@@ -111,7 +148,11 @@ def _file_path(job_id: str, filename: str) -> str:
 
 
 def load_job(job_id: str) -> dict | None:
-    path = _meta_path(job_id)
+    try:
+        jid = _assert_safe_job_id(job_id)
+    except ValueError:
+        return None
+    path = os.path.join(_imports_root(), jid, 'meta.json')
     if not os.path.isfile(path):
         return None
     with open(path, 'r', encoding='utf-8') as fh:
@@ -234,38 +275,153 @@ def pdf_page_text(file_bytes: bytes, page_index: int | None = None, max_chars: i
     return out[:max_chars]
 
 
-def create_upload_job(*, coach_id: int, filename: str, file_bytes: bytes) -> dict:
-    if len(file_bytes) > MAX_UPLOAD_BYTES:
-        raise ValueError(f'Fichier trop volumineux (max {MAX_UPLOAD_BYTES // (1024 * 1024)} Mo)')
-    ext = _ext_of(filename)
-    if ext not in ALLOWED_EXTENSIONS:
-        raise ValueError('Formats acceptés : Excel (.xlsx/.xls), CSV, PDF')
+def _sniff_image_media(raw: bytes) -> str | None:
+    """Détecte le type réel : les screens arrivent souvent avec une extension fausse."""
+    if raw[:8] == b'\x89PNG\r\n\x1a\n':
+        return 'image/png'
+    if raw[:3] == b'\xff\xd8\xff':
+        return 'image/jpeg'
+    if raw[:6] in (b'GIF87a', b'GIF89a'):
+        return 'image/gif'
+    if raw[:4] == b'RIFF' and raw[8:12] == b'WEBP':
+        return 'image/webp'
+    if raw[:2] == b'BM':
+        return 'image/bmp'
+    if raw[:4] in (b'II*\x00', b'MM\x00*'):
+        return 'image/tiff'
+    if raw[4:12] in (b'ftypheic', b'ftypheix', b'ftyphevc', b'ftypmif1', b'ftypmsf1'):
+        return 'image/heic'
+    return None
+
+
+def normalize_image(raw: bytes, ext: str) -> tuple[bytes, str]:
+    """Ramène n'importe quelle image à un format lisible par Claude, redimensionnée."""
+    # L'extension seule ne prouve rien : on ne se rabat que sur la signature binaire.
+    media = _sniff_image_media(raw)
+    try:
+        from PIL import Image
+        try:
+            import pillow_heif
+            pillow_heif.register_heif_opener()
+        except Exception:
+            pass
+        img = Image.open(io.BytesIO(raw))
+        img.load()
+        if img.mode not in ('RGB', 'L'):
+            img = img.convert('RGB')
+        width, height = img.size
+        longest = max(width, height)
+        if longest > MAX_IMAGE_EDGE:
+            scale = MAX_IMAGE_EDGE / float(longest)
+            img = img.resize((max(1, int(width * scale)), max(1, int(height * scale))), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format='JPEG', quality=88, optimize=True)
+        return buf.getvalue(), 'image/jpeg'
+    except Exception:
+        if media in CLAUDE_IMAGE_MEDIA:
+            return raw, media
+        raise ValueError(
+            'Image illisible par le serveur — convertis-la en JPEG ou PNG et réessaie'
+        )
+
+
+def create_upload_job(
+    *,
+    coach_id: int,
+    files: list[tuple[str, bytes]] | None = None,
+    filename: str | None = None,
+    file_bytes: bytes | None = None,
+) -> dict:
+    """Crée un job d'import. `files` = [(nom, contenu)] ; multi-fichiers réservé aux images."""
+    items: list[tuple[str, bytes]] = list(files or [])
+    if not items and filename is not None and file_bytes is not None:
+        items = [(filename, file_bytes)]
+    items = [(name, blob) for name, blob in items if blob]
+    if not items:
+        raise ValueError('Aucun fichier reçu')
+
+    total = 0
+    for name, blob in items:
+        if len(blob) > MAX_UPLOAD_BYTES:
+            raise ValueError(f'"{name}" trop volumineux (max {MAX_UPLOAD_BYTES // (1024 * 1024)} Mo par fichier)')
+        total += len(blob)
+    if total > MAX_TOTAL_BYTES:
+        raise ValueError(f'Import trop volumineux (max {MAX_TOTAL_BYTES // (1024 * 1024)} Mo au total)')
+
+    exts: list[str] = []
+    for name, blob in items:
+        ext = _ext_of(name)
+        if ext not in ALLOWED_EXTENSIONS:
+            # Les captures partagées arrivent parfois sans extension fiable.
+            sniffed = _sniff_image_media(blob)
+            ext = next((e for e, m in IMAGE_MEDIA_TYPES.items() if m == sniffed), '') if sniffed else ''
+        if ext not in ALLOWED_EXTENSIONS:
+            raise ValueError(
+                f'Format non géré pour "{name}". Accepté : Excel (.xlsx/.xls), CSV, PDF, images (JPG, PNG, HEIC…)'
+            )
+        exts.append(ext)
+
+    images_only = all(ext in IMAGE_EXTENSIONS for ext in exts)
+    if len(items) > 1 and not images_only:
+        raise ValueError('Plusieurs fichiers à la fois : uniquement pour des images / captures d\'écran')
+    if images_only and len(items) > MAX_IMAGES:
+        raise ValueError(f'Maximum {MAX_IMAGES} images par import')
 
     job_id = uuid.uuid4().hex
-    stored_name = f'upload{ext}'
-    path = _file_path(job_id, stored_name)
-    with open(path, 'wb') as fh:
-        fh.write(file_bytes)
-
+    stored_files: list[dict] = []
     sheets: list[str] = []
     page_count: int | None = None
-    if ext in ('.xlsx', '.xls'):
-        try:
-            sheets = detect_workbook_sheets(file_bytes)
-        except Exception as exc:
-            raise ValueError(f'Excel illisible : {exc}') from exc
-    elif ext == '.pdf':
-        try:
-            page_count = detect_pdf_page_count(file_bytes)
-        except Exception as exc:
-            raise ValueError(f'PDF illisible : {exc}') from exc
+
+    if images_only:
+        for idx, (name, blob) in enumerate(items):
+            data, media_type = normalize_image(blob, exts[idx])
+            suffix = '.jpg' if media_type == 'image/jpeg' else (
+                '.png' if media_type == 'image/png' else exts[idx] or '.img'
+            )
+            stored = f'page_{idx + 1}{suffix}'
+            with open(_file_path(job_id, stored), 'wb') as fh:
+                fh.write(data)
+            stored_files.append({
+                'name': name,
+                'stored': stored,
+                'media_type': media_type,
+                'bytes': len(data),
+            })
+        kind = 'images'
+        ext = exts[0]
+        display_name = items[0][0] if len(items) == 1 else f'{len(items)} images'
+    else:
+        name, blob = items[0]
+        ext = exts[0]
+        stored = f'upload{ext}'
+        with open(_file_path(job_id, stored), 'wb') as fh:
+            fh.write(blob)
+        stored_files.append({'name': name, 'stored': stored, 'media_type': None, 'bytes': len(blob)})
+        display_name = name
+        if ext in ('.xlsx', '.xls'):
+            kind = 'workbook'
+            try:
+                sheets = detect_workbook_sheets(blob)
+            except Exception as exc:
+                raise ValueError(f'Excel illisible : {exc}') from exc
+        elif ext == '.csv':
+            kind = 'csv'
+        else:
+            kind = 'pdf'
+            try:
+                page_count = detect_pdf_page_count(blob)
+            except Exception as exc:
+                raise ValueError(f'PDF illisible : {exc}') from exc
 
     meta = {
         'id': job_id,
         'coach_id': int(coach_id),
-        'filename': filename,
-        'stored_name': stored_name,
+        'filename': display_name,
+        'stored_name': stored_files[0]['stored'],
         'ext': ext,
+        'kind': kind,
+        'files': stored_files,
+        'image_count': len(stored_files) if kind == 'images' else 0,
         'sheets': sheets,
         'page_count': page_count,
         'status': 'uploaded',
@@ -283,17 +439,63 @@ def create_upload_job(*, coach_id: int, filename: str, file_bytes: bytes) -> dic
     return meta
 
 
+def job_kind(meta: dict) -> str:
+    kind = (meta.get('kind') or '').strip()
+    if kind:
+        return kind
+    ext = meta.get('ext') or ''
+    if ext in IMAGE_EXTENSIONS:
+        return 'images'
+    if ext in ('.xlsx', '.xls'):
+        return 'workbook'
+    if ext == '.csv':
+        return 'csv'
+    return 'pdf'
+
+
 def read_job_bytes(meta: dict) -> bytes:
     path = _file_path(meta['id'], meta['stored_name'])
     with open(path, 'rb') as fh:
         return fh.read()
 
 
+def read_job_images(meta: dict) -> list[dict]:
+    out: list[dict] = []
+    for entry in meta.get('files') or []:
+        path = _file_path(meta['id'], entry.get('stored') or '')
+        if not os.path.isfile(path):
+            continue
+        with open(path, 'rb') as fh:
+            raw = fh.read()
+        out.append({
+            'name': entry.get('name'),
+            'media_type': entry.get('media_type') or _sniff_image_media(raw) or 'image/jpeg',
+            'bytes': raw,
+        })
+    return out
+
+
 def build_extract_payload(meta: dict, *, sheet: str | None, page: int | None) -> dict[str, Any]:
-    """Prépare le contenu à envoyer à Claude (texte et/ou PDF natif)."""
+    """Prépare le contenu à envoyer à Claude (texte, PDF natif ou images)."""
+    kind = job_kind(meta)
+    hint_parts = []
+
+    if kind == 'images':
+        images = read_job_images(meta)
+        if not images:
+            raise ValueError('images introuvables pour cet import')
+        return {
+            'mode': 'images',
+            'selected_sheet': None,
+            'selected_page': None,
+            'text': None,
+            'file_bytes': None,
+            'media_type': None,
+            'images': images,
+        }
+
     file_bytes = read_job_bytes(meta)
     ext = meta['ext']
-    hint_parts = []
 
     if ext in ('.xlsx', '.xls'):
         sheets = meta.get('sheets') or []
@@ -440,7 +642,27 @@ def call_claude_parse(*, extract: dict, hint: str | None, filename: str) -> dict
         "Extrais le programme musculation au format JSON demandé."
     )
 
-    if extract['mode'] == 'pdf' and extract.get('file_bytes'):
+    if extract['mode'] == 'images' and extract.get('images'):
+        images = extract['images']
+        user_bits.append({
+            'type': 'text',
+            'text': (
+                f"{preamble}\n\n"
+                f"{len(images)} image(s) fournie(s), dans l'ordre. "
+                "Elles décrivent un seul et même programme."
+            ),
+        })
+        for idx, img in enumerate(images):
+            user_bits.append({'type': 'text', 'text': f'Image {idx + 1}/{len(images)} :'})
+            user_bits.append({
+                'type': 'image',
+                'source': {
+                    'type': 'base64',
+                    'media_type': img['media_type'],
+                    'data': base64.standard_b64encode(img['bytes']).decode('ascii'),
+                },
+            })
+    elif extract['mode'] == 'pdf' and extract.get('file_bytes'):
         b64 = base64.standard_b64encode(extract['file_bytes']).decode('ascii')
         user_bits.append({
             'type': 'document',
@@ -505,6 +727,9 @@ def public_job_view(meta: dict, *, include_draft: bool = True) -> dict:
         'id': meta['id'],
         'filename': meta.get('filename'),
         'ext': meta.get('ext'),
+        'kind': job_kind(meta),
+        'image_count': int(meta.get('image_count') or 0),
+        'files': [{'name': f.get('name')} for f in (meta.get('files') or [])],
         'sheets': meta.get('sheets') or [],
         'page_count': meta.get('page_count'),
         'status': meta.get('status'),

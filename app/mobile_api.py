@@ -24,6 +24,23 @@ import json
 
 api_bp = Blueprint('api', __name__)
 
+_muscle_map_cache = {"at": 0.0, "data": None}
+
+
+def _exercise_muscle_by_name():
+    """Map nom->muscle with 60s cache (avoid full Exercise.load on every stats call)."""
+    import time
+    now = time.time()
+    cached = _muscle_map_cache.get("data")
+    if cached is not None and (now - float(_muscle_map_cache.get("at") or 0)) < 60:
+        return cached
+    rows = db.session.query(Exercise.name, Exercise.muscle_group).all()
+    data = {name: muscle for name, muscle in rows}
+    _muscle_map_cache["at"] = now
+    _muscle_map_cache["data"] = data
+    return data
+
+
 # Seed démo (~400 perfs + journal) : ne jamais bloquer deux fois le même coach.
 _demo_seed_lock = threading.Lock()
 _demo_seed_in_flight = set()
@@ -1430,7 +1447,13 @@ def unlink_athlete(athlete_id):
 @coach_required
 def list_coach_program_library():
     user = request.current_user
-    _backfill_coach_library(user)
+    # Backfill is expensive: only on demand (?backfill=1) or empty library
+    want_backfill = str(request.args.get('backfill') or '').lower() in ('1', 'true', 'yes')
+    q_check = Program.query.filter_by(is_template=True)
+    if user.role == 'coach':
+        q_check = q_check.filter_by(coach_id=user.id)
+    if want_backfill or q_check.limit(1).first() is None:
+        _backfill_coach_library(user)
     q = Program.query.filter_by(is_template=True)
     if user.role == 'coach':
         q = q.filter_by(coach_id=user.id)
@@ -1466,7 +1489,12 @@ def assign_library_program(program_id):
 @coach_required
 def list_coach_meal_plan_library():
     user = request.current_user
-    _backfill_coach_library(user)
+    want_backfill = str(request.args.get('backfill') or '').lower() in ('1', 'true', 'yes')
+    q_check = MealPlan.query.filter_by(is_template=True)
+    if user.role == 'coach':
+        q_check = q_check.filter_by(coach_id=user.id)
+    if want_backfill or q_check.limit(1).first() is None:
+        _backfill_coach_library(user)
     q = MealPlan.query.filter_by(is_template=True)
     if user.role == 'coach':
         q = q.filter_by(coach_id=user.id)
@@ -2219,19 +2247,17 @@ def _load_owned_import_job(job_id: str):
 @api_bp.post('/coach/program-imports')
 @coach_required
 def create_program_import():
-    """Upload Excel/CSV/PDF → job + détection onglets/pages."""
+    """Upload Excel/CSV/PDF/images → job + détection onglets/pages."""
     from app.program_import import create_upload_job, public_job_view
     user = request.current_user
-    f = (
-        request.files.get('file')
-        or request.files.get('document')
-        or request.files.get('program')
-    )
-    if not f or not getattr(f, 'filename', None):
-        return jsonify({'error': 'Fichier requis (Excel, CSV ou PDF)'}), 400
-    raw = f.read()
+    uploaded = []
+    for field in ('files', 'file', 'images', 'document', 'program'):
+        uploaded.extend(request.files.getlist(field))
+    items = [(f.filename, f.read()) for f in uploaded if getattr(f, 'filename', None)]
+    if not items:
+        return jsonify({'error': 'Fichier requis (Excel, CSV, PDF ou image)'}), 400
     try:
-        meta = create_upload_job(coach_id=user.id, filename=f.filename, file_bytes=raw)
+        meta = create_upload_job(coach_id=user.id, files=items)
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
     return jsonify(public_job_view(meta)), 201
@@ -3119,7 +3145,7 @@ def stats_tonnage_by_muscle():
                .filter(PerformanceEntry.athlete_id == athlete_id,
                        PerformanceEntry.entry_date >= cutoff)
                .all())
-    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
+    muscle_by_name = _exercise_muscle_by_name()
 
     totals = {}
     trend = {}
@@ -3458,7 +3484,7 @@ def stats_weekly_comparison():
     health_a = _health_metrics_for_range(athlete_id, a_start, a_end)
     health_b = _health_metrics_for_range(athlete_id, b_start, b_end)
 
-    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
+    muscle_by_name = _exercise_muscle_by_name()
     muscle_a, ex_a = _muscle_tonnage_for_range(athlete_id, a_start, a_end, muscle_by_name)
     muscle_b, ex_b = _muscle_tonnage_for_range(athlete_id, b_start, b_end, muscle_by_name)
     muscle_rows = _build_muscle_rows(muscle_a, ex_a, muscle_b, ex_b)
@@ -3509,7 +3535,7 @@ def stats_weekly_overview():
     if athlete_id is None:
         return jsonify({'error': 'athlete_id requis'}), 400
     weeks = max(1, min(int(request.args.get('weeks', 8)), 24))
-    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
+    muscle_by_name = _exercise_muscle_by_name()
 
     oldest_start, _ = _week_bounds(weeks - 1)
     _, newest_end = _week_bounds(0)
@@ -3589,7 +3615,7 @@ def stats_exercises_by_muscle():
     athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
     if athlete_id is None:
         return jsonify({'error': 'athlete_id requis'}), 400
-    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
+    muscle_by_name = _exercise_muscle_by_name()
     entries = PerformanceEntry.query.filter_by(athlete_id=athlete_id).all()
     ex_meta = {}
     for e in entries:
@@ -3686,7 +3712,7 @@ def stats_series_breakdown():
         group = 'week'
     muscle_filter = (request.args.get('muscle') or '').strip() or None
     exercise_filter = (request.args.get('exercise') or '').strip() or None
-    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
+    muscle_by_name = _exercise_muscle_by_name()
 
     query = PerformanceEntry.query.filter(
         PerformanceEntry.athlete_id == athlete_id,
@@ -3800,7 +3826,7 @@ def stats_coach_bootstrap():
         return jsonify({'error': 'athlete_id requis'}), 400
     days = max(1, min(int(request.args.get('days', 180)), 180))
     weeks = max(1, min(int(request.args.get('weeks', 24)), 24))
-    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
+    muscle_by_name = _exercise_muscle_by_name()
 
     cutoff = date.today() - timedelta(days=days - 1)
     oldest_start, _ = _week_bounds(weeks - 1)
@@ -4766,7 +4792,7 @@ def athlete_weekly_bilan():
         diff = round(cur_v - prev_v, 1) if cur_v is not None and prev_v is not None else None
         metrics.append({'key': key, 'label': label, 'current': cur_v, 'previous': prev_v, 'diff': diff})
 
-    muscle_by_name = {e.name: e.muscle_group for e in Exercise.query.all()}
+    muscle_by_name = _exercise_muscle_by_name()
     muscle_a, ex_a = _muscle_tonnage_from_rows(cur_perf, muscle_by_name)
     muscle_b, ex_b = _muscle_tonnage_from_rows(prev_perf, muscle_by_name)
     muscle_rows = _build_muscle_rows(muscle_a, ex_a, muscle_b, ex_b)

@@ -1,6 +1,9 @@
 """Abonnements Stripe Checkout (live/test via clés env) + suivi paiements admin."""
 from __future__ import annotations
 
+import html as html_lib
+import json
+import re
 from datetime import datetime
 
 import stripe
@@ -604,19 +607,25 @@ def stripe_webhook():
 @billing_bp.get('/billing/return')
 def billing_return_page():
     """Page web après Checkout (ouvre l’app via deep link si possible)."""
-    status = request.args.get('status', 'success')
-    session_id = request.args.get('session_id', '')
+    raw_status = (request.args.get('status') or 'success').strip().lower()
+    status = raw_status if raw_status in ('success', 'cancel') else 'success'
+    session_id = (request.args.get('session_id') or '').strip()
+    # Autorise uniquement un id Checkout Stripe-like (cs_…)
+    if session_id and not re.fullmatch(r'cs_[\w\-]+', session_id):
+        session_id = ''
     deep = f'farmness://subscription?status={status}'
     if session_id:
         deep += f'&session_id={session_id}'
+    deep_esc = html_lib.escape(deep, quote=True)
+    title = 'Paiement reçu' if status == 'success' else 'Paiement annulé'
     html = f"""<!doctype html><html><head><meta charset="utf-8"><title>Farmness</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <style>body{{font-family:system-ui;background:#0D0F12;color:#fff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;text-align:center}}
     a{{color:#5EEAD4}}</style></head><body>
-    <div><h1>{'Paiement reçu' if status == 'success' else 'Paiement annulé'}</h1>
+    <div><h1>{title}</h1>
     <p>Tu peux revenir dans l’application Farmness.</p>
-    <p><a href="{deep}">Ouvrir Farmness</a></p>
-    <script>setTimeout(function(){{window.location="{deep}"}},400);</script>
+    <p><a href="{deep_esc}">Ouvrir Farmness</a></p>
+    <script>setTimeout(function(){{window.location={json.dumps(deep)};}},400);</script>
     </div></body></html>"""
     return html, 200, {'Content-Type': 'text/html; charset=utf-8'}
 
