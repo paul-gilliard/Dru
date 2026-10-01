@@ -20,9 +20,17 @@ from app.auth_security import (
     SEARCH_LIMIT, SEARCH_WINDOW_SEC,
 )
 from app.security_events import log_security_event
+from sqlalchemy.orm import joinedload, selectinload
 import json
 
 api_bp = Blueprint('api', __name__)
+
+
+def _program_tree_query():
+    """Programme + séances + exercices en 3 requêtes au lieu d'un N+1 par séance."""
+    return Program.query.options(
+        selectinload(Program.sessions).selectinload(ProgramSession.exercises)
+    )
 
 _muscle_map_cache = {"at": 0.0, "data": None}
 
@@ -1255,10 +1263,10 @@ def dashboard():
         })
 
     program = (
-        Program.query.filter_by(athlete_id=user.id, is_active=True)
+        _program_tree_query().filter_by(athlete_id=user.id, is_active=True)
         .order_by(Program.updated_at.desc(), Program.created_at.desc())
         .first()
-        or Program.query.filter_by(athlete_id=user.id)
+        or _program_tree_query().filter_by(athlete_id=user.id)
         .order_by(Program.created_at.desc())
         .first()
     )
@@ -1300,7 +1308,10 @@ def dashboard():
                      .order_by(JournalEntry.entry_date.desc()).first())
     today_journal = JournalEntry.query.filter_by(athlete_id=user.id, entry_date=today).first()
     pending_invites = (
-        CoachingInvitation.query.filter(
+        CoachingInvitation.query.options(
+            joinedload(CoachingInvitation.coach),
+            joinedload(CoachingInvitation.athlete),
+        ).filter(
             CoachingInvitation.athlete_id == user.id,
             CoachingInvitation.status == 'pending',
             # Ne pas remonter les demandes initiées par l'athlète (côté coach).
@@ -1919,7 +1930,9 @@ def list_programs():
 @api_bp.get('/programs/<int:program_id>')
 @login_required
 def get_program(program_id):
-    program = Program.query.get_or_404(program_id)
+    program = _program_tree_query().filter_by(id=program_id).first()
+    if program is None:
+        return jsonify({'error': 'programme introuvable'}), 404
     if not _can_manage_athlete(program.athlete_id):
         return _deny_manage(program.athlete_id)
     return jsonify(program.to_dict(with_sessions=True))
@@ -2095,8 +2108,10 @@ def get_session(session_id):
         if not athlete or athlete.coach_id != user.id:
             return jsonify({'error': 'Accès refusé'}), 403
     data = session_obj.to_dict(with_exercises=True)
-    for ex in data.get('exercises') or []:
-        media = _resolve_exercise_media_payload(ex.get('name') or '', user)
+    entries = data.get('exercises') or []
+    media_by_name = _resolve_exercise_media_batch([e.get('name') or '' for e in entries], user)
+    for ex in entries:
+        media = media_by_name.get((ex.get('name') or '').strip()) or {}
         ex['animation_slug'] = media.get('animation_slug')
         ex['youtube_url'] = media.get('youtube_url')
         ex['custom_gif_url'] = media.get('custom_gif_url')
@@ -2742,24 +2757,97 @@ def _find_personal_exercise_for_media(name, public_name, user):
     return None
 
 
-def _resolve_exercise_media_payload(name, user):
-    from app.exercise_animation_map import slug_for_exercise_name
-    from app.exercise_media import (
-        empty_media_dict, media_dict_from_exercise, media_dict_from_slug,
-    )
+def _public_name_of(name):
+    try:
+        return _public_name_from_personal(name)
+    except Exception:
+        return name
 
+
+def _resolve_exercise_media_payload(name, user):
     name = (name or '').strip()
     if not name:
+        from app.exercise_media import empty_media_dict
         return empty_media_dict('')
-    public_name = name
-    try:
-        public_name = _public_name_from_personal(name)
-    except Exception:
-        public_name = name
+    public_name = _public_name_of(name)
     common = Exercise.query.filter_by(name=name, owner_id=None).first()
     if not common and public_name != name:
         common = Exercise.query.filter_by(name=public_name, owner_id=None).first()
     personal = _find_personal_exercise_for_media(name, public_name, user)
+    return _media_payload_from_pair(name, public_name, common, personal)
+
+
+def _resolve_exercise_media_batch(names, user):
+    """Même résolution que ci-dessus mais en 2 requêtes pour toute une séance."""
+    from app.exercise_media import empty_media_dict
+
+    wanted = [(n or '').strip() for n in names]
+    unique = [n for n in dict.fromkeys(wanted) if n]
+    if not unique:
+        return {}
+
+    owners = _personal_media_owners(user)
+    owner_rows = User.query.filter(User.id.in_(owners)).all() if owners else []
+    owner_by_id = {u.id: u for u in owner_rows}
+
+    publics = {n: _public_name_of(n) for n in unique}
+    lookup_names = set(unique) | set(publics.values())
+    for n in unique:
+        for oid in owners:
+            owner = owner_by_id.get(oid)
+            if owner is not None:
+                lookup_names.add(_ensure_personal_name(publics[n] or n, owner))
+
+    from sqlalchemy import or_
+    conditions = [Exercise.owner_id.is_(None)]
+    if owners:
+        conditions.append(Exercise.owner_id.in_(owners))
+    rows = (
+        Exercise.query
+        .filter(Exercise.name.in_(list(lookup_names)), or_(*conditions))
+        .all()
+    )
+    common_by_name = {}
+    personal_by_key = {}
+    for ex in rows:
+        if ex.owner_id is None:
+            common_by_name.setdefault(ex.name, ex)
+        else:
+            personal_by_key.setdefault((ex.owner_id, ex.name), ex)
+
+    out = {}
+    for n in unique:
+        public_name = publics[n]
+        common = common_by_name.get(n) or (
+            common_by_name.get(public_name) if public_name != n else None
+        )
+        personal = None
+        for oid in owners:
+            personal = personal_by_key.get((oid, n))
+            if personal:
+                break
+            if public_name and public_name != n:
+                personal = personal_by_key.get((oid, public_name))
+                if personal:
+                    break
+            owner = owner_by_id.get(oid)
+            if owner is not None:
+                suffixed = _ensure_personal_name(public_name or n, owner)
+                personal = personal_by_key.get((oid, suffixed))
+                if personal:
+                    break
+        out[n] = _media_payload_from_pair(n, public_name, common, personal)
+    for n in wanted:
+        if n and n not in out:
+            out[n] = empty_media_dict(n)
+    return out
+
+
+def _media_payload_from_pair(name, public_name, common, personal):
+    from app.exercise_animation_map import slug_for_exercise_name
+    from app.exercise_media import (
+        empty_media_dict, media_dict_from_exercise, media_dict_from_slug,
+    )
 
     # YouTube / GIF perso prioritaire ; on complète avec l’illustration commune si besoin
     if personal and (personal.animation_slug or personal.youtube_url or personal.custom_gif_url):
@@ -3033,10 +3121,14 @@ def last_performance_for_exercises():
     names = [str(e).strip() for e in exercises if str(e).strip()]
     if not names:
         return jsonify({})
+    # Borné : sans fenêtre ni limite, ouvrir une séance scannait tout l'historique.
+    since = date.today() - timedelta(days=365)
     entries = (PerformanceEntry.query
                .filter(PerformanceEntry.athlete_id == athlete_id,
-                       PerformanceEntry.exercise.in_(names))
+                       PerformanceEntry.exercise.in_(names),
+                       PerformanceEntry.entry_date >= since)
                .order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.series_number)
+               .limit(max(200, len(names) * 60))
                .all())
     by_ex = {}
     for e in entries:
@@ -3517,14 +3609,25 @@ def stats_regularity():
     athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
     if athlete_id is None:
         return jsonify({'error': 'athlete_id requis'}), 400
-    weeks = int(request.args.get('weeks', 4))
+    weeks = max(1, min(int(request.args.get('weeks', 4)), 52))
+    oldest_start, _ = _week_bounds(weeks - 1)
+    _, newest_end = _week_bounds(0)
+    # Une seule requête (dates distinctes) au lieu d'une par semaine.
+    logged_dates = {
+        row[0] for row in db.session.query(PerformanceEntry.entry_date)
+        .filter(
+            PerformanceEntry.athlete_id == athlete_id,
+            PerformanceEntry.entry_date >= oldest_start,
+            PerformanceEntry.entry_date <= newest_end,
+        )
+        .distinct()
+        .all()
+    }
     out = []
     for offset in range(weeks - 1, -1, -1):
         start, end = _week_bounds(offset)
-        dates = {e.entry_date for e in PerformanceEntry.query.filter(
-            PerformanceEntry.athlete_id == athlete_id,
-            PerformanceEntry.entry_date >= start, PerformanceEntry.entry_date <= end).all()}
-        out.append({'offset': offset, 'label': _week_label(offset), 'start': start.isoformat(), 'sessions': len(dates)})
+        sessions = sum(1 for d in logged_dates if start <= d <= end)
+        out.append({'offset': offset, 'label': _week_label(offset), 'start': start.isoformat(), 'sessions': sessions})
     return jsonify(out)
 
 
@@ -3616,17 +3719,32 @@ def stats_exercises_by_muscle():
     if athlete_id is None:
         return jsonify({'error': 'athlete_id requis'}), 400
     muscle_by_name = _exercise_muscle_by_name()
-    entries = PerformanceEntry.query.filter_by(athlete_id=athlete_id).all()
+    # Fenêtre bornée + colonnes ciblées : l'historique complet en ORM était un scan de table.
+    days = max(30, min(int(request.args.get('days', 365)), 1095))
+    since = date.today() - timedelta(days=days)
+    rows = (
+        db.session.query(
+            PerformanceEntry.exercise,
+            PerformanceEntry.entry_date,
+            PerformanceEntry.reps,
+            PerformanceEntry.load,
+        )
+        .filter(
+            PerformanceEntry.athlete_id == athlete_id,
+            PerformanceEntry.entry_date >= since,
+        )
+        .all()
+    )
     ex_meta = {}
-    for e in entries:
-        if not e.exercise:
+    for exercise, entry_date, reps, load in rows:
+        if not exercise:
             continue
-        meta = ex_meta.setdefault(e.exercise, {'last': e.entry_date, 'entries': 0, 'tonnage': 0.0})
+        meta = ex_meta.setdefault(exercise, {'last': entry_date, 'entries': 0, 'tonnage': 0.0})
         meta['entries'] += 1
-        if e.entry_date and (meta['last'] is None or e.entry_date > meta['last']):
-            meta['last'] = e.entry_date
-        if e.load is not None and e.reps is not None:
-            meta['tonnage'] += series_tonnage(e.reps, e.load)
+        if entry_date and (meta['last'] is None or entry_date > meta['last']):
+            meta['last'] = entry_date
+        if load is not None and reps is not None:
+            meta['tonnage'] += series_tonnage(reps, load)
     by_muscle = {}
     for name, meta in ex_meta.items():
         muscle = muscle_by_name.get(name, 'Autre') or 'Autre'

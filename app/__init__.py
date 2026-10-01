@@ -1,6 +1,7 @@
+import gzip
 import os
 from datetime import datetime
-from flask import Flask
+from flask import Flask, request
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_cors import CORS
@@ -209,6 +210,32 @@ def create_app():
             db.session.rollback()
             print(f"⚠️ meal_plan.is_active alter skipped: {e}")
 
+        # Apple IAP columns on subscription_payment
+        try:
+            from sqlalchemy import inspect as sa_inspect_apple
+            inspector_apple = sa_inspect_apple(db.engine)
+            if 'subscription_payment' in inspector_apple.get_table_names():
+                sp_cols = {c['name'] for c in inspector_apple.get_columns('subscription_payment')}
+                for col, ddl in [
+                    ('apple_product_id', "ALTER TABLE subscription_payment ADD COLUMN apple_product_id VARCHAR(128) NULL"),
+                    ('apple_transaction_id', "ALTER TABLE subscription_payment ADD COLUMN apple_transaction_id VARCHAR(128) NULL"),
+                    ('apple_original_transaction_id', "ALTER TABLE subscription_payment ADD COLUMN apple_original_transaction_id VARCHAR(128) NULL"),
+                ]:
+                    if col not in sp_cols:
+                        db.session.execute(db.text(ddl))
+                        db.session.commit()
+                        print(f"✓ subscription_payment.{col} OK")
+                try:
+                    db.session.execute(db.text(
+                        "CREATE UNIQUE INDEX uq_subpay_apple_tx ON subscription_payment (apple_transaction_id)"
+                    ))
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+        except Exception as e:
+            db.session.rollback()
+            print(f"⚠️ apple IAP columns alter skipped: {e}")
+
         # Coach library templates (is_template / library_* / athlete_id NULL)
         try:
             inspector_lib = db.inspect(db.engine)
@@ -415,6 +442,42 @@ def create_app():
             db.session.rollback()
             print(f"⚠️ bank owner_id alter skipped: {e}")
 
+        # Index sur les filtres chauds de l'API mobile (idempotent, no-op si présents)
+        try:
+            from sqlalchemy import inspect as sa_inspect_idx
+            insp_idx = sa_inspect_idx(db.engine)
+            existing_tables = set(insp_idx.get_table_names())
+            wanted_indexes = (
+                ('program', 'idx_program_athlete_active', ('athlete_id', 'is_active')),
+                ('program', 'idx_program_coach_template', ('coach_id', 'is_template')),
+                ('program_session', 'idx_session_program', ('program_id',)),
+                ('exercise_entry', 'idx_entry_session_position', ('session_id', 'position')),
+                ('performance_entry', 'idx_perf_session', ('program_session_id',)),
+                ('user', 'idx_user_coach_role', ('coach_id', 'role')),
+                ('coaching_invitation', 'idx_invitation_athlete_status_dir',
+                 ('athlete_id', 'status', 'direction')),
+            )
+            for table, index_name, cols in wanted_indexes:
+                if table not in existing_tables:
+                    continue
+                try:
+                    if any(ix.get('name') == index_name for ix in insp_idx.get_indexes(table)):
+                        continue
+                    table_cols = {c['name'] for c in insp_idx.get_columns(table)}
+                    if not set(cols).issubset(table_cols):
+                        continue
+                    col_sql = ', '.join(f'`{c}`' for c in cols)
+                    db.session.execute(db.text(
+                        f'CREATE INDEX {index_name} ON `{table}` ({col_sql})'
+                    ))
+                    db.session.commit()
+                    print(f"✓ index {index_name} créé")
+                except Exception:
+                    db.session.rollback()
+        except Exception as e:
+            db.session.rollback()
+            print(f"⚠️ index perf skipped: {e}")
+
         try:
             from app.models import Exercise
             from app.exercise_animation_map import backfill_animation_slugs
@@ -570,6 +633,34 @@ def create_app():
     app.register_blueprint(api_bp, url_prefix='/api')
     from app.billing import billing_bp
     app.register_blueprint(billing_bp, url_prefix='/api')
+
+    @app.after_request
+    def _compress_json(response):
+        """gzip des réponses JSON : les banques et stats passent de ~150 Ko à ~20 Ko."""
+        try:
+            if 'gzip' not in (request.headers.get('Accept-Encoding') or '').lower():
+                return response
+            if response.direct_passthrough or response.headers.get('Content-Encoding'):
+                return response
+            if not (200 <= response.status_code < 300):
+                return response
+            ctype = response.content_type or ''
+            if not (ctype.startswith('application/json') or ctype.startswith('text/')):
+                return response
+            body = response.get_data()
+            if len(body) < 1024:
+                return response
+            packed = gzip.compress(body, 6)
+            if len(packed) >= len(body):
+                return response
+            response.set_data(packed)
+            response.headers['Content-Encoding'] = 'gzip'
+            response.headers['Content-Length'] = str(len(packed))
+            vary = response.headers.get('Vary')
+            response.headers['Vary'] = f'{vary}, Accept-Encoding' if vary else 'Accept-Encoding'
+        except Exception:
+            return response
+        return response
 
     @app.get('/health')
     def health():

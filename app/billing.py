@@ -11,6 +11,13 @@ from flask import Blueprint, current_app, jsonify, request
 
 from app import db
 from app.mobile_auth import admin_required, login_required
+from app.apple_iap import (
+    ALL_PRODUCT_IDS,
+    apple_product_id_for,
+    plan_for_product,
+    transaction_still_active,
+    verify_storekit_jws,
+)
 from app.models import SubscriptionPayment, User
 
 billing_bp = Blueprint('billing', __name__)
@@ -143,7 +150,7 @@ def _fulfill_payment(pay: SubscriptionPayment, *, payment_intent=None):
     # Coach hors quota après downgrade : trim si besoin
     if user.role == 'coach' and pay.kind == 'coach_tier':
         try:
-            from app.api import _enforce_coach_quota_or_trim
+            from app.mobile_api import _enforce_coach_quota_or_trim
             _enforce_coach_quota_or_trim(user)
         except Exception:
             pass
@@ -166,6 +173,7 @@ def _current_plan_payload(user: User):
                     'price_label': 'Gratuit',
                     'blurb': 'Programmes, nutrition, banques perso',
                     'current': not independent,
+                    'apple_product_id': None,
                 },
                 {
                     'kind': 'athlete_independent',
@@ -174,6 +182,7 @@ def _current_plan_payload(user: User):
                     'price_label': '1,99 € / mois',
                     'blurb': 'Stats + Easy Bilan',
                     'current': independent,
+                    'apple_product_id': apple_product_id_for('athlete_independent'),
                 },
             ],
         }
@@ -188,6 +197,7 @@ def _current_plan_payload(user: User):
             'price_label': 'Gratuit',
             'blurb': '0 athlète — abonnement requis pour coacher',
             'current': tier == 0,
+            'apple_product_id': None,
         },
         {
             'kind': 'coach_tier',
@@ -197,6 +207,7 @@ def _current_plan_payload(user: User):
             'price_label': '9,99 € / mois',
             'blurb': 'Jusqu’à 3 athlètes',
             'current': tier == 1,
+            'apple_product_id': apple_product_id_for('coach_tier', 1),
         },
         {
             'kind': 'coach_tier',
@@ -206,6 +217,7 @@ def _current_plan_payload(user: User):
             'price_label': '24,99 € / mois',
             'blurb': 'Jusqu’à 10 athlètes',
             'current': tier == 2,
+            'apple_product_id': apple_product_id_for('coach_tier', 2),
         },
         {
             'kind': 'coach_tier',
@@ -215,6 +227,7 @@ def _current_plan_payload(user: User):
             'price_label': '49,99 € / mois',
             'blurb': 'Athlètes illimités',
             'current': tier == 3,
+            'apple_product_id': apple_product_id_for('coach_tier', 3),
         },
     ]
     return {
@@ -274,6 +287,7 @@ def get_my_subscription():
         'pending': None,
         'history': [p.to_dict() for p in history],
         'stripe_configured': bool((current_app.config.get('STRIPE_SECRET_KEY') or '').strip()),
+        'apple_iap_products': ALL_PRODUCT_IDS,
     }
     # Hint carte test uniquement en développement local — jamais en prod.
     if current_app.config.get('IS_DEVELOPMENT'):
@@ -290,13 +304,21 @@ def create_checkout():
     user = request.current_user
     if user.role not in ('athlete', 'coach'):
         return jsonify({'error': 'Réservé athlète / coach'}), 403
+
+    data = request.get_json(silent=True) or {}
+    platform = (data.get('platform') or request.headers.get('X-Client-Platform') or '').strip().lower()
+    if platform == 'ios':
+        return jsonify({
+            'error': 'Sur iOS, les abonnements passent par les achats intégrés Apple (In-App Purchase).',
+            'code': 'USE_APPLE_IAP',
+        }), 400
+
     if not _stripe_ready():
         return jsonify({
             'error': 'Stripe non configuré (STRIPE_SECRET_KEY manquant côté serveur).',
             'code': 'STRIPE_NOT_CONFIGURED',
         }), 503
 
-    data = request.get_json(silent=True) or {}
     kind = (data.get('kind') or '').strip()
     target_tier = data.get('target_tier')
     success_url = (data.get('success_url') or '').strip()
@@ -448,6 +470,75 @@ def confirm_checkout():
     return jsonify({'ok': True, 'payment': pay.to_dict(), 'user': user.to_dict()})
 
 
+@billing_bp.post('/me/subscription/apple/confirm')
+@login_required
+def confirm_apple_purchase():
+    """Valide une transaction StoreKit 2 (JWS) et applique l'abonnement."""
+    user = request.current_user
+    if user.role not in ('athlete', 'coach'):
+        return jsonify({'error': 'Réservé athlète / coach'}), 403
+
+    data = request.get_json(silent=True) or {}
+    signed = (data.get('signed_transaction') or data.get('transactionReceipt') or '').strip()
+    if not signed:
+        return jsonify({'error': 'signed_transaction requis'}), 400
+
+    try:
+        payload = verify_storekit_jws(signed)
+    except ValueError as e:
+        return jsonify({'error': str(e), 'code': 'APPLE_JWS_INVALID'}), 400
+
+    product_id = str(payload.get('productId') or '')
+    transaction_id = str(payload.get('transactionId') or '')
+    original_transaction_id = str(payload.get('originalTransactionId') or transaction_id)
+    bundle_id = str(payload.get('bundleId') or '')
+    if bundle_id and bundle_id != 'com.farmness.app':
+        return jsonify({'error': 'Bundle Apple invalide'}), 400
+    if not transaction_still_active(payload):
+        return jsonify({'error': 'Abonnement Apple expiré', 'code': 'APPLE_EXPIRED'}), 400
+
+    try:
+        kind, target_tier = plan_for_product(product_id)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+
+    if kind.startswith('athlete') and user.role != 'athlete':
+        return jsonify({'error': 'Produit réservé athlète'}), 403
+    if kind == 'coach_tier' and user.role != 'coach':
+        return jsonify({'error': 'Produit réservé coach'}), 403
+
+    existing = SubscriptionPayment.query.filter_by(apple_transaction_id=transaction_id).first()
+    if existing:
+        if existing.user_id != user.id:
+            return jsonify({'error': 'Transaction déjà liée à un autre compte'}), 409
+        db.session.refresh(user)
+        return jsonify({'ok': True, 'payment': existing.to_dict(), 'user': user.to_dict()})
+
+    pay = SubscriptionPayment(
+        user_id=user.id,
+        kind=kind,
+        target_tier=target_tier if kind == 'coach_tier' else None,
+        amount_euros=_amount_euros(kind, target_tier),
+        billing_period='monthly',
+        source='apple',
+        status='pending',
+        apple_product_id=product_id,
+        apple_transaction_id=transaction_id,
+        apple_original_transaction_id=original_transaction_id,
+        note='In-App Purchase StoreKit',
+    )
+    db.session.add(pay)
+    try:
+        _fulfill_payment(pay)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 400
+
+    db.session.refresh(user)
+    return jsonify({'ok': True, 'payment': pay.to_dict(), 'user': user.to_dict()})
+
+
 @billing_bp.post('/me/subscription')
 @login_required
 def request_subscription():
@@ -537,7 +628,7 @@ def downgrade_subscription():
                 return jsonify({'error': 'Downgrade libre uniquement vers niveau 0. Pour upgrader, passe par Stripe.'}), 400
             apply_subscription_change(user, kind, 0)
             try:
-                from app.api import _enforce_coach_quota_or_trim
+                from app.mobile_api import _enforce_coach_quota_or_trim
                 _enforce_coach_quota_or_trim(user)
             except Exception:
                 pass

@@ -1008,6 +1008,9 @@ class SubscriptionPayment(db.Model):
     status = db.Column(db.String(16), nullable=False, default='pending', index=True)
     stripe_session_id = db.Column(db.String(255), nullable=True, unique=True, index=True)
     stripe_payment_intent = db.Column(db.String(255), nullable=True)
+    apple_product_id = db.Column(db.String(128), nullable=True, index=True)
+    apple_transaction_id = db.Column(db.String(128), nullable=True, unique=True, index=True)
+    apple_original_transaction_id = db.Column(db.String(128), nullable=True, index=True)
     note = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     resolved_at = db.Column(db.DateTime, nullable=True)
@@ -1032,6 +1035,8 @@ class SubscriptionPayment(db.Model):
             'source': self.source,
             'status': self.status,
             'stripe_session_id': self.stripe_session_id,
+            'apple_product_id': self.apple_product_id,
+            'apple_transaction_id': self.apple_transaction_id,
             'note': self.note,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
