@@ -53,10 +53,13 @@ def verify_storekit_jws(token: str) -> dict:
     if not token or token.count('.') != 2:
         raise ValueError('JWS Apple invalide')
 
-    header = jwt.get_unverified_header(token)
+    try:
+        header = jwt.get_unverified_header(token)
+    except Exception as exc:
+        raise ValueError('JWS Apple illisible') from exc
+
     x5c = header.get('x5c')
     if not x5c or not isinstance(x5c, list):
-        # Fallback sandbox / tests : decode non vérifié uniquement si explicitement autorisé
         raise ValueError('Certificat Apple (x5c) manquant dans la transaction')
 
     try:
@@ -65,16 +68,21 @@ def verify_storekit_jws(token: str) -> dict:
     except ImportError as exc:
         raise ValueError('cryptography requis pour vérifier les achats Apple') from exc
 
-    leaf_der = base64.b64decode(x5c[0])
-    cert = x509.load_der_x509_certificate(leaf_der, default_backend())
-    public_key = cert.public_key()
+    try:
+        leaf_der = base64.b64decode(x5c[0])
+        cert = x509.load_der_x509_certificate(leaf_der, default_backend())
+        public_key = cert.public_key()
+        payload = jwt.decode(
+            token,
+            public_key,
+            algorithms=['ES256'],
+            options={'verify_aud': False},
+        )
+    except ValueError:
+        raise
+    except Exception as exc:
+        raise ValueError('Transaction Apple non vérifiable') from exc
 
-    payload = jwt.decode(
-        token,
-        public_key,
-        algorithms=['ES256'],
-        options={'verify_aud': False},
-    )
     if not payload.get('productId') or not payload.get('transactionId'):
         raise ValueError('Transaction Apple incomplète')
     return payload
