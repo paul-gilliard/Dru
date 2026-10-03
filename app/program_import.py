@@ -42,7 +42,8 @@ MAX_TOTAL_BYTES = 40 * 1024 * 1024
 MAX_IMAGES = 12
 # Au-delà, Claude n'y gagne rien et le coût de tokens explose.
 MAX_IMAGE_EDGE = 1800
-CLAUDE_MODEL = os.environ.get('ANTHROPIC_PROGRAM_IMPORT_MODEL', 'claude-sonnet-4-20250514')
+# Sonnet 4 (20250514) retiré côté Anthropic — défaut = Sonnet 5.5 (vision + docs).
+CLAUDE_MODEL = os.environ.get('ANTHROPIC_PROGRAM_IMPORT_MODEL', 'claude-sonnet-5-5')
 
 MUSCLE_ALIASES = {
     'abdos': 'ABDOS', 'abs': 'ABDOS', 'abdominaux': 'ABDOS', 'core': 'ABDOS',
@@ -680,13 +681,22 @@ def call_claude_parse(*, extract: dict, hint: str | None, filename: str) -> dict
             'text': f"{preamble}\n\n--- CONTENU ---\n{text}",
         })
 
+    model = (os.environ.get('ANTHROPIC_PROGRAM_IMPORT_MODEL') or CLAUDE_MODEL).strip()
     client = anthropic.Anthropic(api_key=api_key)
-    msg = client.messages.create(
-        model=CLAUDE_MODEL,
-        max_tokens=8192,
-        system=SYSTEM_PROMPT,
-        messages=[{'role': 'user', 'content': user_bits}],
-    )
+    create_kwargs = {
+        'model': model,
+        'max_tokens': 8192,
+        'system': SYSTEM_PROMPT,
+        'messages': [{'role': 'user', 'content': user_bits}],
+    }
+    # Sonnet 5.x : effort bas = peu de thinking, JSON plus fiable / moins cher
+    if model.startswith('claude-sonnet-5') or model.startswith('claude-opus-5'):
+        create_kwargs['output_config'] = {'effort': 'low'}
+    try:
+        msg = client.messages.create(**create_kwargs)
+    except TypeError:
+        create_kwargs.pop('output_config', None)
+        msg = client.messages.create(**create_kwargs)
     parts = []
     for block in msg.content:
         if getattr(block, 'type', None) == 'text':
