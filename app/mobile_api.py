@@ -405,78 +405,111 @@ def _queue_promote_to_common(kind, target, requester):
     return req
 
 
+def _retarget_exercise_name(old_name, new_name, athlete_id=None):
+    """Renomme les refs programme + perfs. Ne crée / ne supprime aucune séance."""
+    old_name = (old_name or '').strip()
+    new_name = (new_name or '').strip()
+    if not old_name or not new_name or old_name == new_name:
+        return
+    ExerciseEntry.query.filter_by(name=old_name).update(
+        {'name': new_name}, synchronize_session=False,
+    )
+    perf_q = PerformanceEntry.query.filter_by(exercise=old_name)
+    if athlete_id is not None:
+        perf_q = perf_q.filter_by(athlete_id=athlete_id)
+    perf_q.update({'exercise': new_name}, synchronize_session=False)
+
+
 def _promote_personal_to_common(kind, target, payload):
     """
-    Publie une copie commune (owner_id=None). L'entrée perso reste intacte
-    pour ne pas casser les programmes qui pointent déjà dessus.
+    Passe une entrée perso en commune SANS toucher à la structure des programmes :
+    - renomme (retire le suffixe utilisateur) + owner_id = None
+    - retarget ExerciseEntry / PerformanceEntry (ou MealEntry pour les aliments)
+    - si une commune du même nom existe déjà : fusionne dessus puis supprime la perso
     Returns (common_entry, error_response_or_None)
     """
     if target.owner_id is None:
         return target, None
     public_name = (payload.get('name') or '').strip() or _public_name_from_personal(target.name)
+    old_name = target.name
+
     if kind == 'exercise':
         muscle = payload.get('muscle_group') or target.muscle_group
         if muscle not in MUSCLE_GROUPS:
             return None, (jsonify({'error': 'muscle_group invalide'}), 400)
-        existing = Exercise.query.filter_by(name=public_name).first()
-        if existing:
-            if existing.owner_id is None:
-                # Fusionne les médias proposés sur la commune déjà existante
-                slug = payload.get('animation_slug') or target.animation_slug
-                yt = payload.get('youtube_url') or target.youtube_url
-                gif = payload.get('custom_gif_url') or target.custom_gif_url
-                if slug:
-                    existing.animation_slug = slug
-                if yt:
-                    existing.youtube_url = yt
-                if gif:
-                    existing.custom_gif_url = gif
-                if existing.animation_slug or existing.youtube_url or existing.custom_gif_url:
-                    existing.media_status = 'approved'
-                return existing, None
-            return None, (jsonify({'error': f'Nom « {public_name} » déjà pris (perso)'}), 409)
-        common = Exercise(
-            name=public_name,
-            muscle_group=muscle,
-            owner_id=None,
-            animation_slug=payload.get('animation_slug') or target.animation_slug,
-            youtube_url=payload.get('youtube_url') or target.youtube_url,
-            custom_gif_url=payload.get('custom_gif_url') or target.custom_gif_url,
-            media_status=(
-                payload.get('media_status')
-                or (
-                    'approved'
-                    if (payload.get('youtube_url') or payload.get('custom_gif_url') or payload.get('animation_slug')
-                        or target.youtube_url or target.custom_gif_url or target.animation_slug)
-                    else 'none'
-                )
-            ),
-        )
-        db.session.add(common)
-        db.session.flush()
-        return common, None
 
-    existing = Food.query.filter_by(name=public_name).first()
-    if existing:
-        if existing.owner_id is None:
+        def apply_ex_media(ex):
+            slug = payload.get('animation_slug') or target.animation_slug
+            yt = payload.get('youtube_url') or target.youtube_url
+            gif = payload.get('custom_gif_url') or target.custom_gif_url
+            if slug:
+                ex.animation_slug = slug
+            if yt:
+                ex.youtube_url = yt
+            if gif:
+                ex.custom_gif_url = gif
+            if ex.animation_slug or ex.youtube_url or ex.custom_gif_url:
+                ex.media_status = 'approved'
+            elif payload.get('media_status'):
+                ex.media_status = payload.get('media_status')
+
+        existing = Exercise.query.filter(
+            Exercise.name == public_name,
+            Exercise.id != target.id,
+        ).first()
+        if existing:
+            if existing.owner_id is not None:
+                return None, (jsonify({'error': f'Nom « {public_name} » déjà pris (perso)'}), 409)
+            if payload.get('muscle_group') in MUSCLE_GROUPS:
+                existing.muscle_group = muscle
+            apply_ex_media(existing)
+            # Rename refs FIRST, then drop the perso row (jamais de cascade sur les séances).
+            _retarget_exercise_name(old_name, existing.name)
+            db.session.delete(target)
+            db.session.flush()
             return existing, None
-        return None, (jsonify({'error': f'Nom « {public_name} » déjà pris (perso)'}), 409)
-    common = Food(
-        name=public_name,
-        brand=payload.get('brand', target.brand),
-        kcal=payload['kcal'] if payload.get('kcal') is not None else target.kcal,
-        proteins=payload.get('proteins', target.proteins),
-        lipids=payload.get('lipids', target.lipids),
-        saturated_fats=payload.get('saturated_fats', target.saturated_fats),
-        carbs=payload['carbs'] if payload.get('carbs') is not None else target.carbs,
-        simple_sugars=payload.get('simple_sugars', target.simple_sugars),
-        fiber=payload.get('fiber', target.fiber),
-        salt=payload.get('salt', target.salt),
-        owner_id=None,
-    )
-    db.session.add(common)
+
+        # Conversion in-place perso → commune (même id, nouveau nom public)
+        target.name = public_name
+        target.muscle_group = muscle
+        target.owner_id = None
+        apply_ex_media(target)
+        _retarget_exercise_name(old_name, public_name)
+        db.session.flush()
+        return target, None
+
+    existing = Food.query.filter(
+        Food.name == public_name,
+        Food.id != target.id,
+    ).first()
+    if existing:
+        if existing.owner_id is not None:
+            return None, (jsonify({'error': f'Nom « {public_name} » déjà pris (perso)'}), 409)
+        for field in (
+            'brand', 'kcal', 'proteins', 'lipids', 'saturated_fats',
+            'carbs', 'simple_sugars', 'fiber', 'salt',
+        ):
+            if field in payload and payload.get(field) is not None:
+                setattr(existing, field, payload[field])
+            elif getattr(target, field, None) is not None and getattr(existing, field, None) is None:
+                setattr(existing, field, getattr(target, field))
+        MealEntry.query.filter_by(food_id=target.id).update(
+            {'food_id': existing.id}, synchronize_session=False,
+        )
+        db.session.delete(target)
+        db.session.flush()
+        return existing, None
+
+    target.name = public_name
+    target.owner_id = None
+    for field in (
+        'brand', 'kcal', 'proteins', 'lipids', 'saturated_fats',
+        'carbs', 'simple_sugars', 'fiber', 'salt',
+    ):
+        if field in payload and payload.get(field) is not None:
+            setattr(target, field, payload[field])
     db.session.flush()
-    return common, None
+    return target, None
 
 
 def _bank_owner_scope_id():
@@ -1933,7 +1966,7 @@ def get_program(program_id):
     program = _program_tree_query().filter_by(id=program_id).first()
     if program is None:
         return jsonify({'error': 'programme introuvable'}), 404
-    if not _can_manage_athlete(program.athlete_id):
+    if not _can_access_program(program):
         return _deny_manage(program.athlete_id)
     return jsonify(program.to_dict(with_sessions=True))
 
@@ -1967,15 +2000,16 @@ def create_program():
 @login_required
 def delete_program(program_id):
     program = Program.query.get_or_404(program_id)
-    if not _can_manage_athlete(program.athlete_id):
+    if not _can_access_program(program):
         return _deny_manage()
     athlete_id = program.athlete_id
     was_active = bool(program.is_active)
+    was_template = bool(getattr(program, 'is_template', False))
     db.session.delete(program)
     db.session.flush()
-    if was_active:
+    if was_active and athlete_id and not was_template:
         fallback = (
-            Program.query.filter_by(athlete_id=athlete_id)
+            Program.query.filter_by(athlete_id=athlete_id, is_template=False)
             .order_by(Program.created_at.desc())
             .first()
         )
@@ -1989,7 +2023,7 @@ def delete_program(program_id):
 @login_required
 def rename_program(program_id):
     program = Program.query.get_or_404(program_id)
-    if not _can_manage_athlete(program.athlete_id):
+    if not _can_access_program(program):
         return _deny_manage()
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
@@ -2062,7 +2096,7 @@ def duplicate_program(program_id):
 @login_required
 def create_session(program_id):
     program = Program.query.get_or_404(program_id)
-    if not _can_manage_athlete(program.athlete_id):
+    if not _can_access_program(program):
         return _deny_manage()
     data = request.get_json(silent=True) or {}
     day_of_week = data.get('day_of_week')
@@ -2087,7 +2121,7 @@ def create_session(program_id):
 def delete_session(session_id):
     session_obj = ProgramSession.query.get_or_404(session_id)
     program = Program.query.get_or_404(session_obj.program_id)
-    if not _can_manage_athlete(program.athlete_id):
+    if not _can_access_program(program):
         return _deny_manage()
     db.session.delete(session_obj)
     db.session.commit()
@@ -2101,12 +2135,8 @@ def get_session(session_id):
     session_obj = ProgramSession.query.get_or_404(session_id)
     program = Program.query.get_or_404(session_obj.program_id)
     user = request.current_user
-    if user.role == 'athlete' and program.athlete_id != user.id:
-        return jsonify({'error': 'Accès refusé'}), 403
-    if user.role == 'coach':
-        athlete = User.query.get(program.athlete_id)
-        if not athlete or athlete.coach_id != user.id:
-            return jsonify({'error': 'Accès refusé'}), 403
+    if not _can_access_program(program, user):
+        return _deny_manage(program.athlete_id)
     data = session_obj.to_dict(with_exercises=True)
     entries = data.get('exercises') or []
     media_by_name = _resolve_exercise_media_batch([e.get('name') or '' for e in entries], user)
@@ -2124,7 +2154,7 @@ def get_session(session_id):
 def rename_session(session_id):
     session_obj = ProgramSession.query.get_or_404(session_id)
     program = Program.query.get_or_404(session_obj.program_id)
-    if not _can_manage_athlete(program.athlete_id):
+    if not _can_access_program(program):
         return _deny_manage()
     data = request.get_json(silent=True) or {}
     if 'session_name' in data:
@@ -2140,7 +2170,7 @@ def rename_session(session_id):
 def add_exercise_entry(session_id):
     session_obj = ProgramSession.query.get_or_404(session_id)
     program = Program.query.get_or_404(session_obj.program_id)
-    if not _can_manage_athlete(program.athlete_id):
+    if not _can_access_program(program):
         return _deny_manage()
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
@@ -2173,7 +2203,7 @@ def update_exercise_entry(entry_id):
     entry = ExerciseEntry.query.get_or_404(entry_id)
     session_obj = ProgramSession.query.get_or_404(entry.session_id)
     program = Program.query.get_or_404(session_obj.program_id)
-    if not _can_manage_athlete(program.athlete_id):
+    if not _can_access_program(program):
         return _deny_manage()
     data = request.get_json(silent=True) or {}
     for field in ('name', 'sets', 'reps', 'rest', 'rir', 'intensification', 'muscle', 'remark',
@@ -2190,7 +2220,7 @@ def delete_exercise_entry(entry_id):
     entry = ExerciseEntry.query.get_or_404(entry_id)
     session_obj = ProgramSession.query.get_or_404(entry.session_id)
     program = Program.query.get_or_404(session_obj.program_id)
-    if not _can_manage_athlete(program.athlete_id):
+    if not _can_access_program(program):
         return _deny_manage()
     db.session.delete(entry)
     db.session.commit()
@@ -2423,7 +2453,7 @@ def resolve_program_import(job_id):
 @coach_required
 def commit_program_import(job_id):
     """Matérialise un template bibliothèque + crée les exos manquants (promote queue)."""
-    from app.program_import import public_job_view, save_job
+    from app.program_import import normalize_draft, public_job_view, save_job
     meta, err = _load_owned_import_job(job_id)
     if err:
         return err
@@ -2438,6 +2468,16 @@ def commit_program_import(job_id):
             'unresolved_keys': [m['key'] for m in unresolved],
             'code': 'UNRESOLVED',
         }), 400
+
+    # Overrides coach (nom prog + séries) — les noms d'exos source restent ceux du matching.
+    data = request.get_json(silent=True) or {}
+    patched = dict(draft)
+    if isinstance(data.get('program_name'), str) and data.get('program_name').strip():
+        patched['program_name'] = data['program_name'].strip()[:128]
+    if isinstance(data.get('sessions'), list) and data['sessions']:
+        patched['sessions'] = data['sessions']
+    draft = normalize_draft(patched)
+    meta['draft'] = draft
 
     user = request.current_user
     coach_id = user.id if user.role == 'coach' else int(meta['coach_id'])
@@ -4230,7 +4270,7 @@ def list_meal_plans():
 @login_required
 def get_meal_plan(plan_id):
     plan = MealPlan.query.get_or_404(plan_id)
-    if not _can_manage_athlete(plan.athlete_id):
+    if not _can_access_meal_plan(plan):
         return _deny_manage(plan.athlete_id)
     return jsonify(plan.to_dict(with_meals=True))
 
@@ -4261,15 +4301,16 @@ def create_meal_plan():
 @login_required
 def delete_meal_plan(plan_id):
     plan = MealPlan.query.get_or_404(plan_id)
-    if not _can_manage_athlete(plan.athlete_id):
+    if not _can_access_meal_plan(plan):
         return _deny_manage()
     athlete_id = plan.athlete_id
     was_active = bool(plan.is_active)
+    was_template = bool(getattr(plan, 'is_template', False))
     db.session.delete(plan)
     db.session.flush()
-    if was_active:
+    if was_active and athlete_id and not was_template:
         fallback = (
-            MealPlan.query.filter_by(athlete_id=athlete_id)
+            MealPlan.query.filter_by(athlete_id=athlete_id, is_template=False)
             .order_by(MealPlan.created_at.desc())
             .first()
         )
@@ -4284,9 +4325,11 @@ def delete_meal_plan(plan_id):
 def activate_meal_plan(plan_id):
     plan = MealPlan.query.get_or_404(plan_id)
     user = request.current_user
+    if getattr(plan, 'is_template', False) or not plan.athlete_id:
+        return jsonify({'error': "Impossible d'activer un modèle bibliothèque"}), 400
     if not _can_manage_athlete(plan.athlete_id, user):
         return _deny_manage(plan.athlete_id)
-    MealPlan.query.filter_by(athlete_id=plan.athlete_id, is_active=True).update(
+    MealPlan.query.filter_by(athlete_id=plan.athlete_id, is_active=True, is_template=False).update(
         {'is_active': False}, synchronize_session=False,
     )
     plan.is_active = True
@@ -4298,7 +4341,7 @@ def activate_meal_plan(plan_id):
 @login_required
 def rename_meal_plan(plan_id):
     plan = MealPlan.query.get_or_404(plan_id)
-    if not _can_manage_athlete(plan.athlete_id):
+    if not _can_access_meal_plan(plan):
         return _deny_manage()
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or '').strip()
@@ -4314,25 +4357,38 @@ def rename_meal_plan(plan_id):
 @login_required
 def duplicate_meal_plan(plan_id):
     source = MealPlan.query.get_or_404(plan_id)
-    if not _can_manage_athlete(source.athlete_id):
+    if not _can_access_meal_plan(source):
         return _deny_manage()
     data = request.get_json(silent=True) or {}
     name = (data.get('name') or f'{source.name} (copie)').strip()
-    athlete_id = int(data.get('athlete_id') or source.athlete_id)
+    as_template = bool(data.get('as_template'))
+    user = request.current_user
+
+    if as_template or (getattr(source, 'is_template', False) and data.get('athlete_id') is None and user.role == 'coach'):
+        if user.role not in ('coach', 'admin'):
+            return jsonify({'error': 'Réservé au coach'}), 403
+        coach_id = user.id if user.role == 'coach' else (source.coach_id or user.id)
+        new_plan = _clone_meal_plan(
+            source, athlete_id=None, coach_id=coach_id, name=name, is_template=True,
+        )
+        new_plan.library_source_id = source.library_source_id or source.id
+        new_plan.library_day = date.today()
+        db.session.commit()
+        return jsonify(new_plan.to_dict()), 201
+
+    athlete_id = data.get('athlete_id') or source.athlete_id
+    if not athlete_id:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    athlete_id = int(athlete_id)
     if not _can_manage_athlete(athlete_id):
         return _deny_manage()
 
-    new_plan = MealPlan(
-        name=name, athlete_id=athlete_id, coach_id=_coach_id_for_create(athlete_id),
-        meal_count=source.meal_count,
-        **{f'meal_time_{i}': getattr(source, f'meal_time_{i}') for i in range(1, 7)},
-        **{f'meal_label_{i}': getattr(source, f'meal_label_{i}') for i in range(1, 7)},
+    new_plan = _clone_meal_plan(
+        source, athlete_id=athlete_id, coach_id=_coach_id_for_create(athlete_id),
+        name=name, is_template=False,
     )
-    db.session.add(new_plan)
     db.session.flush()
-
-    _copy_meal_entries_with_equivalents(source.meals, new_plan.id)
-
+    _sync_meal_plan_to_coach_library(new_plan)
     db.session.commit()
     return jsonify(new_plan.to_dict()), 201
 
@@ -4341,7 +4397,7 @@ def duplicate_meal_plan(plan_id):
 @login_required
 def add_meal_entry(plan_id):
     plan = MealPlan.query.get_or_404(plan_id)
-    if not _can_manage_athlete(plan.athlete_id):
+    if not _can_access_meal_plan(plan):
         return _deny_manage()
     data = request.get_json(silent=True) or {}
     meal_number = data.get('meal_number')
@@ -4368,7 +4424,7 @@ def add_meal_entry(plan_id):
 def update_meal_entry(entry_id):
     entry = MealEntry.query.get_or_404(entry_id)
     plan = MealPlan.query.get_or_404(entry.meal_plan_id)
-    if not _can_manage_athlete(plan.athlete_id):
+    if not _can_access_meal_plan(plan):
         return _deny_manage()
     data = request.get_json(silent=True) or {}
     if 'quantity' in data:
@@ -4384,7 +4440,7 @@ def update_meal_entry(entry_id):
 def replace_meal_entry_equivalents(entry_id):
     entry = MealEntry.query.get_or_404(entry_id)
     plan = MealPlan.query.get_or_404(entry.meal_plan_id)
-    if not _can_manage_athlete(plan.athlete_id):
+    if not _can_access_meal_plan(plan):
         return _deny_manage()
     data = request.get_json(silent=True) or {}
     items = data.get('equivalents') if isinstance(data, dict) else None
@@ -4400,7 +4456,7 @@ def replace_meal_entry_equivalents(entry_id):
 def delete_meal_entry(entry_id):
     entry = MealEntry.query.get_or_404(entry_id)
     plan = MealPlan.query.get_or_404(entry.meal_plan_id)
-    if not _can_manage_athlete(plan.athlete_id):
+    if not _can_access_meal_plan(plan):
         return _deny_manage()
     db.session.delete(entry)
     db.session.commit()
@@ -4411,7 +4467,7 @@ def delete_meal_entry(entry_id):
 @login_required
 def set_meal_time(plan_id):
     plan = MealPlan.query.get_or_404(plan_id)
-    if not _can_manage_athlete(plan.athlete_id):
+    if not _can_access_meal_plan(plan):
         return _deny_manage()
     data = request.get_json(silent=True) or {}
     meal_number = data.get('meal_number')
