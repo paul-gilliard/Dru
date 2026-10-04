@@ -455,7 +455,8 @@ def confirm_checkout():
     try:
         session = stripe.checkout.Session.retrieve(session_id)
     except Exception as e:
-        return jsonify({'error': f'Session Stripe invalide : {e}'}), 502
+        current_app.logger.exception('stripe session retrieve failed')
+        return jsonify({'error': 'Paiement impossible à vérifier. Réessaie dans un instant.'}), 502
 
     if session.payment_status != 'paid' and session.status != 'complete':
         return jsonify({'error': 'Paiement pas encore confirmé', 'payment_status': session.payment_status}), 402
@@ -487,14 +488,14 @@ def confirm_apple_purchase():
     try:
         payload = verify_storekit_jws(signed)
     except ValueError as e:
-        return jsonify({'error': str(e), 'code': 'APPLE_JWS_INVALID'}), 400
+        return jsonify({'error': 'Achat Apple invalide. Relance l\'achat ou utilise « Restaurer les achats ».', 'code': 'APPLE_JWS_INVALID'}), 400
 
     product_id = str(payload.get('productId') or '')
     transaction_id = str(payload.get('transactionId') or '')
     original_transaction_id = str(payload.get('originalTransactionId') or transaction_id)
     bundle_id = str(payload.get('bundleId') or '')
     if bundle_id and bundle_id != 'com.farmness.app':
-        return jsonify({'error': 'Bundle Apple invalide'}), 400
+        return jsonify({'error': 'Achat Apple non reconnu pour cette app'}), 400
     if not transaction_still_active(payload):
         return jsonify({'error': 'Abonnement Apple expiré', 'code': 'APPLE_EXPIRED'}), 400
 
