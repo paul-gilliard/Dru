@@ -4749,8 +4749,30 @@ def _training_week_streak(athlete_id, program, today):
     return streak
 
 
+def _ensure_default_bilan_questions(athlete):
+    """Si un jour de bilan est posé sans questions, sème le questionnaire standard.
+
+    Sinon la notif J-1 part (weekday OK) mais l'accueil n'affiche rien (can_write_note faux).
+    Commit laissé au caller.
+    """
+    if not athlete or getattr(athlete, 'role', None) != 'athlete':
+        return False
+    if athlete.bilan_weekday is None:
+        return False
+    if athlete.get_bilan_note_questions():
+        return False
+    from app.models import DEFAULT_BILAN_NOTE_QUESTIONS
+    athlete.set_bilan_note_questions(DEFAULT_BILAN_NOTE_QUESTIONS)
+    return True
+
+
 def _athlete_bilan_context(user, today=None):
     today = today or date.today()
+    if _ensure_default_bilan_questions(user):
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
     weekday = int(user.bilan_weekday) if user.bilan_weekday is not None else None
     j_minus_1 = ((weekday - 1) % 7) if weekday is not None else None
     has_questions = bool(user.get_bilan_note_questions(enabled_only=True))
@@ -5241,6 +5263,8 @@ def get_athlete_bilan_settings(athlete_id):
     if not _coach_owns_athlete(request.current_user, athlete_id):
         return jsonify({'error': 'Athlète non autorisé'}), 403
     athlete = User.query.get_or_404(athlete_id)
+    if _ensure_default_bilan_questions(athlete):
+        db.session.commit()
     weekday = int(athlete.bilan_weekday) if athlete.bilan_weekday is not None else None
     return jsonify({
         'athlete_id': athlete.id,
@@ -5286,7 +5310,11 @@ def put_athlete_bilan_settings(athlete_id):
     if not touched:
         return jsonify({'error': 'bilan_weekday ou questions requis'}), 400
 
+    # Jour posé sans questionnaire → questions standard (sinon notif sans UI athlète).
+    _ensure_default_bilan_questions(athlete)
+
     db.session.commit()
+    weekday = int(athlete.bilan_weekday) if athlete.bilan_weekday is not None else None
     return jsonify({
         'athlete_id': athlete.id,
         'bilan_weekday': weekday,
