@@ -1835,7 +1835,8 @@ def delete_user(user_id):
         db.session.commit()
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Suppression impossible : {e}'}), 500
+        current_app.logger.exception('account/user delete failed')
+        return jsonify({'error': 'Suppression impossible pour le moment. Réessaie.'}), 500
     return jsonify({'ok': True})
 
 
@@ -2360,13 +2361,13 @@ def parse_program_import(job_id):
         return jsonify({'error': str(exc)}), 503
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
-    except Exception as exc:
+    except Exception:
         current_app.logger.exception('program import parse failed')
-        return jsonify({'error': f'Analyse IA impossible : {exc}'}), 502
+        return jsonify({'error': 'Analyse du fichier impossible. Réessaie avec un autre fichier ou plus tard.'}), 502
 
     if not draft.get('sessions'):
         return jsonify({
-            'error': 'Aucun exercice musculation détecté. Change d’onglet/page ou précise un hint.',
+            'error': 'Aucun exercice musculation détecté. Change d’onglet/page ou ajoute une précision.',
             'warnings': draft.get('warnings') or [],
         }), 422
 
@@ -5473,7 +5474,7 @@ def coach_youtube_auth_url():
     from app.youtube_oauth import build_authorize_url, youtube_oauth_configured
     if not youtube_oauth_configured():
         return jsonify({
-            'error': 'YouTube non configuré côté serveur (GOOGLE_OAUTH_CLIENT_ID / SECRET)',
+            'error': 'Connexion YouTube indisponible pour le moment.',
             'code': 'YOUTUBE_OAUTH_MISSING',
         }), 503
     try:
@@ -5568,7 +5569,7 @@ def coach_youtube_videos():
     from app.youtube_oauth import enrich_privacy, list_my_videos, refresh_access_token, youtube_oauth_configured
     user = request.current_user
     if not youtube_oauth_configured():
-        return jsonify({'error': 'YouTube non configuré', 'code': 'YOUTUBE_OAUTH_MISSING'}), 503
+        return jsonify({'error': 'Connexion YouTube indisponible pour le moment.', 'code': 'YOUTUBE_OAUTH_MISSING'}), 503
     if not user.youtube_refresh_token:
         return jsonify({'error': 'YouTube non connecté', 'code': 'YOUTUBE_NOT_CONNECTED'}), 401
     try:
@@ -5593,7 +5594,8 @@ def coach_youtube_videos():
             ),
         })
     except Exception as exc:
-        return jsonify({'error': f'YouTube API : {exc}'}), 502
+        current_app.logger.exception('youtube api failed')
+        return jsonify({'error': 'Impossible de charger tes vidéos YouTube. Réessaie plus tard.'}), 502
 
 
 @api_bp.put('/coach/profile')

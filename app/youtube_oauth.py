@@ -35,7 +35,7 @@ def youtube_redirect_uri() -> str:
         return explicit
     base = (os.environ.get('PUBLIC_BASE_URL') or '').rstrip('/')
     if not base:
-        raise ValueError('PUBLIC_BASE_URL ou GOOGLE_OAUTH_REDIRECT_URI requis')
+        raise ValueError('Connexion YouTube indisponible. Contacte le support.')
     return f'{base}/api/coach/youtube/callback'
 
 
@@ -57,7 +57,7 @@ def parse_oauth_state(state: str) -> int:
 
 def build_authorize_url(user_id: int) -> str:
     if not youtube_oauth_configured():
-        raise ValueError('YouTube OAuth non configuré (GOOGLE_OAUTH_CLIENT_ID / SECRET)')
+        raise ValueError('Connexion YouTube indisponible pour le moment.')
     params = {
         'client_id': _client_id(),
         'redirect_uri': youtube_redirect_uri(),

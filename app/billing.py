@@ -315,7 +315,7 @@ def create_checkout():
 
     if not _stripe_ready():
         return jsonify({
-            'error': 'Stripe non configuré (STRIPE_SECRET_KEY manquant côté serveur).',
+            'error': 'Paiement indisponible pour le moment. Contacte le support Farmness.',
             'code': 'STRIPE_NOT_CONFIGURED',
         }), 503
 
@@ -421,7 +421,8 @@ def create_checkout():
         )
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': f'Stripe Checkout impossible : {e}'}), 502
+        current_app.logger.exception('stripe checkout failed')
+        return jsonify({'error': 'Paiement impossible. Réessaie ou contacte le support.'}), 502
 
     pay.stripe_session_id = session.id
     db.session.commit()
@@ -439,7 +440,7 @@ def confirm_checkout():
     """Après retour app : vérifie la session Stripe et upgrade si payée."""
     user = request.current_user
     if not _stripe_ready():
-        return jsonify({'error': 'Stripe non configuré', 'code': 'STRIPE_NOT_CONFIGURED'}), 503
+        return jsonify({'error': 'Paiement indisponible pour le moment.', 'code': 'STRIPE_NOT_CONFIGURED'}), 503
     data = request.get_json(silent=True) or {}
     session_id = (data.get('session_id') or '').strip()
     if not session_id:
@@ -659,7 +660,7 @@ def stripe_webhook():
     sig = request.headers.get('Stripe-Signature', '')
     secret = (current_app.config.get('STRIPE_WEBHOOK_SECRET') or '').strip()
     if not _stripe_ready():
-        return jsonify({'error': 'Stripe non configuré'}), 503
+        return jsonify({'error': 'Paiement indisponible pour le moment.'}), 503
 
     if secret:
         try:

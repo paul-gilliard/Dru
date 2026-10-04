@@ -631,7 +631,7 @@ def call_claude_parse(*, extract: dict, hint: str | None, filename: str) -> dict
     """Appelle Anthropic. Overridable en tests via monkeypatch."""
     api_key = (os.environ.get('ANTHROPIC_API_KEY') or '').strip()
     if not api_key:
-        raise RuntimeError('ANTHROPIC_API_KEY manquant sur le serveur')
+        raise RuntimeError("L'import intelligent est temporairement indisponible.")
 
     import anthropic
 
