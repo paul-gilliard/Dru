@@ -147,6 +147,9 @@ class User(db.Model):
     avatar_url = db.Column(db.String(512), nullable=True)
     # Logo marque / salle (coach) — même stockage avatars
     logo_url = db.Column(db.String(512), nullable=True)
+    # Crédits import IA (athlète) — débité à l'enregistrement d'un import
+    program_ai_credits = db.Column(db.Integer, nullable=False, default=1)
+    meal_ai_credits = db.Column(db.Integer, nullable=False, default=1)
 
     coach = db.relationship('User', remote_side=[id], foreign_keys=[coach_id], backref='athletes')
 
@@ -199,6 +202,8 @@ class User(db.Model):
         }
         if self.role == 'athlete':
             data['bilan_note_questions'] = self.get_bilan_note_questions()
+            data['program_ai_credits'] = int(self.program_ai_credits or 0)
+            data['meal_ai_credits'] = int(self.meal_ai_credits or 0)
             data['sex'] = self.sex
             data['height_cm'] = self.height_cm
             data['birth_date'] = self.birth_date.isoformat() if self.birth_date else None

@@ -1738,9 +1738,28 @@ def create_user():
     if User.query.filter(db.func.lower(User.username) == username.lower()).first():
         return jsonify({'error': "Ce nom d'utilisateur existe déjà"}), 409
 
+    ai_credits = 1 if role == 'athlete' else 0
+    meal_credits = 1 if role == 'athlete' else 0
+    if role == 'athlete' and 'program_ai_credits' in data:
+        try:
+            ai_credits = int(data.get('program_ai_credits'))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'program_ai_credits doit être un entier'}), 400
+        if ai_credits < 0 or ai_credits > 100:
+            return jsonify({'error': 'program_ai_credits doit être entre 0 et 100'}), 400
+    if role == 'athlete' and 'meal_ai_credits' in data:
+        try:
+            meal_credits = int(data.get('meal_ai_credits'))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'meal_ai_credits doit être un entier'}), 400
+        if meal_credits < 0 or meal_credits > 100:
+            return jsonify({'error': 'meal_ai_credits doit être entre 0 et 100'}), 400
+
     user = User(
         username=username, email=email, role=role, display_name=display_name,
         subscription_tier=subscription_tier if role == 'coach' else 0,
+        program_ai_credits=ai_credits,
+        meal_ai_credits=meal_credits,
     )
     user.set_password(password)
     if role == 'athlete' and data.get('coach_id'):
@@ -1788,7 +1807,7 @@ def update_user(user_id):
                 from app.billing import record_admin_manual_change
                 record_admin_manual_change(
                     user, 'coach_tier', tier, admin,
-                    note=f'Passage manuel N{prev} → N{tier}',
+                    note=f'Passage manuel N{prev} -> N{tier}',
                 )
             except Exception:
                 pass
@@ -1805,10 +1824,26 @@ def update_user(user_id):
                     'athlete_independent' if next_val else 'athlete_free',
                     None,
                     admin,
-                    note='Activation manuelle Indépendant' if next_val else 'Désactivation manuelle Indépendant',
+                    note='Activation manuelle Independant' if next_val else 'Desactivation manuelle Independant',
                 )
             except Exception:
                 pass
+    if user.role == 'athlete' and 'program_ai_credits' in data:
+        try:
+            credits = int(data.get('program_ai_credits'))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'program_ai_credits doit être un entier'}), 400
+        if credits < 0 or credits > 100:
+            return jsonify({'error': 'program_ai_credits doit être entre 0 et 100'}), 400
+        user.program_ai_credits = credits
+    if user.role == 'athlete' and 'meal_ai_credits' in data:
+        try:
+            credits = int(data.get('meal_ai_credits'))
+        except (TypeError, ValueError):
+            return jsonify({'error': 'meal_ai_credits doit être un entier'}), 400
+        if credits < 0 or credits > 100:
+            return jsonify({'error': 'meal_ai_credits doit être entre 0 et 100'}), 400
+        user.meal_ai_credits = credits
     if user.role == 'athlete' and 'coach_id' in data:
         coach_id = data.get('coach_id')
         if coach_id in (None, '', 0, 'null'):

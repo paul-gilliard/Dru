@@ -333,6 +333,8 @@ def create_app():
                 ('energy_balance_start_date', "ALTER TABLE `user` ADD COLUMN energy_balance_start_date DATE NULL"),
                 ('avatar_url', "ALTER TABLE `user` ADD COLUMN avatar_url VARCHAR(512) NULL"),
                 ('logo_url', "ALTER TABLE `user` ADD COLUMN logo_url VARCHAR(512) NULL"),
+                ('program_ai_credits', "ALTER TABLE `user` ADD COLUMN program_ai_credits INT NOT NULL DEFAULT 1"),
+                ('meal_ai_credits', "ALTER TABLE `user` ADD COLUMN meal_ai_credits INT NOT NULL DEFAULT 1"),
             ]:
                 if col not in user_cols:
                     db.session.execute(db.text(ddl))
@@ -350,7 +352,20 @@ def create_app():
             except Exception:
                 pass
             db.session.commit()
-            print("✓ user coach_id / subscription_tier / email / independent_module / bilan / profile OK")
+            # Backfill crédits IA manquants (0 → 1) sans écraser les valeurs admin (>1).
+            try:
+                db.session.execute(db.text(
+                    "UPDATE `user` SET program_ai_credits = 1 "
+                    "WHERE role = 'athlete' AND COALESCE(program_ai_credits, 0) < 1"
+                ))
+                db.session.execute(db.text(
+                    "UPDATE `user` SET meal_ai_credits = 1 "
+                    "WHERE role = 'athlete' AND COALESCE(meal_ai_credits, 0) < 1"
+                ))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+            print("✓ user coach_id / subscription_tier / email / independent_module / bilan / profile / AI credits OK")
 
             # Migration one-shot : ancien jour global coach → chaque athlète sans jour
             try:
