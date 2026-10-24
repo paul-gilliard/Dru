@@ -2265,15 +2265,28 @@ def delete_exercise_entry(entry_id):
 
 # ---------------------------------------------------- PROGRAM IMPORT (AI) -
 
-def _find_import_exercise_candidates(name: str, *, muscle_group=None, coach_id=None, limit=5):
+def _find_import_exercise_candidates(
+    name: str,
+    *,
+    muscle_group=None,
+    coach_id=None,
+    limit=5,
+    personal_exercises=None,
+):
     """Commun + perso coach, triés par score (seuil un peu plus strict pour l'UI Oui/Non)."""
     from app.program_import import normalize_muscle
     muscle = normalize_muscle(muscle_group) or muscle_group
     common = _find_similar_bank_items('exercise', name, muscle_group=muscle, limit=limit)
     results = list(common)
     seen = {r['id'] for r in results}
-    if coach_id is not None:
-        personal = Exercise.query.filter(Exercise.owner_id == int(coach_id)).all()
+    personal = personal_exercises
+    if personal is None and coach_id is not None:
+        personal = (
+            Exercise.query.filter(Exercise.owner_id == int(coach_id))
+            .limit(1500)
+            .all()
+        )
+    if personal:
         scored = []
         for ex in personal:
             score = _bank_name_similarity(name, _public_name_from_personal(ex.name))
@@ -2295,6 +2308,14 @@ def _find_import_exercise_candidates(name: str, *, muscle_group=None, coach_id=N
 
 
 def _enrich_match_items(match_items: list, coach_id: int) -> list:
+    # Une seule lecture perso pour tout le job (évite N× .all() après Claude).
+    personal = []
+    if coach_id is not None:
+        personal = (
+            Exercise.query.filter(Exercise.owner_id == int(coach_id))
+            .limit(1500)
+            .all()
+        )
     for item in match_items:
         if item.get('resolution'):
             continue
@@ -2303,6 +2324,7 @@ def _enrich_match_items(match_items: list, coach_id: int) -> list:
             muscle_group=item.get('muscle'),
             coach_id=coach_id,
             limit=5,
+            personal_exercises=personal,
         )
         item['candidates'] = cands
         suggested = None
