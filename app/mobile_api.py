@@ -2637,11 +2637,13 @@ def commit_program_import(job_id):
 
     program_name = (draft.get('program_name') or 'Programme importé').strip()[:128]
     if is_athlete:
+        # Comme create_program : la 1ʳᵉ prog athlète devient l’actuelle.
+        has_any = Program.query.filter_by(athlete_id=user.id, is_template=False).count() > 0
         program = Program(
             name=program_name,
             athlete_id=user.id,
             coach_id=user.coach_id,
-            is_active=False,
+            is_active=not has_any,
             is_template=False,
         )
     else:
