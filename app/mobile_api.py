@@ -2695,6 +2695,428 @@ def commit_program_import(job_id):
     }), 201
 
 
+# ---------------------------------------------------- MEAL PLAN IMPORT (AI) -
+
+def _find_import_food_candidates(
+    name: str,
+    *,
+    brand=None,
+    owner_id=None,
+    limit=5,
+    personal_foods=None,
+):
+    """Commun + perso owner, triés par score."""
+    common = _find_similar_bank_items('food', name, brand=brand, limit=limit)
+    results = list(common)
+    seen = {r['id'] for r in results}
+    personal = personal_foods
+    if personal is None and owner_id is not None:
+        personal = (
+            Food.query.filter(Food.owner_id == int(owner_id))
+            .limit(1500)
+            .all()
+        )
+    if personal:
+        scored = []
+        for food in personal:
+            score = _bank_name_similarity(name, _public_name_from_personal(food.name))
+            if brand and food.brand and str(brand).lower() in (food.brand or '').lower():
+                score = min(100.0, score + 12)
+            if score < 35:
+                continue
+            scored.append((score, food))
+        scored.sort(key=lambda x: (-x[0], x[1].name.lower()))
+        for score, food in scored:
+            if food.id in seen:
+                continue
+            results.append(_food_similar_dict(food, 'personal', score))
+            seen.add(food.id)
+            if len(results) >= limit:
+                break
+    results.sort(key=lambda r: (-float(r.get('score') or 0), (r.get('name') or '').lower()))
+    return results[:limit]
+
+
+def _enrich_meal_match_items(match_items: list, owner_id: int) -> list:
+    personal = []
+    if owner_id is not None:
+        personal = (
+            Food.query.filter(Food.owner_id == int(owner_id))
+            .limit(1500)
+            .all()
+        )
+    for item in match_items:
+        if item.get('resolution'):
+            continue
+        cands = _find_import_food_candidates(
+            item.get('source_name') or '',
+            brand=item.get('brand'),
+            owner_id=owner_id,
+            limit=5,
+            personal_foods=personal,
+        )
+        item['candidates'] = cands
+        suggested = None
+        if cands and float(cands[0].get('score') or 0) >= 55:
+            suggested = cands[0]
+        item['suggested'] = suggested
+    return match_items
+
+
+def _load_owned_meal_import_job(job_id: str):
+    from app.meal_import import load_job
+    meta = load_job(job_id)
+    if not meta:
+        return None, (jsonify({'error': 'Import introuvable'}), 404)
+    user = request.current_user
+    if user.role == 'admin':
+        return meta, None
+    if user.role not in ('coach', 'athlete'):
+        return None, (jsonify({'error': 'Accès refusé'}), 403)
+    if int(meta.get('coach_id') or 0) != int(user.id):
+        return None, (jsonify({'error': 'Accès refusé'}), 403)
+    return meta, None
+
+
+def _athlete_meal_import_credit_error(user, meta=None):
+    if user.role != 'athlete':
+        return None
+    if meta and meta.get('credit_spent'):
+        return None
+    if int(getattr(user, 'meal_ai_credits', 0) or 0) < 1:
+        return jsonify({
+            'error': 'Plus de crédit IA pour importer un plan alimentaire.',
+            'code': 'NO_MEAL_AI_CREDITS',
+            'meal_ai_credits': 0,
+        }), 403
+    return None
+
+
+def _spend_athlete_meal_import_credit(user, meta):
+    if user.role != 'athlete' or meta.get('credit_spent'):
+        return
+    credits = int(getattr(user, 'meal_ai_credits', 0) or 0)
+    if credits < 1:
+        raise RuntimeError('NO_MEAL_AI_CREDITS')
+    user.meal_ai_credits = credits - 1
+    meta['credit_spent'] = True
+
+
+@api_bp.post('/coach/meal-imports')
+@login_required
+def create_meal_import():
+    from app.meal_import import create_upload_job, public_job_view, save_job
+    user = request.current_user
+    if user.role not in ('coach', 'admin', 'athlete'):
+        return jsonify({'error': 'Accès refusé'}), 403
+    credit_err = _athlete_meal_import_credit_error(user)
+    if credit_err:
+        return credit_err
+    uploaded = []
+    for field in ('files', 'file', 'images', 'document', 'plan', 'meal'):
+        uploaded.extend(request.files.getlist(field))
+    items = [(f.filename, f.read()) for f in uploaded if getattr(f, 'filename', None)]
+    if not items:
+        return jsonify({'error': 'Fichier requis (Excel, CSV, PDF ou image)'}), 400
+    try:
+        meta = create_upload_job(coach_id=user.id, files=items)
+        meta['owner_role'] = user.role
+        save_job(meta)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    return jsonify(public_job_view(meta)), 201
+
+
+@api_bp.get('/coach/meal-imports/<job_id>')
+@login_required
+def get_meal_import(job_id):
+    from app.meal_import import public_job_view
+    if request.current_user.role not in ('coach', 'admin', 'athlete'):
+        return jsonify({'error': 'Accès refusé'}), 403
+    meta, err = _load_owned_meal_import_job(job_id)
+    if err:
+        return err
+    return jsonify(public_job_view(meta))
+
+
+@api_bp.post('/coach/meal-imports/<job_id>/parse')
+@login_required
+def parse_meal_import(job_id):
+    from app.meal_import import (
+        build_extract_payload, build_match_items, call_claude_parse,
+        public_job_view, save_job,
+    )
+    if request.current_user.role not in ('coach', 'admin', 'athlete'):
+        return jsonify({'error': 'Accès refusé'}), 403
+    meta, err = _load_owned_meal_import_job(job_id)
+    if err:
+        return err
+    user = request.current_user
+    credit_err = _athlete_meal_import_credit_error(user, meta)
+    if credit_err:
+        return credit_err
+    data = request.get_json(silent=True) or {}
+    sheet = (data.get('sheet') or data.get('selected_sheet') or '').strip() or None
+    page = data.get('page') if 'page' in data else data.get('selected_page')
+    if page is not None:
+        try:
+            page = int(page)
+        except (TypeError, ValueError):
+            return jsonify({'error': 'page doit être un entier (0-based)'}), 400
+    hint = (data.get('hint') or '').strip()[:2000] or None
+
+    sheets = meta.get('sheets') or []
+    if sheets and len(sheets) > 1 and not sheet:
+        return jsonify({
+            'error': 'Plusieurs onglets — précise sheet',
+            'sheets': sheets,
+            'code': 'SHEET_REQUIRED',
+        }), 400
+
+    try:
+        extract = build_extract_payload(meta, sheet=sheet, page=page)
+        draft = call_claude_parse(
+            extract=extract, hint=hint, filename=meta.get('filename') or 'upload',
+        )
+    except RuntimeError as exc:
+        return jsonify({'error': str(exc)}), 503
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 400
+    except Exception:
+        current_app.logger.exception('meal import parse failed')
+        return jsonify({'error': 'Analyse du fichier impossible. Réessaie avec un autre fichier ou plus tard.'}), 502
+
+    if not draft.get('meals'):
+        return jsonify({
+            'error': 'Aucun aliment détecté. Change d’onglet/page ou ajoute une précision.',
+            'warnings': draft.get('warnings') or [],
+        }), 422
+
+    match_items = _enrich_meal_match_items(build_match_items(draft), meta['coach_id'])
+    meta['selected_sheet'] = extract.get('selected_sheet')
+    meta['selected_page'] = extract.get('selected_page')
+    meta['hint'] = hint
+    meta['draft'] = draft
+    meta['match_items'] = match_items
+    meta['warnings'] = draft.get('warnings') or []
+    meta['status'] = 'parsed'
+    save_job(meta)
+    view = public_job_view(meta)
+    if user.role == 'athlete':
+        view['meal_ai_credits'] = int(getattr(user, 'meal_ai_credits', 0) or 0)
+    return jsonify(view)
+
+
+@api_bp.post('/coach/meal-imports/<job_id>/resolve')
+@login_required
+def resolve_meal_import(job_id):
+    from app.meal_import import public_job_view, save_job
+    if request.current_user.role not in ('coach', 'admin', 'athlete'):
+        return jsonify({'error': 'Accès refusé'}), 403
+    meta, err = _load_owned_meal_import_job(job_id)
+    if err:
+        return err
+    if meta.get('status') not in ('parsed', 'resolving'):
+        return jsonify({'error': 'Parse le fichier avant de résoudre les aliments'}), 400
+    data = request.get_json(silent=True) or {}
+    resolutions = data.get('resolutions')
+    if not isinstance(resolutions, list) or not resolutions:
+        return jsonify({'error': 'resolutions[] requis'}), 400
+
+    by_key = {m['key']: m for m in (meta.get('match_items') or [])}
+    for row in resolutions:
+        if not isinstance(row, dict):
+            continue
+        key = row.get('key')
+        item = by_key.get(key)
+        if not item:
+            continue
+        action = (row.get('action') or '').strip()
+        if action == 'match':
+            fid = row.get('food_id')
+            if fid is None and item.get('suggested'):
+                fid = item['suggested'].get('id')
+            if fid is None:
+                return jsonify({'error': f'food_id requis pour {key}'}), 400
+            food = Food.query.get(int(fid))
+            if not food:
+                return jsonify({'error': f'Aliment {fid} introuvable'}), 404
+            if food.owner_id is not None and food.owner_id != meta['coach_id'] and request.current_user.role != 'admin':
+                return jsonify({'error': 'Aliment hors de ta banque'}), 403
+            item['resolution'] = {
+                'action': 'match',
+                'food_id': food.id,
+                'name': food.name,
+                'brand': food.brand,
+            }
+        elif action == 'create':
+            name = (row.get('name') or item.get('source_name') or '').strip()[:160]
+            if not name:
+                return jsonify({'error': f'name requis pour créer {key}'}), 400
+            macros = item.get('suggested_macros') or {}
+            item['resolution'] = {
+                'action': 'create',
+                'food_id': None,
+                'name': name,
+                'brand': (row.get('brand') or item.get('brand') or None),
+                'kcal': row.get('kcal', macros.get('kcal')),
+                'proteins': row.get('proteins', macros.get('proteins')),
+                'lipids': row.get('lipids', macros.get('lipids')),
+                'carbs': row.get('carbs', macros.get('carbs')),
+            }
+        else:
+            return jsonify({'error': f'action invalide pour {key} (match|create)'}), 400
+
+    meta['match_items'] = list(by_key.values())
+    unresolved = [m for m in meta['match_items'] if not m.get('resolution')]
+    meta['status'] = 'resolved' if not unresolved else 'resolving'
+    save_job(meta)
+    return jsonify(public_job_view(meta))
+
+
+@api_bp.post('/coach/meal-imports/<job_id>/commit')
+@login_required
+def commit_meal_import(job_id):
+    from app.meal_import import normalize_draft, public_job_view, save_job
+    if request.current_user.role not in ('coach', 'admin', 'athlete'):
+        return jsonify({'error': 'Accès refusé'}), 403
+    meta, err = _load_owned_meal_import_job(job_id)
+    if err:
+        return err
+    draft = meta.get('draft') or {}
+    match_items = meta.get('match_items') or []
+    if not draft.get('meals'):
+        return jsonify({'error': 'Rien à commit — parse d’abord'}), 400
+    unresolved = [m for m in match_items if not m.get('resolution')]
+    if unresolved:
+        return jsonify({
+            'error': f'{len(unresolved)} aliment(s) sans confirmation',
+            'unresolved_keys': [m['key'] for m in unresolved],
+            'code': 'UNRESOLVED',
+        }), 400
+
+    data = request.get_json(silent=True) or {}
+    patched = dict(draft)
+    if isinstance(data.get('plan_name'), str) and data.get('plan_name').strip():
+        patched['plan_name'] = data['plan_name'].strip()[:128]
+    if isinstance(data.get('meals'), list) and data['meals']:
+        patched['meals'] = data['meals']
+    draft = normalize_draft(patched)
+    meta['draft'] = draft
+
+    user = request.current_user
+    is_athlete = user.role == 'athlete'
+    if is_athlete:
+        credit_err = _athlete_meal_import_credit_error(user, meta)
+        if credit_err:
+            return credit_err
+        try:
+            _spend_athlete_meal_import_credit(user, meta)
+        except RuntimeError:
+            return jsonify({
+                'error': 'Plus de crédit IA pour importer un plan alimentaire.',
+                'code': 'NO_MEAL_AI_CREDITS',
+                'meal_ai_credits': 0,
+            }), 403
+    owner_id = user.id if user.role in ('coach', 'athlete') else int(meta['coach_id'])
+
+    food_map = {}
+    created_foods = []
+    for item in match_items:
+        res = item['resolution']
+        src = item['source_name']
+        if res['action'] == 'match':
+            food_map[src] = int(res['food_id'])
+        else:
+            public_name = (res.get('name') or src).strip()
+            personal_name = _ensure_personal_name(public_name, user)
+            existing = Food.query.filter_by(name=personal_name).first()
+            if existing:
+                food = existing
+            else:
+                def _macro(key, default):
+                    raw = res.get(key)
+                    try:
+                        return float(raw) if raw is not None and str(raw).strip() != '' else default
+                    except (TypeError, ValueError):
+                        return default
+                food = Food(
+                    name=personal_name,
+                    brand=(res.get('brand') or item.get('brand') or None),
+                    kcal=_macro('kcal', 100.0),
+                    proteins=_macro('proteins', 0.0),
+                    lipids=_macro('lipids', 0.0),
+                    carbs=_macro('carbs', 0.0),
+                    owner_id=owner_id,
+                )
+                db.session.add(food)
+                db.session.flush()
+                _queue_promote_to_common('food', food, user)
+                created_foods.append(food.to_dict())
+            food_map[src] = food.id
+
+    plan_name = (draft.get('plan_name') or 'Plan alimentaire importé').strip()[:128]
+    meal_count = max(1, min(6, int(draft.get('meal_count') or 1)))
+    if is_athlete:
+        has_any = MealPlan.query.filter_by(athlete_id=user.id, is_template=False).count() > 0
+        plan = MealPlan(
+            name=plan_name,
+            athlete_id=user.id,
+            coach_id=user.coach_id,
+            is_active=not has_any,
+            is_template=False,
+            meal_count=meal_count,
+        )
+    else:
+        plan = MealPlan(
+            name=plan_name,
+            athlete_id=None,
+            coach_id=owner_id,
+            is_active=False,
+            is_template=True,
+            meal_count=meal_count,
+        )
+    db.session.add(plan)
+    db.session.flush()
+
+    for meal in draft['meals']:
+        num = int(meal['meal_number'])
+        if meal.get('label'):
+            setattr(plan, f'meal_label_{num}', meal['label'])
+        if meal.get('time'):
+            setattr(plan, f'meal_time_{num}', meal['time'])
+        for pos, item in enumerate(meal.get('items') or [], start=1):
+            src = item.get('name') or ''
+            fid = food_map.get(src)
+            if not fid:
+                continue
+            qty = item.get('quantity_g')
+            try:
+                qty = float(qty) if qty is not None else 100.0
+            except (TypeError, ValueError):
+                qty = 100.0
+            db.session.add(MealEntry(
+                meal_plan_id=plan.id,
+                food_id=fid,
+                meal_number=num,
+                quantity=qty,
+                position=pos,
+            ))
+
+    db.session.commit()
+    meta['status'] = 'committed'
+    meta['meal_plan_id'] = plan.id
+    save_job(meta)
+    return jsonify({
+        'ok': True,
+        'meal_plan': plan.to_dict(with_meals=True),
+        'created_foods': created_foods,
+        'import': public_job_view(meta),
+        'meal_ai_credits': (
+            int(getattr(user, 'meal_ai_credits', 0) or 0) if is_athlete else None
+        ),
+    }), 201
+
 
 # ---------------------------------------------------------- EXERCISE BANK -
 
