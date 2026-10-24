@@ -2318,19 +2318,52 @@ def _load_owned_import_job(job_id: str):
     if not meta:
         return None, (jsonify({'error': 'Import introuvable'}), 404)
     user = request.current_user
-    if user.role == 'coach' and int(meta.get('coach_id') or 0) != int(user.id):
+    if user.role == 'admin':
+        return meta, None
+    if user.role not in ('coach', 'athlete'):
         return None, (jsonify({'error': 'Accès refusé'}), 403)
-    if user.role not in ('coach', 'admin'):
-        return None, (jsonify({'error': 'Réservé au coach'}), 403)
+    if int(meta.get('coach_id') or 0) != int(user.id):
+        return None, (jsonify({'error': 'Accès refusé'}), 403)
     return meta, None
 
 
+def _athlete_import_credit_error(user, meta=None):
+    """403 si athlète sans crédit (sauf job déjà débité au commit)."""
+    if user.role != 'athlete':
+        return None
+    if meta and meta.get('credit_spent'):
+        return None
+    if int(getattr(user, 'program_ai_credits', 0) or 0) < 1:
+        return jsonify({
+            'error': 'Plus de crédit IA pour importer un programme. Tu as déjà utilisé ton crédit offert.',
+            'code': 'NO_AI_CREDITS',
+            'program_ai_credits': 0,
+        }), 403
+    return None
+
+
+def _spend_athlete_import_credit(user, meta):
+    """Débite 1 crédit quand le programme est bien créé (idempotent par job)."""
+    if user.role != 'athlete' or meta.get('credit_spent'):
+        return
+    credits = int(getattr(user, 'program_ai_credits', 0) or 0)
+    if credits < 1:
+        raise RuntimeError('NO_AI_CREDITS')
+    user.program_ai_credits = credits - 1
+    meta['credit_spent'] = True
+
+
 @api_bp.post('/coach/program-imports')
-@coach_required
+@login_required
 def create_program_import():
     """Upload Excel/CSV/PDF/images → job + détection onglets/pages."""
-    from app.program_import import create_upload_job, public_job_view
+    from app.program_import import create_upload_job, public_job_view, save_job
     user = request.current_user
+    if user.role not in ('coach', 'admin', 'athlete'):
+        return jsonify({'error': 'Accès refusé'}), 403
+    credit_err = _athlete_import_credit_error(user)
+    if credit_err:
+        return credit_err
     uploaded = []
     for field in ('files', 'file', 'images', 'document', 'program'):
         uploaded.extend(request.files.getlist(field))
@@ -2339,15 +2372,19 @@ def create_program_import():
         return jsonify({'error': 'Fichier requis (Excel, CSV, PDF ou image)'}), 400
     try:
         meta = create_upload_job(coach_id=user.id, files=items)
+        meta['owner_role'] = user.role
+        save_job(meta)
     except ValueError as exc:
         return jsonify({'error': str(exc)}), 400
     return jsonify(public_job_view(meta)), 201
 
 
 @api_bp.get('/coach/program-imports/<job_id>')
-@coach_required
+@login_required
 def get_program_import(job_id):
     from app.program_import import public_job_view
+    if request.current_user.role not in ('coach', 'admin', 'athlete'):
+        return jsonify({'error': 'Accès refusé'}), 403
     meta, err = _load_owned_import_job(job_id)
     if err:
         return err
@@ -2355,16 +2392,22 @@ def get_program_import(job_id):
 
 
 @api_bp.post('/coach/program-imports/<job_id>/parse')
-@coach_required
+@login_required
 def parse_program_import(job_id):
     """Claude → draft Farmness + file de matching Oui/Non."""
     from app.program_import import (
         build_extract_payload, build_match_items, call_claude_parse,
         public_job_view, save_job,
     )
+    if request.current_user.role not in ('coach', 'admin', 'athlete'):
+        return jsonify({'error': 'Accès refusé'}), 403
     meta, err = _load_owned_import_job(job_id)
     if err:
         return err
+    user = request.current_user
+    credit_err = _athlete_import_credit_error(user, meta)
+    if credit_err:
+        return credit_err
     data = request.get_json(silent=True) or {}
     sheet = (data.get('sheet') or data.get('selected_sheet') or '').strip() or None
     page = data.get('page') if 'page' in data else data.get('selected_page')
@@ -2415,14 +2458,19 @@ def parse_program_import(job_id):
     meta['warnings'] = draft.get('warnings') or []
     meta['status'] = 'parsed'
     save_job(meta)
-    return jsonify(public_job_view(meta))
+    view = public_job_view(meta)
+    if user.role == 'athlete':
+        view['program_ai_credits'] = int(getattr(user, 'program_ai_credits', 0) or 0)
+    return jsonify(view)
 
 
 @api_bp.post('/coach/program-imports/<job_id>/resolve')
-@coach_required
+@login_required
 def resolve_program_import(job_id):
     """Enregistre les Oui/Non (match existant / créer / choisir un candidat)."""
     from app.program_import import public_job_view, save_job
+    if request.current_user.role not in ('coach', 'admin', 'athlete'):
+        return jsonify({'error': 'Accès refusé'}), 403
     meta, err = _load_owned_import_job(job_id)
     if err:
         return err
@@ -2451,7 +2499,7 @@ def resolve_program_import(job_id):
             ex = Exercise.query.get(int(eid))
             if not ex:
                 return jsonify({'error': f'Exercice {eid} introuvable'}), 404
-            # Visible : commun ou perso du coach
+            # Visible : commun ou perso du propriétaire du job
             if ex.owner_id is not None and ex.owner_id != meta['coach_id'] and request.current_user.role != 'admin':
                 return jsonify({'error': 'Exercice hors de ta banque'}), 403
             item['resolution'] = {
@@ -2471,9 +2519,9 @@ def resolve_program_import(job_id):
                 return jsonify({'error': f'name requis pour créer {key}'}), 400
             item['resolution'] = {
                 'action': 'create',
-                'exercise_id': None,
                 'name': name,
                 'muscle_group': muscle,
+                'exercise_id': None,
             }
         else:
             return jsonify({'error': f'action invalide pour {key} (match|create)'}), 400
@@ -2486,10 +2534,12 @@ def resolve_program_import(job_id):
 
 
 @api_bp.post('/coach/program-imports/<job_id>/commit')
-@coach_required
+@login_required
 def commit_program_import(job_id):
-    """Matérialise un template bibliothèque + crée les exos manquants (promote queue)."""
+    """Matérialise un template bibliothèque (coach) ou un programme athlète + exos manquants."""
     from app.program_import import normalize_draft, public_job_view, save_job
+    if request.current_user.role not in ('coach', 'admin', 'athlete'):
+        return jsonify({'error': 'Accès refusé'}), 403
     meta, err = _load_owned_import_job(job_id)
     if err:
         return err
@@ -2505,7 +2555,7 @@ def commit_program_import(job_id):
             'code': 'UNRESOLVED',
         }), 400
 
-    # Overrides coach (nom prog + séries) — les noms d'exos source restent ceux du matching.
+    # Overrides (nom prog + séries) — les noms d'exos source restent ceux du matching.
     data = request.get_json(silent=True) or {}
     patched = dict(draft)
     if isinstance(data.get('program_name'), str) and data.get('program_name').strip():
@@ -2516,7 +2566,20 @@ def commit_program_import(job_id):
     meta['draft'] = draft
 
     user = request.current_user
-    coach_id = user.id if user.role == 'coach' else int(meta['coach_id'])
+    is_athlete = user.role == 'athlete'
+    if is_athlete:
+        credit_err = _athlete_import_credit_error(user, meta)
+        if credit_err:
+            return credit_err
+        try:
+            _spend_athlete_import_credit(user, meta)
+        except RuntimeError:
+            return jsonify({
+                'error': 'Plus de crédit IA pour importer un programme.',
+                'code': 'NO_AI_CREDITS',
+                'program_ai_credits': 0,
+            }), 403
+    owner_id = user.id if user.role in ('coach', 'athlete') else int(meta['coach_id'])
     name_map = {}  # folded source_name → canonical program entry name + muscle
     created_exercises = []
     for item in match_items:
@@ -2541,7 +2604,7 @@ def commit_program_import(job_id):
                 ex = Exercise(
                     name=personal_name,
                     muscle_group=muscle,
-                    owner_id=coach_id,
+                    owner_id=owner_id,
                     media_status='none',
                 )
                 db.session.add(ex)
@@ -2551,13 +2614,22 @@ def commit_program_import(job_id):
             name_map[src] = {'name': ex.name, 'muscle': ex.muscle_group}
 
     program_name = (draft.get('program_name') or 'Programme importé').strip()[:128]
-    program = Program(
-        name=program_name,
-        athlete_id=None,
-        coach_id=coach_id,
-        is_active=False,
-        is_template=True,
-    )
+    if is_athlete:
+        program = Program(
+            name=program_name,
+            athlete_id=user.id,
+            coach_id=user.coach_id,
+            is_active=False,
+            is_template=False,
+        )
+    else:
+        program = Program(
+            name=program_name,
+            athlete_id=None,
+            coach_id=owner_id,
+            is_active=False,
+            is_template=True,
+        )
     db.session.add(program)
     db.session.flush()
 
@@ -2593,6 +2665,9 @@ def commit_program_import(job_id):
         'program': program.to_dict(with_sessions=True),
         'created_exercises': created_exercises,
         'import': public_job_view(meta),
+        'program_ai_credits': (
+            int(getattr(user, 'program_ai_credits', 0) or 0) if is_athlete else None
+        ),
     }), 201
 
 
