@@ -343,70 +343,91 @@ def _find_similar_bank_items(kind: str, name: str, *, muscle_group=None, brand=N
         results.append(item)
 
     if kind == 'exercise':
-        common = Exercise.query.filter(Exercise.owner_id.is_(None))
+        # Commune + perso : un doublon « Mollets jambes tendus » perso doit
+        # remonter à la review Superadmin, pas seulement la banque partagée.
+        base = Exercise.query
         if exclude_id is not None:
-            common = common.filter(Exercise.id != exclude_id)
+            base = base.filter(Exercise.id != exclude_id)
 
         name_conds = [Exercise.name.ilike(f'%{name}%')]
         for form in search_forms[:12]:
             name_conds.append(Exercise.name.ilike(f'%{form}%'))
-        # Inclure d’emblée le même groupe musculaire dans le pool de scoring
+        # Inclure d’emblée le même groupe musculaire (commune) dans le pool
         if muscle_group:
-            name_conds.append(Exercise.muscle_group == muscle_group)
+            name_conds.append(
+                db.and_(Exercise.owner_id.is_(None), Exercise.muscle_group == muscle_group)
+            )
         candidates = {
-            ex.id: ex for ex in common.filter(db.or_(*name_conds)).limit(120).all()
+            ex.id: ex for ex in base.filter(db.or_(*name_conds)).limit(160).all()
         }
 
         scored = []
         for ex in candidates.values():
-            score = _bank_name_similarity(name, ex.name)
+            pub = _public_name_from_personal(ex.name)
+            score = _bank_name_similarity(name, pub)
             if score < 28:
                 continue
-            reason = 'exact' if score >= 99.5 else 'close'
+            is_common = ex.owner_id is None
+            if score >= 99.5:
+                reason = 'exact'
+            elif is_common:
+                reason = 'close'
+            else:
+                reason = 'personal'
             if muscle_group and ex.muscle_group == muscle_group:
                 score = min(100.0, score + 8)
-            scored.append((score, reason, ex))
-        scored.sort(key=lambda x: (-x[0], x[2].name.lower()))
-        for score, reason, ex in scored[:limit]:
+            scored.append((score, reason, ex, 0 if is_common else 1))
+        scored.sort(key=lambda x: (-x[0], x[3], x[2].name.lower()))
+        for score, reason, ex, _perso in scored[:limit]:
             push(_exercise_similar_dict(ex, reason, score))
 
-        # Contexte même muscle (catalogue existant), même si le nom diffère
+        # Contexte même muscle (catalogue commun), même si le nom diffère
         if muscle_group and len(results) < limit:
             same = (
-                common.filter(Exercise.muscle_group == muscle_group)
-                .order_by(Exercise.name.asc())
-                .limit(24)
-                .all()
+                Exercise.query.filter(
+                    Exercise.owner_id.is_(None),
+                    Exercise.muscle_group == muscle_group,
+                )
             )
+            if exclude_id is not None:
+                same = same.filter(Exercise.id != exclude_id)
+            same = same.order_by(Exercise.name.asc()).limit(24).all()
             for ex in same:
                 if len(results) >= limit:
                     break
-                score = _bank_name_similarity(name, ex.name)
+                score = _bank_name_similarity(name, _public_name_from_personal(ex.name))
                 push(_exercise_similar_dict(ex, 'same_muscle', max(score, 10.0)))
 
     else:
-        common = Food.query.filter(Food.owner_id.is_(None))
+        base = Food.query
         if exclude_id is not None:
-            common = common.filter(Food.id != exclude_id)
+            base = base.filter(Food.id != exclude_id)
         name_conds = [Food.name.ilike(f'%{name}%')]
         for form in search_forms[:12]:
             name_conds.append(Food.name.ilike(f'%{form}%'))
         if brand:
             name_conds.append(Food.brand.ilike(f'%{brand}%'))
         candidates = {
-            f.id: f for f in common.filter(db.or_(*name_conds)).limit(120).all()
+            f.id: f for f in base.filter(db.or_(*name_conds)).limit(160).all()
         }
         scored = []
         for food in candidates.values():
-            score = _bank_name_similarity(name, food.name)
+            pub = _public_name_from_personal(food.name)
+            score = _bank_name_similarity(name, pub)
             if brand and food.brand and brand.lower() in (food.brand or '').lower():
                 score = min(100.0, score + 12)
             if score < 28:
                 continue
-            reason = 'exact' if score >= 99.5 else 'close'
-            scored.append((score, reason, food))
-        scored.sort(key=lambda x: (-x[0], x[2].name.lower()))
-        for score, reason, food in scored[:limit]:
+            is_common = food.owner_id is None
+            if score >= 99.5:
+                reason = 'exact'
+            elif is_common:
+                reason = 'close'
+            else:
+                reason = 'personal'
+            scored.append((score, reason, food, 0 if is_common else 1))
+        scored.sort(key=lambda x: (-x[0], x[3], x[2].name.lower()))
+        for score, reason, food, _perso in scored[:limit]:
             push(_food_similar_dict(food, reason, score))
 
     return results[:limit]
