@@ -504,6 +504,149 @@ def _retarget_exercise_name(old_name, new_name, athlete_id=None):
     perf_q.update({'exercise': new_name}, synchronize_session=False)
 
 
+def _fill_exercise_media_from(source: Exercise, target: Exercise) -> None:
+    """Complète les médias manquants de la cible avec ceux de la source (fusion)."""
+    if not target.animation_slug and source.animation_slug:
+        target.animation_slug = source.animation_slug
+    if not target.youtube_url and source.youtube_url:
+        target.youtube_url = source.youtube_url
+    if not target.custom_gif_url and source.custom_gif_url:
+        target.custom_gif_url = source.custom_gif_url
+    if target.animation_slug or target.youtube_url or target.custom_gif_url:
+        if (target.media_status or 'none') in ('none', 'pending', None):
+            target.media_status = 'approved'
+
+
+def _exercise_usage_counts_by_name(names: list[str]) -> dict[str, dict]:
+    """Compteurs programme + perfs pour une liste de noms d’exercices."""
+    names = [n for n in names if n]
+    empty = {'program_entries': 0, 'performances': 0}
+    if not names:
+        return {}
+    out = {n: dict(empty) for n in names}
+    entry_rows = (
+        db.session.query(ExerciseEntry.name, db.func.count(ExerciseEntry.id))
+        .filter(ExerciseEntry.name.in_(names))
+        .group_by(ExerciseEntry.name)
+        .all()
+    )
+    for name, count in entry_rows:
+        out.setdefault(name, dict(empty))['program_entries'] = int(count or 0)
+    perf_rows = (
+        db.session.query(PerformanceEntry.exercise, db.func.count(PerformanceEntry.id))
+        .filter(PerformanceEntry.exercise.in_(names))
+        .group_by(PerformanceEntry.exercise)
+        .all()
+    )
+    for name, count in perf_rows:
+        out.setdefault(name, dict(empty))['performances'] = int(count or 0)
+    return out
+
+
+_CLUSTER_SCORE_MIN = 42.0
+
+
+def _build_common_exercise_duplicate_clusters(*, muscle_group=None, q=None, limit=60):
+    """Composantes connexes de noms proches dans la banque commune."""
+    query = Exercise.query.filter(Exercise.owner_id.is_(None))
+    if muscle_group and muscle_group in MUSCLE_GROUPS:
+        query = query.filter(Exercise.muscle_group == muscle_group)
+    rows = query.order_by(Exercise.muscle_group.asc(), Exercise.name.asc()).all()
+    if q:
+        needle = _fold_bank_name(q).strip()
+        if needle:
+            rows = [ex for ex in rows if needle in _fold_bank_name(ex.name)]
+    n = len(rows)
+    if n < 2:
+        return []
+
+    parent = list(range(n))
+    rank = [0] * n
+
+    def find(i: int) -> int:
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra == rb:
+            return
+        if rank[ra] < rank[rb]:
+            parent[ra] = rb
+        elif rank[ra] > rank[rb]:
+            parent[rb] = ra
+        else:
+            parent[rb] = ra
+            rank[ra] += 1
+
+    best_pair: dict[tuple[int, int], float] = {}
+    for i in range(n):
+        for j in range(i + 1, n):
+            score = _bank_name_similarity(rows[i].name, rows[j].name)
+            if rows[i].muscle_group and rows[i].muscle_group == rows[j].muscle_group:
+                score = min(100.0, score + 8.0)
+            if score < _CLUSTER_SCORE_MIN:
+                continue
+            union(i, j)
+            a_id, b_id = rows[i].id, rows[j].id
+            key = (a_id, b_id) if a_id < b_id else (b_id, a_id)
+            prev = best_pair.get(key, 0.0)
+            if score > prev:
+                best_pair[key] = score
+
+    groups: dict[int, list[int]] = {}
+    for i in range(n):
+        root = find(i)
+        groups.setdefault(root, []).append(i)
+
+    usage = _exercise_usage_counts_by_name([ex.name for ex in rows])
+    clusters = []
+    for indices in groups.values():
+        if len(indices) < 2:
+            continue
+        items = []
+        max_link = 0.0
+        for idx in indices:
+            ex = rows[idx]
+            link = 0.0
+            for other in indices:
+                if other == idx:
+                    continue
+                a_id, b_id = ex.id, rows[other].id
+                key = (a_id, b_id) if a_id < b_id else (b_id, a_id)
+                link = max(link, best_pair.get(key, 0.0))
+            max_link = max(max_link, link)
+            u = usage.get(ex.name) or {'program_entries': 0, 'performances': 0}
+            items.append({
+                'id': ex.id,
+                'name': ex.name,
+                'muscle_group': ex.muscle_group,
+                'score': round(link, 1),
+                'has_media': bool(ex.animation_slug or ex.youtube_url or ex.custom_gif_url),
+                'animation_slug': ex.animation_slug,
+                'youtube_url': ex.youtube_url,
+                'media_status': ex.media_status or 'none',
+                'usage': {
+                    'program_entries': u['program_entries'],
+                    'performances': u['performances'],
+                },
+            })
+        items.sort(key=lambda it: (-float(it['score']), -(it['usage']['performances']), it['name'].lower()))
+        muscles = sorted({it['muscle_group'] for it in items if it.get('muscle_group')})
+        clusters.append({
+            'id': f"c-{'-'.join(str(it['id']) for it in items[:4])}",
+            'muscle_group': muscles[0] if len(muscles) == 1 else None,
+            'muscle_groups': muscles,
+            'score': round(max_link, 1),
+            'items': items,
+        })
+
+    clusters.sort(key=lambda c: (-float(c['score']), -len(c['items']), (c.get('muscle_group') or '')))
+    return clusters[: max(1, min(int(limit or 60), 120))]
+
+
 def _promote_personal_to_common(kind, target, payload):
     """
     Passe une entrée perso en commune SANS toucher à la structure des programmes :
@@ -3675,15 +3818,106 @@ def serve_exercise_media(filename):
 @api_bp.delete('/exercise-bank/<int:exercise_id>')
 @login_required
 def delete_exercise_bank(exercise_id):
+    """Suppression simple (perso). Les communs passent par replace-and-delete."""
     exercise = Exercise.query.get_or_404(exercise_id)
     user = request.current_user
     if exercise.owner_id is None:
-        return jsonify({'error': 'Impossible de supprimer une entrée commune'}), 403
+        if user.role != 'admin':
+            return jsonify({
+                'error': 'Exercice partagé : choisis un remplacement (fusion) avant suppression',
+                'code': 'COMMON_REQUIRES_REPLACE',
+            }), 403
+        return jsonify({
+            'error': 'Pour un exercice partagé, utilise le remplacement vers un autre exo',
+            'code': 'COMMON_REQUIRES_REPLACE',
+        }), 400
     if exercise.owner_id != user.id and user.role != 'admin':
         return _deny_manage()
     db.session.delete(exercise)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+@api_bp.get('/admin/exercise-bank/duplicate-clusters')
+@login_required
+def admin_exercise_bank_duplicate_clusters():
+    """Superadmin : clusters de doublons dans la banque commune (matching noms)."""
+    if request.current_user.role != 'admin':
+        return _deny_manage()
+    muscle = (request.args.get('muscle_group') or '').strip() or None
+    q = (request.args.get('q') or '').strip() or None
+    try:
+        limit = int(request.args.get('limit') or 60)
+    except (TypeError, ValueError):
+        limit = 60
+    clusters = _build_common_exercise_duplicate_clusters(
+        muscle_group=muscle, q=q, limit=limit,
+    )
+    return jsonify({
+        'clusters': clusters,
+        'muscle_groups': MUSCLE_GROUPS,
+        'threshold': _CLUSTER_SCORE_MIN,
+    })
+
+
+@api_bp.post('/exercise-bank/<int:exercise_id>/replace-and-delete')
+@login_required
+def replace_and_delete_exercise_bank(exercise_id):
+    """Superadmin : retarget programmes + perfs vers un autre exo, puis supprime.
+
+    Complète les médias manquants de la cible. Body optionnel also_rename :
+    renomme la cible après fusion (historique suivi).
+    """
+    if request.current_user.role != 'admin':
+        return _deny_manage()
+    source = Exercise.query.get_or_404(exercise_id)
+    data = request.get_json(silent=True) or {}
+    try:
+        replace_id = int(data.get('replace_with_id'))
+    except (TypeError, ValueError):
+        return jsonify({'error': 'replace_with_id requis'}), 400
+    if replace_id == source.id:
+        return jsonify({'error': 'Choisis un exercice différent comme remplacement'}), 400
+    target = Exercise.query.get(replace_id)
+    if not target:
+        return jsonify({'error': 'Exercice de remplacement introuvable'}), 404
+
+    also_rename = (data.get('also_rename') or '').strip() or None
+    if also_rename:
+        clash = Exercise.query.filter(
+            Exercise.name == also_rename,
+            Exercise.id != target.id,
+            Exercise.id != source.id,
+        ).first()
+        if clash:
+            return jsonify({'error': f'Le nom « {also_rename} » est déjà pris'}), 409
+
+    old_name = source.name
+    keep_name = target.name
+    entries_n = ExerciseEntry.query.filter_by(name=old_name).count()
+    perf_n = PerformanceEntry.query.filter_by(exercise=old_name).count()
+    _fill_exercise_media_from(source, target)
+    _retarget_exercise_name(old_name, keep_name)
+    db.session.delete(source)
+    db.session.flush()
+
+    final_name = keep_name
+    renamed = False
+    if also_rename and also_rename != keep_name:
+        _retarget_exercise_name(keep_name, also_rename)
+        target.name = also_rename
+        final_name = also_rename
+        renamed = True
+
+    db.session.commit()
+    return jsonify({
+        'ok': True,
+        'replaced_with_id': target.id,
+        'replaced_with_name': final_name,
+        'renamed': renamed,
+        'retargeted_program_entries': entries_n,
+        'retargeted_performances': perf_n,
+    })
 
 
 # ---------------------------------------------------------------- JOURNAL -
