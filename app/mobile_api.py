@@ -901,6 +901,74 @@ def _library_version_name(base_name, athlete, day):
     return f'{base_name} · {label} · {day.strftime("%d/%m/%Y")}'[:128]
 
 
+def _program_content_signature(program):
+    """Empreinte du corps (séances + exos), sans le nom d’affichage.
+
+    Le nom live (« Force ») et le nom template (« Force · Alex · 25/10/2026 »)
+    diffèrent toujours — l’inclure cassait le skip no-op et créait des versions
+    quotidiennes sans vrai changement.
+    """
+    sessions = []
+    for sess in sorted(
+        list(program.sessions or []),
+        key=lambda s: (s.day_of_week if s.day_of_week is not None else 0, s.id or 0),
+    ):
+        exercises = []
+        for ex in sorted(
+            list(sess.exercises or []),
+            key=lambda e: (e.position if e.position is not None else 0, e.id or 0),
+        ):
+            exercises.append((
+                ex.position, ex.name, ex.sets, ex.reps, ex.rest, ex.rir,
+                ex.intensification, ex.muscle, ex.remark, ex.series_description,
+                ex.main_series,
+            ))
+        sessions.append((sess.day_of_week, sess.session_name, tuple(exercises)))
+    return tuple(sessions)
+
+
+def _meal_plan_content_signature(plan):
+    """Empreinte du corps (horaires + repas + équivalents), sans le nom d’affichage."""
+    times = tuple(getattr(plan, f'meal_time_{i}') for i in range(1, 7))
+    labels = tuple(getattr(plan, f'meal_label_{i}') for i in range(1, 7))
+    meals = []
+    for meal in sorted(
+        list(plan.meals or []),
+        key=lambda m: (m.meal_number or 0, m.position if m.position is not None else 0, m.id or 0),
+    ):
+        eqs = tuple(sorted(
+            (
+                (eq.food_id, float(eq.quantity) if eq.quantity is not None else None)
+                for eq in (meal.equivalents or [])
+            ),
+            key=lambda t: t[0] or 0,
+        ))
+        meals.append((
+            meal.meal_number, meal.food_id,
+            float(meal.quantity) if meal.quantity is not None else None,
+            meal.position, eqs,
+        ))
+    return (
+        plan.meal_count,
+        times,
+        labels,
+        tuple(meals),
+    )
+
+
+def _dedupe_library_rows(rows):
+    """Garde le plus récent, supprime les doublons (même source + jour)."""
+    if not rows:
+        return None
+    ordered = sorted(rows, key=lambda r: (r.id or 0), reverse=True)
+    keep = ordered[0]
+    for extra in ordered[1:]:
+        db.session.delete(extra)
+    if len(ordered) > 1:
+        db.session.flush()
+    return keep
+
+
 def _replace_program_template_from_source(target, source):
     for sess in list(target.sessions):
         db.session.delete(sess)
@@ -946,6 +1014,7 @@ def _replace_meal_plan_template_from_source(target, source):
 
 
 def _sync_program_to_coach_library(program, *, actor=None, force=False):
+    """Upsert 1 template / source / jour — uniquement si le contenu a changé. Ne commit pas."""
     if not program or getattr(program, 'is_template', False) or not program.athlete_id:
         return None
     if not force:
@@ -962,12 +1031,31 @@ def _sync_program_to_coach_library(program, *, actor=None, force=False):
         program.coach_id = int(coach_id)
     day = date.today()
     name = _library_version_name(program.name, athlete, day)
-    existing = Program.query.filter_by(
+    live_sig = _program_content_signature(program)
+
+    today_rows = Program.query.filter_by(
         coach_id=int(coach_id),
         is_template=True,
         library_source_id=program.id,
         library_day=day,
-    ).first()
+    ).all()
+    existing = _dedupe_library_rows(today_rows)
+
+    latest = (
+        Program.query.filter_by(
+            coach_id=int(coach_id),
+            is_template=True,
+            library_source_id=program.id,
+        )
+        .order_by(Program.library_day.desc(), Program.id.desc())
+        .first()
+    )
+    compare = existing or latest
+    if compare is not None and _program_content_signature(compare) == live_sig:
+        if existing and existing.name != name:
+            existing.name = name
+        return None
+
     if existing:
         _replace_program_template_from_source(existing, program)
         existing.name = name
@@ -982,6 +1070,7 @@ def _sync_program_to_coach_library(program, *, actor=None, force=False):
 
 
 def _sync_meal_plan_to_coach_library(plan, *, actor=None, force=False):
+    """Upsert 1 template / source / jour — uniquement si le contenu a changé. Ne commit pas."""
     if not plan or getattr(plan, 'is_template', False) or not plan.athlete_id:
         return None
     if not force:
@@ -998,12 +1087,31 @@ def _sync_meal_plan_to_coach_library(plan, *, actor=None, force=False):
         plan.coach_id = int(coach_id)
     day = date.today()
     name = _library_version_name(plan.name, athlete, day)
-    existing = MealPlan.query.filter_by(
+    live_sig = _meal_plan_content_signature(plan)
+
+    today_rows = MealPlan.query.filter_by(
         coach_id=int(coach_id),
         is_template=True,
         library_source_id=plan.id,
         library_day=day,
-    ).first()
+    ).all()
+    existing = _dedupe_library_rows(today_rows)
+
+    latest = (
+        MealPlan.query.filter_by(
+            coach_id=int(coach_id),
+            is_template=True,
+            library_source_id=plan.id,
+        )
+        .order_by(MealPlan.library_day.desc(), MealPlan.id.desc())
+        .first()
+    )
+    compare = existing or latest
+    if compare is not None and _meal_plan_content_signature(compare) == live_sig:
+        if existing and existing.name != name:
+            existing.name = name
+        return None
+
     if existing:
         _replace_meal_plan_template_from_source(existing, plan)
         existing.name = name
