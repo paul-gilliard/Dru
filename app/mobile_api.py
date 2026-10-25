@@ -207,13 +207,48 @@ def _fold_bank_name(name: str) -> str:
     return (name or '').lower().translate(table)
 
 
+_BANK_NAME_STOPWORDS = frozenset({
+    'de', 'des', 'du', 'la', 'le', 'les', 'un', 'une', 'et', 'en', 'au', 'aux',
+    'a', 'd', 'l', 'sur', 'sous', 'avec', 'sans', 'pour', 'par',
+})
+
+
 def _bank_name_tokens(name: str) -> set[str]:
     raw = re.sub(r'[^a-z0-9\s\-]', ' ', _fold_bank_name(name))
-    return {t for t in re.split(r'[\s\-]+', raw) if len(t) >= 2}
+    return {
+        t for t in re.split(r'[\s\-]+', raw)
+        if len(t) >= 2 and t not in _BANK_NAME_STOPWORDS
+    }
+
+
+def _bank_token_stem(token: str) -> str:
+    """Stem FR léger : pluriels (mollets→mollet) + féminin (tendues→tendu)."""
+    t = (token or '').strip().lower()
+    if len(t) <= 3:
+        return t
+    if t[-1] in 'sx':
+        t = t[:-1]
+    if len(t) > 4 and t.endswith(('ue', 'ee')):
+        t = t[:-1]
+    return t
+
+
+def _bank_token_search_forms(token: str) -> list[str]:
+    """Variantes SQL ILIKE (token, stem, pluriel) pour ne pas rater mollet/mollets."""
+    t = (token or '').strip().lower()
+    if len(t) < 3:
+        return []
+    forms = {t}
+    stem = _bank_token_stem(t)
+    if len(stem) >= 3:
+        forms.add(stem)
+        if not stem.endswith('s'):
+            forms.add(stem + 's')
+    return sorted(forms, key=len, reverse=True)
 
 
 def _bank_name_similarity(query: str, candidate: str) -> float:
-    """Score 0–100 : exact, sous-chaîne, ou chevauchement de mots."""
+    """Score 0–100 : exact, sous-chaîne, ou chevauchement de mots (pluriels FR)."""
     q = _fold_bank_name(query).strip()
     c = _fold_bank_name(candidate).strip()
     if not q or not c:
@@ -227,9 +262,29 @@ def _bank_name_similarity(query: str, candidate: str) -> float:
     if not qt or not ct:
         return 0.0
     overlap = len(qt & ct)
-    if overlap == 0:
+    qs = {_bank_token_stem(t) for t in qt}
+    cs = {_bank_token_stem(t) for t in ct}
+    stem_overlap = len(qs & cs)
+    if overlap == 0 and stem_overlap == 0:
         return 0.0
-    return 55.0 * overlap / max(len(qt), len(ct)) + 20.0 * overlap / len(qt | ct)
+    score = 0.0
+    if stem_overlap:
+        score = max(
+            score,
+            55.0 * stem_overlap / max(len(qs), len(cs))
+            + 20.0 * stem_overlap / len(qs | cs),
+        )
+        # Un lemme long partagé (ex. mollet) suffit pour signaler un proche
+        significant = {s for s in (qs & cs) if len(s) >= 5}
+        if significant:
+            score = max(score, 42.0 + 8.0 * min(len(significant), 3))
+    if overlap:
+        score = max(
+            score,
+            55.0 * overlap / max(len(qt), len(ct))
+            + 20.0 * overlap / len(qt | ct),
+        )
+    return min(100.0, score)
 
 
 def _exercise_similar_dict(ex: Exercise, reason: str, score: float) -> dict:
@@ -268,6 +323,13 @@ def _find_similar_bank_items(kind: str, name: str, *, muscle_group=None, brand=N
     if not name:
         return []
     tokens = sorted(_bank_name_tokens(name), key=len, reverse=True)[:5]
+    search_forms: list[str] = []
+    seen_forms: set[str] = set()
+    for t in tokens:
+        for form in _bank_token_search_forms(t):
+            if form not in seen_forms:
+                seen_forms.add(form)
+                search_forms.append(form)
     results: list[dict] = []
     seen: set[int] = set()
     if exclude_id is not None:
@@ -286,11 +348,13 @@ def _find_similar_bank_items(kind: str, name: str, *, muscle_group=None, brand=N
             common = common.filter(Exercise.id != exclude_id)
 
         name_conds = [Exercise.name.ilike(f'%{name}%')]
-        for t in tokens:
-            if len(t) >= 3:
-                name_conds.append(Exercise.name.ilike(f'%{t}%'))
+        for form in search_forms[:12]:
+            name_conds.append(Exercise.name.ilike(f'%{form}%'))
+        # Inclure d’emblée le même groupe musculaire dans le pool de scoring
+        if muscle_group:
+            name_conds.append(Exercise.muscle_group == muscle_group)
         candidates = {
-            ex.id: ex for ex in common.filter(db.or_(*name_conds)).limit(80).all()
+            ex.id: ex for ex in common.filter(db.or_(*name_conds)).limit(120).all()
         }
 
         scored = []
@@ -325,13 +389,12 @@ def _find_similar_bank_items(kind: str, name: str, *, muscle_group=None, brand=N
         if exclude_id is not None:
             common = common.filter(Food.id != exclude_id)
         name_conds = [Food.name.ilike(f'%{name}%')]
-        for t in tokens:
-            if len(t) >= 3:
-                name_conds.append(Food.name.ilike(f'%{t}%'))
+        for form in search_forms[:12]:
+            name_conds.append(Food.name.ilike(f'%{form}%'))
         if brand:
             name_conds.append(Food.brand.ilike(f'%{brand}%'))
         candidates = {
-            f.id: f for f in common.filter(db.or_(*name_conds)).limit(80).all()
+            f.id: f for f in common.filter(db.or_(*name_conds)).limit(120).all()
         }
         scored = []
         for food in candidates.values():
