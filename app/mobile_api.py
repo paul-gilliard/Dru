@@ -584,9 +584,11 @@ def _build_common_exercise_duplicate_clusters(*, muscle_group=None, q=None, limi
     best_pair: dict[tuple[int, int], float] = {}
     for i in range(n):
         for j in range(i + 1, n):
+            # Jamais de cluster cross-muscle (évite les mega-groupes « presse »).
+            if rows[i].muscle_group != rows[j].muscle_group:
+                continue
             score = _bank_name_similarity(rows[i].name, rows[j].name)
-            if rows[i].muscle_group and rows[i].muscle_group == rows[j].muscle_group:
-                score = min(100.0, score + 8.0)
+            score = min(100.0, score + 8.0)
             if score < _CLUSTER_SCORE_MIN:
                 continue
             union(i, j)
@@ -633,7 +635,12 @@ def _build_common_exercise_duplicate_clusters(*, muscle_group=None, q=None, limi
                     'performances': u['performances'],
                 },
             })
-        items.sort(key=lambda it: (-float(it['score']), -(it['usage']['performances']), it['name'].lower()))
+        # Gardé par défaut = le plus utilisé (perfs + programmes), puis score
+        items.sort(key=lambda it: (
+            -(it['usage']['performances'] + it['usage']['program_entries']),
+            -float(it['score']),
+            it['name'].lower(),
+        ))
         muscles = sorted({it['muscle_group'] for it in items if it.get('muscle_group')})
         clusters.append({
             'id': f"c-{'-'.join(str(it['id']) for it in items[:4])}",
