@@ -3978,14 +3978,15 @@ def admin_exercise_bank_duplicate_clusters():
 @api_bp.get('/admin/exercise-bank/active-program-usage')
 @login_required
 def admin_exercise_active_program_usage():
-    """Superadmin : par nom d’exo, nb d’athlètes l’ayant dans leur programme actif."""
+    """Superadmin : par nom d’exo, nb d’athlètes l’ayant dans leur programme actif.
+
+    Clés de by_name = nom « foldé » (minuscules, sans accents) pour matcher la
+    banque même si la casse diffère entre exercise_entry et exercise.
+    """
     if request.current_user.role != 'admin':
         return _deny_manage()
-    athlete_rows = (
-        db.session.query(
-            ExerciseEntry.name,
-            db.func.count(db.func.distinct(Program.athlete_id)),
-        )
+    rows = (
+        db.session.query(ExerciseEntry.name, Program.athlete_id, ExerciseEntry.id)
         .join(ProgramSession, ExerciseEntry.session_id == ProgramSession.id)
         .join(Program, ProgramSession.program_id == Program.id)
         .filter(
@@ -3993,33 +3994,23 @@ def admin_exercise_active_program_usage():
             Program.is_template.is_(False),
             Program.athlete_id.isnot(None),
         )
-        .group_by(ExerciseEntry.name)
         .all()
     )
-    entry_rows = (
-        db.session.query(
-            ExerciseEntry.name,
-            db.func.count(ExerciseEntry.id),
-        )
-        .join(ProgramSession, ExerciseEntry.session_id == ProgramSession.id)
-        .join(Program, ProgramSession.program_id == Program.id)
-        .filter(
-            Program.is_active.is_(True),
-            Program.is_template.is_(False),
-            Program.athlete_id.isnot(None),
-        )
-        .group_by(ExerciseEntry.name)
-        .all()
-    )
-    by_name = {}
-    for name, count in athlete_rows:
-        by_name[name] = {
-            'active_athletes': int(count or 0),
-            'active_entries': 0,
+    athletes_by_key: dict[str, set] = {}
+    entries_by_key: dict[str, set] = {}
+    for name, athlete_id, entry_id in rows:
+        key = _fold_bank_name(name)
+        if not key:
+            continue
+        athletes_by_key.setdefault(key, set()).add(athlete_id)
+        entries_by_key.setdefault(key, set()).add(entry_id)
+    by_name = {
+        key: {
+            'active_athletes': len(athletes_by_key.get(key) or ()),
+            'active_entries': len(entries_by_key.get(key) or ()),
         }
-    for name, count in entry_rows:
-        slot = by_name.setdefault(name, {'active_athletes': 0, 'active_entries': 0})
-        slot['active_entries'] = int(count or 0)
+        for key in athletes_by_key.keys() | entries_by_key.keys()
+    }
     return jsonify({'by_name': by_name})
 
 
