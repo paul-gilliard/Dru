@@ -3568,8 +3568,23 @@ def update_exercise_bank(exercise_id):
             }), 403
     elif exercise.owner_id != user.id and user.role != 'admin':
         return _deny_manage()
-    if data.get('name'):
-        exercise.name = data['name']
+    if 'name' in data and data.get('name') is not None:
+        new_name = str(data.get('name') or '').strip()
+        if not new_name:
+            return jsonify({'error': 'Nom requis'}), 400
+        if len(new_name) > 192:
+            new_name = new_name[:192]
+        old_name = exercise.name
+        if new_name != old_name:
+            clash = Exercise.query.filter(
+                Exercise.name == new_name,
+                Exercise.id != exercise.id,
+            ).first()
+            if clash:
+                return jsonify({'error': f'Le nom « {new_name} » est déjà pris'}), 409
+            # Aligne séances + historique perfs ; les entrées restent en place.
+            _retarget_exercise_name(old_name, new_name)
+            exercise.name = new_name
     if data.get('muscle_group') in MUSCLE_GROUPS:
         exercise.muscle_group = data['muscle_group']
     from app.exercise_media import normalize_youtube_url
