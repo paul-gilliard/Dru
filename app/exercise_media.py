@@ -81,14 +81,29 @@ def public_absolute_url(path_or_url: str | None) -> str | None:
         return None
     if path_or_url.startswith('http://') or path_or_url.startswith('https://'):
         return path_or_url
-    base = (os.environ.get('PUBLIC_BASE_URL') or request.url_root.rstrip('/')).rstrip('/')
+    base = (os.environ.get('PUBLIC_BASE_URL') or '').rstrip('/')
+    if not base:
+        try:
+            base = request.url_root.rstrip('/')
+        except RuntimeError:
+            return path_or_url if path_or_url.startswith('/') else f'/{path_or_url}'
     if path_or_url.startswith('/'):
         return f'{base}{path_or_url}'
     return f'{base}/{path_or_url}'
 
 
-def media_dict_from_exercise(ex) -> dict:
+def _machine_fields_from_exercise(ex) -> dict:
+    from app.machine_catalog import machine_image_public_url
+    key = getattr(ex, 'machine_image_key', None)
     return {
+        'machine_brand': getattr(ex, 'machine_brand', None),
+        'machine_image_key': key,
+        'machine_image_url': machine_image_public_url(key) if key else None,
+    }
+
+
+def media_dict_from_exercise(ex) -> dict:
+    payload = {
         'id': ex.id,
         'name': ex.name,
         'muscle_group': ex.muscle_group,
@@ -99,6 +114,8 @@ def media_dict_from_exercise(ex) -> dict:
         'has_media': bool(ex.animation_slug or ex.youtube_url or ex.custom_gif_url),
         'is_personal': ex.owner_id is not None,
     }
+    payload.update(_machine_fields_from_exercise(ex))
+    return payload
 
 
 def media_dict_from_slug(name: str, slug: str) -> dict:
@@ -107,6 +124,9 @@ def media_dict_from_slug(name: str, slug: str) -> dict:
         'animation_slug': slug,
         'youtube_url': None,
         'custom_gif_url': None,
+        'machine_brand': None,
+        'machine_image_key': None,
+        'machine_image_url': None,
         'media_status': 'approved',
         'has_media': True,
         'is_personal': False,
@@ -119,6 +139,9 @@ def empty_media_dict(name: str) -> dict:
         'animation_slug': None,
         'youtube_url': None,
         'custom_gif_url': None,
+        'machine_brand': None,
+        'machine_image_key': None,
+        'machine_image_url': None,
         'media_status': 'none',
         'has_media': False,
     }

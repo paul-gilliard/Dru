@@ -512,6 +512,10 @@ def _fill_exercise_media_from(source: Exercise, target: Exercise) -> None:
         target.youtube_url = source.youtube_url
     if not target.custom_gif_url and source.custom_gif_url:
         target.custom_gif_url = source.custom_gif_url
+    if not target.machine_brand and source.machine_brand:
+        target.machine_brand = source.machine_brand
+    if not target.machine_image_key and source.machine_image_key:
+        target.machine_image_key = source.machine_image_key
     if target.animation_slug or target.youtube_url or target.custom_gif_url:
         if (target.media_status or 'none') in ('none', 'pending', None):
             target.media_status = 'approved'
@@ -2524,6 +2528,9 @@ def get_session(session_id):
         ex['youtube_url'] = media.get('youtube_url')
         ex['custom_gif_url'] = media.get('custom_gif_url')
         ex['has_media'] = bool(media.get('has_media'))
+        ex['machine_brand'] = media.get('machine_brand')
+        ex['machine_image_url'] = media.get('machine_image_url')
+        ex['machine_image_key'] = media.get('machine_image_key')
     return jsonify(data)
 
 
@@ -3493,6 +3500,7 @@ def create_exercise_bank():
         return jsonify({'error': 'Cet exercice existe déjà'}), 409
 
     from app.exercise_media import normalize_youtube_url
+    from app.machine_catalog import normalize_machine_image_key
     youtube_url = None
     try:
         youtube_url = normalize_youtube_url(data.get('youtube_url'))
@@ -3500,6 +3508,27 @@ def create_exercise_bank():
         return jsonify({'error': str(exc)}), 400
     animation_slug = (data.get('animation_slug') or '').strip() or None
     custom_gif_url = (data.get('custom_gif_url') or '').strip() or None
+    wants_machine = (
+        'machine_brand' in data or 'machine_image_key' in data
+    ) and (
+        (data.get('machine_brand') not in (None, ''))
+        or (data.get('machine_image_key') not in (None, ''))
+    )
+    if wants_machine and user.role != 'admin':
+        return jsonify({
+            'error': 'Seule l’équipe Farmness peut lier une marque / photo machine',
+            'code': 'MACHINE_LINK_ADMIN_ONLY',
+        }), 403
+    machine_brand = None
+    machine_image_key = None
+    if user.role == 'admin':
+        machine_brand = (data.get('machine_brand') or '').strip() or None
+        if machine_brand and len(machine_brand) > 64:
+            machine_brand = machine_brand[:64]
+        try:
+            machine_image_key = normalize_machine_image_key(data.get('machine_image_key'))
+        except ValueError as exc:
+            return jsonify({'error': str(exc)}), 400
     has_media = bool(animation_slug or youtube_url or custom_gif_url)
     if as_common:
         media_status = 'approved' if has_media else 'none'
@@ -3513,6 +3542,8 @@ def create_exercise_bank():
         animation_slug=animation_slug if user.role == 'admin' else None,
         youtube_url=youtube_url,
         custom_gif_url=custom_gif_url,
+        machine_brand=machine_brand,
+        machine_image_key=machine_image_key,
         media_status=media_status,
     )
     db.session.add(exercise)
@@ -3551,6 +3582,28 @@ def update_exercise_bank(exercise_id):
         exercise.custom_gif_url = (data.get('custom_gif_url') or '').strip() or None
     if 'animation_slug' in data and user.role == 'admin':
         exercise.animation_slug = (data.get('animation_slug') or '').strip() or None
+    if 'machine_brand' in data or 'machine_image_key' in data:
+        if user.role != 'admin':
+            return jsonify({
+                'error': 'Seule l’équipe Farmness peut lier une marque / photo machine',
+                'code': 'MACHINE_LINK_ADMIN_ONLY',
+            }), 403
+        if 'machine_brand' in data:
+            brand = data.get('machine_brand')
+            if brand is None or (isinstance(brand, str) and not brand.strip()):
+                exercise.machine_brand = None
+            else:
+                exercise.machine_brand = str(brand).strip()[:64]
+        if 'machine_image_key' in data:
+            from app.machine_catalog import normalize_machine_image_key
+            raw_key = data.get('machine_image_key')
+            if raw_key is None or (isinstance(raw_key, str) and not raw_key.strip()):
+                exercise.machine_image_key = None
+            else:
+                try:
+                    exercise.machine_image_key = normalize_machine_image_key(raw_key)
+                except ValueError as exc:
+                    return jsonify({'error': str(exc)}), 400
     if exercise.animation_slug or exercise.youtube_url or exercise.custom_gif_url:
         if exercise.owner_id is None:
             exercise.media_status = 'approved'
@@ -3782,13 +3835,35 @@ def _resolve_exercise_media_batch(names, user):
     return out
 
 
+def _merge_machine_fields(payload: dict, common, personal) -> dict:
+    from app.machine_catalog import machine_image_public_url
+
+    src = None
+    if personal and (personal.machine_image_key or personal.machine_brand):
+        src = personal
+    elif common and (common.machine_image_key or common.machine_brand):
+        src = common
+    if not src:
+        payload.setdefault('machine_brand', None)
+        payload.setdefault('machine_image_key', None)
+        payload.setdefault('machine_image_url', None)
+        return payload
+    if not payload.get('machine_brand'):
+        payload['machine_brand'] = src.machine_brand
+    if not payload.get('machine_image_key'):
+        payload['machine_image_key'] = src.machine_image_key
+        payload['machine_image_url'] = (
+            machine_image_public_url(src.machine_image_key) if src.machine_image_key else None
+        )
+    return payload
+
+
 def _media_payload_from_pair(name, public_name, common, personal):
     from app.exercise_animation_map import slug_for_exercise_name
     from app.exercise_media import (
         empty_media_dict, media_dict_from_exercise, media_dict_from_slug,
     )
 
-    # YouTube / GIF perso prioritaire ; on complète avec l’illustration commune si besoin
     if personal and (personal.animation_slug or personal.youtube_url or personal.custom_gif_url):
         payload = media_dict_from_exercise(personal)
         if common:
@@ -3801,15 +3876,48 @@ def _media_payload_from_pair(name, public_name, common, personal):
             payload['has_media'] = bool(
                 payload.get('animation_slug') or payload.get('youtube_url') or payload.get('custom_gif_url')
             )
-        return payload
+        return _merge_machine_fields(payload, common, personal)
     if common and (common.animation_slug or common.youtube_url or common.custom_gif_url):
-        return media_dict_from_exercise(common)
+        return _merge_machine_fields(media_dict_from_exercise(common), common, personal)
     slug = slug_for_exercise_name(name) or slug_for_exercise_name(public_name)
     if slug:
-        return media_dict_from_slug(name, slug)
+        return _merge_machine_fields(media_dict_from_slug(name, slug), common, personal)
     if common:
-        return media_dict_from_exercise(common)
+        return _merge_machine_fields(media_dict_from_exercise(common), common, personal)
+    if personal:
+        return _merge_machine_fields(media_dict_from_exercise(personal), common, personal)
     return empty_media_dict(name)
+
+
+@api_bp.get('/machine-catalog')
+@login_required
+def list_machine_catalog():
+    if request.current_user.role != 'admin':
+        return jsonify({
+            'error': 'Catalogue machines réservé à l’équipe Farmness',
+            'code': 'MACHINE_LINK_ADMIN_ONLY',
+        }), 403
+    from app.machine_catalog import MACHINE_BRANDS, list_catalog_items
+
+    brand = (request.args.get('brand') or '').strip() or None
+    q = (request.args.get('q') or '').strip() or None
+    data = list_catalog_items(brand=brand, q=q)
+    data['closed_brands'] = list(MACHINE_BRANDS)
+    return jsonify(data)
+
+
+@api_bp.get('/media/machine-catalog/<path:key>')
+def serve_machine_catalog_media(key):
+    from flask import send_from_directory
+    from app.machine_catalog import is_safe_machine_image_key, machine_catalog_storage_dir
+
+    if not is_safe_machine_image_key(key):
+        return jsonify({'error': 'Fichier invalide'}), 400
+    root = machine_catalog_storage_dir()
+    path = root / key.replace('\\', '/')
+    if not path.is_file():
+        return jsonify({'error': 'Introuvable'}), 404
+    return send_from_directory(path.parent, path.name)
 
 
 @api_bp.get('/media/exercises/<path:filename>')
@@ -3865,6 +3973,54 @@ def admin_exercise_bank_duplicate_clusters():
         'muscle_groups': MUSCLE_GROUPS,
         'threshold': _CLUSTER_SCORE_MIN,
     })
+
+
+@api_bp.get('/admin/exercise-bank/active-program-usage')
+@login_required
+def admin_exercise_active_program_usage():
+    """Superadmin : par nom d’exo, nb d’athlètes l’ayant dans leur programme actif."""
+    if request.current_user.role != 'admin':
+        return _deny_manage()
+    athlete_rows = (
+        db.session.query(
+            ExerciseEntry.name,
+            db.func.count(db.func.distinct(Program.athlete_id)),
+        )
+        .join(ProgramSession, ExerciseEntry.session_id == ProgramSession.id)
+        .join(Program, ProgramSession.program_id == Program.id)
+        .filter(
+            Program.is_active.is_(True),
+            Program.is_template.is_(False),
+            Program.athlete_id.isnot(None),
+        )
+        .group_by(ExerciseEntry.name)
+        .all()
+    )
+    entry_rows = (
+        db.session.query(
+            ExerciseEntry.name,
+            db.func.count(ExerciseEntry.id),
+        )
+        .join(ProgramSession, ExerciseEntry.session_id == ProgramSession.id)
+        .join(Program, ProgramSession.program_id == Program.id)
+        .filter(
+            Program.is_active.is_(True),
+            Program.is_template.is_(False),
+            Program.athlete_id.isnot(None),
+        )
+        .group_by(ExerciseEntry.name)
+        .all()
+    )
+    by_name = {}
+    for name, count in athlete_rows:
+        by_name[name] = {
+            'active_athletes': int(count or 0),
+            'active_entries': 0,
+        }
+    for name, count in entry_rows:
+        slot = by_name.setdefault(name, {'active_athletes': 0, 'active_entries': 0})
+        slot['active_entries'] = int(count or 0)
+    return jsonify({'by_name': by_name})
 
 
 @api_bp.post('/exercise-bank/<int:exercise_id>/replace-and-delete')

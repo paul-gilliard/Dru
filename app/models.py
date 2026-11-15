@@ -588,6 +588,8 @@ class Exercise(db.Model):
     animation_slug = db.Column(db.String(128), nullable=True)
     youtube_url = db.Column(db.String(512), nullable=True)
     custom_gif_url = db.Column(db.String(512), nullable=True)
+    machine_brand = db.Column(db.String(64), nullable=True)
+    machine_image_key = db.Column(db.String(256), nullable=True)
     # none | personal | pending | approved
     media_status = db.Column(db.String(16), nullable=False, default='none')
 
@@ -597,6 +599,7 @@ class Exercise(db.Model):
         return f'<Exercise {self.name} ({self.muscle_group})>'
     
     def to_dict(self):
+        from app.machine_catalog import machine_image_public_url
         return {
             'id': self.id,
             'name': self.name,
@@ -606,6 +609,9 @@ class Exercise(db.Model):
             'animation_slug': self.animation_slug,
             'youtube_url': self.youtube_url,
             'custom_gif_url': self.custom_gif_url,
+            'machine_brand': self.machine_brand,
+            'machine_image_key': self.machine_image_key,
+            'machine_image_url': machine_image_public_url(self.machine_image_key) if self.machine_image_key else None,
             'media_status': self.media_status or 'none',
             'has_media': bool(self.animation_slug or self.youtube_url or self.custom_gif_url),
         }

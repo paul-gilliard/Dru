@@ -441,6 +441,8 @@ def create_app():
                     ('youtube_url', "ALTER TABLE exercise ADD COLUMN youtube_url VARCHAR(512) NULL"),
                     ('custom_gif_url', "ALTER TABLE exercise ADD COLUMN custom_gif_url VARCHAR(512) NULL"),
                     ('media_status', "ALTER TABLE exercise ADD COLUMN media_status VARCHAR(16) NOT NULL DEFAULT 'none'"),
+                    ('machine_brand', "ALTER TABLE exercise ADD COLUMN machine_brand VARCHAR(64) NULL"),
+                    ('machine_image_key', "ALTER TABLE exercise ADD COLUMN machine_image_key VARCHAR(256) NULL"),
                 ):
                     if col not in ecols:
                         db.session.execute(db.text(ddl))
