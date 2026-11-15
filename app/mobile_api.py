@@ -3993,17 +3993,25 @@ def admin_exercise_bank_duplicate_clusters():
 @api_bp.get('/admin/exercise-bank/active-program-usage')
 @login_required
 def admin_exercise_active_program_usage():
-    """Superadmin : par nom d’exo, nb d’athlètes l’ayant dans leur programme actif.
+    """Superadmin : par nom d’exo, athlètes l’ayant dans leur programme actif.
 
     Clés de by_name = nom « foldé » (minuscules, sans accents) pour matcher la
     banque même si la casse diffère entre exercise_entry et exercise.
+    Chaque entrée inclut athletes: [{id, display_name}].
     """
     if request.current_user.role != 'admin':
         return _deny_manage()
     rows = (
-        db.session.query(ExerciseEntry.name, Program.athlete_id, ExerciseEntry.id)
+        db.session.query(
+            ExerciseEntry.name,
+            Program.athlete_id,
+            ExerciseEntry.id,
+            User.display_name,
+            User.username,
+        )
         .join(ProgramSession, ExerciseEntry.session_id == ProgramSession.id)
         .join(Program, ProgramSession.program_id == Program.id)
+        .join(User, User.id == Program.athlete_id)
         .filter(
             Program.is_active.is_(True),
             Program.is_template.is_(False),
@@ -4011,21 +4019,29 @@ def admin_exercise_active_program_usage():
         )
         .all()
     )
-    athletes_by_key: dict[str, set] = {}
+    athletes_by_key: dict[str, dict[int, str]] = {}
     entries_by_key: dict[str, set] = {}
-    for name, athlete_id, entry_id in rows:
+    for name, athlete_id, entry_id, display_name, username in rows:
         key = _fold_bank_name(name)
-        if not key:
+        if not key or athlete_id is None:
             continue
-        athletes_by_key.setdefault(key, set()).add(athlete_id)
+        label = (display_name or username or f'#{athlete_id}').strip()
+        athletes_by_key.setdefault(key, {})[int(athlete_id)] = label
         entries_by_key.setdefault(key, set()).add(entry_id)
-    by_name = {
-        key: {
-            'active_athletes': len(athletes_by_key.get(key) or ()),
+    by_name = {}
+    for key in athletes_by_key.keys() | entries_by_key.keys():
+        athletes = [
+            {'id': aid, 'display_name': label}
+            for aid, label in sorted(
+                (athletes_by_key.get(key) or {}).items(),
+                key=lambda item: (item[1] or '').lower(),
+            )
+        ]
+        by_name[key] = {
+            'active_athletes': len(athletes),
             'active_entries': len(entries_by_key.get(key) or ()),
+            'athletes': athletes,
         }
-        for key in athletes_by_key.keys() | entries_by_key.keys()
-    }
     return jsonify({'by_name': by_name})
 
 
