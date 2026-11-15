@@ -4105,6 +4105,29 @@ def replace_and_delete_exercise_bank(exercise_id):
     })
 
 
+@api_bp.post('/exercise-bank/<int:exercise_id>/purge-and-delete')
+@login_required
+def purge_and_delete_exercise_bank(exercise_id):
+    """Superadmin : retire l’exo des programmes athlètes puis supprime la fiche banque.
+
+    L’historique de performances (journal) est conservé sous l’ancien nom.
+    """
+    if request.current_user.role != 'admin':
+        return _deny_manage()
+    exercise = Exercise.query.get_or_404(exercise_id)
+    name = (exercise.name or '').strip()
+    if not name:
+        return jsonify({'error': 'Exercice sans nom'}), 400
+    entries_n = ExerciseEntry.query.filter_by(name=name).delete(synchronize_session=False)
+    db.session.delete(exercise)
+    db.session.commit()
+    return jsonify({
+        'ok': True,
+        'name': name,
+        'purged_program_entries': int(entries_n or 0),
+    })
+
+
 # ---------------------------------------------------------------- JOURNAL -
 
 @api_bp.get('/journal')
