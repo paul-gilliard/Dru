@@ -19,6 +19,10 @@ MACHINE_BRANDS = [
     'Glutebuilder',
     'Etenon',
     'Matrix',
+    'Mega Mass',
+    'Nautilus',
+    'New Tech',
+    'Gym 80',
 ]
 
 _SAFE_KEY_RE = re.compile(r'^[a-z0-9][a-z0-9._/-]*\.(jpg|jpeg|png|webp|avif|gif)$', re.IGNORECASE)
