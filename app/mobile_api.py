@@ -3508,20 +3508,22 @@ def create_exercise_bank():
         return jsonify({'error': str(exc)}), 400
     animation_slug = (data.get('animation_slug') or '').strip() or None
     custom_gif_url = (data.get('custom_gif_url') or '').strip() or None
+    # Marque / photo : admin (commune ou perso) ou créateur d'un exo perso
+    machine_brand = None
+    machine_image_key = None
     wants_machine = (
         'machine_brand' in data or 'machine_image_key' in data
     ) and (
         (data.get('machine_brand') not in (None, ''))
         or (data.get('machine_image_key') not in (None, ''))
     )
-    if wants_machine and user.role != 'admin':
+    can_link_machine = user.role == 'admin' or owner_id is not None
+    if wants_machine and not can_link_machine:
         return jsonify({
-            'error': 'Seule l’équipe Farmness peut lier une marque / photo machine',
+            'error': "Marque machine réservée à ta banque perso (ou à l'équipe Farmness)",
             'code': 'MACHINE_LINK_ADMIN_ONLY',
         }), 403
-    machine_brand = None
-    machine_image_key = None
-    if user.role == 'admin':
+    if can_link_machine and ('machine_brand' in data or 'machine_image_key' in data):
         machine_brand = (data.get('machine_brand') or '').strip() or None
         if machine_brand and len(machine_brand) > 64:
             machine_brand = machine_brand[:64]
@@ -3562,10 +3564,31 @@ def update_exercise_bank(exercise_id):
     user = request.current_user
     if exercise.owner_id is None:
         if user.role != 'admin':
-            return jsonify({
-                'error': 'Banque commune : crée une demande de modification ou ta version perso',
-                'code': 'COMMON_BANK_LOCKED',
-            }), 403
+            # Fork perso si on pose une marque/photo machine (override perso).
+            if 'machine_brand' in data or 'machine_image_key' in data:
+                base_name = _ensure_personal_name(exercise.name, user)
+                existing = Exercise.query.filter_by(name=base_name, owner_id=user.id).first()
+                if existing:
+                    exercise = existing
+                else:
+                    exercise = Exercise(
+                        name=base_name,
+                        muscle_group=exercise.muscle_group,
+                        owner_id=user.id,
+                        animation_slug=None,
+                        youtube_url=None,
+                        custom_gif_url=None,
+                        machine_brand=None,
+                        machine_image_key=None,
+                        media_status='none',
+                    )
+                    db.session.add(exercise)
+                    db.session.flush()
+            else:
+                return jsonify({
+                    'error': 'Banque commune : crée une demande de modification ou ta version perso',
+                    'code': 'COMMON_BANK_LOCKED',
+                }), 403
     elif exercise.owner_id != user.id and user.role != 'admin':
         return _deny_manage()
     if 'name' in data and data.get('name') is not None:
@@ -3598,9 +3621,10 @@ def update_exercise_bank(exercise_id):
     if 'animation_slug' in data and user.role == 'admin':
         exercise.animation_slug = (data.get('animation_slug') or '').strip() or None
     if 'machine_brand' in data or 'machine_image_key' in data:
-        if user.role != 'admin':
+        can_link = user.role == 'admin' or exercise.owner_id == user.id
+        if not can_link:
             return jsonify({
-                'error': 'Seule l’équipe Farmness peut lier une marque / photo machine',
+                'error': "Marque machine réservée à ta banque perso (ou à l'équipe Farmness)",
                 'code': 'MACHINE_LINK_ADMIN_ONLY',
             }), 403
         if 'machine_brand' in data:
@@ -3907,11 +3931,7 @@ def _media_payload_from_pair(name, public_name, common, personal):
 @api_bp.get('/machine-catalog')
 @login_required
 def list_machine_catalog():
-    if request.current_user.role != 'admin':
-        return jsonify({
-            'error': 'Catalogue machines réservé à l’équipe Farmness',
-            'code': 'MACHINE_LINK_ADMIN_ONLY',
-        }), 403
+    """Catalogue machines — lecture pour tout compte connecté (picker marque/photo)."""
     from app.machine_catalog import MACHINE_BRANDS, list_catalog_items
 
     brand = (request.args.get('brand') or '').strip() or None
