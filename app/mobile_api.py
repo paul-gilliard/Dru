@@ -4342,7 +4342,21 @@ def list_performance():
     entry_date = _parse_date(request.args.get('date'))
     if entry_date:
         query = query.filter_by(entry_date=entry_date)
-    entries = query.order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.series_number).limit(200).all()
+    # Fenêtre optionnelle (jours) pour Perf brut / historique long — indépendant du programme.
+    days_raw = request.args.get('days')
+    if days_raw is not None and str(days_raw).strip() != '':
+        days = max(1, min(int(days_raw), 730))
+        since = date.today() - timedelta(days=days - 1)
+        query = query.filter(PerformanceEntry.entry_date >= since)
+        # Assez large pour ~1–2 ans de séries quotidiennes.
+        limit = 8000
+    else:
+        limit = 200
+    entries = (
+        query.order_by(PerformanceEntry.entry_date.desc(), PerformanceEntry.series_number)
+        .limit(limit)
+        .all()
+    )
     return jsonify([e.to_dict() for e in entries])
 
 
