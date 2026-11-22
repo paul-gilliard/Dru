@@ -130,6 +130,12 @@ class User(db.Model):
     youtube_channel_id = db.Column(db.String(128), nullable=True)
     youtube_channel_title = db.Column(db.String(255), nullable=True)
     youtube_connected_at = db.Column(db.DateTime, nullable=True)
+    # Withings OAuth (athlète) — tokens jamais exposés dans to_dict
+    withings_refresh_token = db.Column(db.Text, nullable=True)
+    withings_userid = db.Column(db.String(64), nullable=True)
+    withings_connected_at = db.Column(db.DateTime, nullable=True)
+    # Préférences sync santé (JSON) : weight / steps / sleep_hours / nutrition
+    health_sync_prefs = db.Column(db.Text, nullable=True)
     # Métabolisme (athlète Indépendant)
     sex = db.Column(db.String(8), nullable=True)
     height_cm = db.Column(db.Float, nullable=True)
@@ -182,6 +188,40 @@ class User(db.Model):
         self.bilan_note_questions = _json.dumps(normalized, ensure_ascii=False)
         return normalized
 
+
+    DEFAULT_HEALTH_SYNC_PREFS = {
+        'weight': True,
+        'steps': True,
+        'sleep_hours': True,
+        'nutrition': True,
+    }
+
+    def get_health_sync_prefs(self):
+        """Toggles athlète : quoi importer depuis Health hub / Withings."""
+        base = dict(self.DEFAULT_HEALTH_SYNC_PREFS)
+        raw = self.health_sync_prefs
+        if not raw:
+            return base
+        try:
+            parsed = _json.loads(raw) if isinstance(raw, str) else raw
+        except Exception:
+            return base
+        if not isinstance(parsed, dict):
+            return base
+        for key in base:
+            if key in parsed:
+                base[key] = bool(parsed[key])
+        return base
+
+    def set_health_sync_prefs(self, prefs):
+        current = self.get_health_sync_prefs()
+        if isinstance(prefs, dict):
+            for key in current:
+                if key in prefs:
+                    current[key] = bool(prefs[key])
+        self.health_sync_prefs = _json.dumps(current, ensure_ascii=False)
+        return current
+
     def to_dict(self):
         from app.exercise_media import public_absolute_url
         data = {
@@ -204,6 +244,8 @@ class User(db.Model):
             data['bilan_note_questions'] = self.get_bilan_note_questions()
             data['program_ai_credits'] = int(self.program_ai_credits or 0)
             data['meal_ai_credits'] = int(self.meal_ai_credits or 0)
+            data['health_sync_prefs'] = self.get_health_sync_prefs()
+            data['withings_connected'] = bool(self.withings_refresh_token)
             data['sex'] = self.sex
             data['height_cm'] = self.height_cm
             data['birth_date'] = self.birth_date.isoformat() if self.birth_date else None
@@ -1053,6 +1095,29 @@ class SubscriptionPayment(db.Model):
             'resolved_at': self.resolved_at.isoformat() if self.resolved_at else None,
             'resolved_by_id': self.resolved_by_id,
             'resolved_by_name': (rb.display_name or rb.username) if rb else None,
+        }
+
+
+
+class AthleteExercisePersonalNote(db.Model):
+    """Note perso athlète sur un exercice (réglages) — rappelée à chaque séance de cet exo."""
+    __tablename__ = 'athlete_exercise_personal_note'
+    id = db.Column(db.Integer, primary_key=True)
+    athlete_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    exercise = db.Column(db.String(192), nullable=False)
+    body = db.Column(db.Text, nullable=False, default='')
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint('athlete_id', 'exercise', name='uq_athlete_exercise_personal_note'),
+    )
+
+    def to_dict(self):
+        return {
+            'athlete_id': self.athlete_id,
+            'exercise': self.exercise,
+            'body': self.body or '',
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
 
 

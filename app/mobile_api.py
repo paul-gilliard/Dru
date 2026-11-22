@@ -12,7 +12,7 @@ from app.models import (
     JournalEntry, PerformanceEntry, Exercise, Food, MealPlan, MealEntry,
     MealEntryEquivalent, Objective, MobileWeeklyBilanMarking, CoachingInvitation,
     BankChangeRequest, MUSCLE_GROUPS, WeeklyBilanMarking, SubscriptionPayment,
-    SecurityEvent, CoachAthletePrivateNote,
+    SecurityEvent, CoachAthletePrivateNote, AthleteExercisePersonalNote,
 )
 from app.auth_security import (
     honeypot_triggered, hit, looks_like_bot_identity, rate_limited,
@@ -24,6 +24,9 @@ from sqlalchemy.orm import joinedload, selectinload
 import json
 
 api_bp = Blueprint('api', __name__)
+
+# series_number réservé : remarque exercice → coach (Easy Bilan), pas une série loguée.
+COACH_REMARK_SERIES = 0
 
 
 def _program_tree_query():
@@ -4324,6 +4327,240 @@ def bulk_import_journal():
     return jsonify({'imported_days': imported_days, 'imported_fields': imported_fields})
 
 
+# ------------------------------------------------------ HEALTH SYNC / WITHINGS -
+
+def _require_athlete_self():
+    user = request.current_user
+    if user.role != 'athlete':
+        return None, (jsonify({'error': 'Réservé aux athlètes'}), 403)
+    return user, None
+
+
+def _ensure_withings_access(user: User):
+    """Refresh token Withings ; persiste le nouveau refresh_token si rotation."""
+    from app.withings_oauth import refresh_access_token, withings_oauth_configured
+    if not withings_oauth_configured():
+        raise RuntimeError('WITHINGS_NOT_CONFIGURED')
+    if not user.withings_refresh_token:
+        raise RuntimeError('WITHINGS_NOT_CONNECTED')
+    tok = refresh_access_token(user.withings_refresh_token)
+    access = tok.get('access_token')
+    if not access:
+        raise RuntimeError('WITHINGS_TOKEN_FAILED')
+    new_refresh = tok.get('refresh_token')
+    if new_refresh and new_refresh != user.withings_refresh_token:
+        user.withings_refresh_token = new_refresh
+        db.session.commit()
+    return access
+
+
+@api_bp.get('/me/health-sync')
+@login_required
+def me_health_sync_status():
+    user, err = _require_athlete_self()
+    if err:
+        return err
+    from app.withings_oauth import withings_oauth_configured
+    return jsonify({
+        'prefs': user.get_health_sync_prefs(),
+        'withings': {
+            'configured': withings_oauth_configured(),
+            'connected': bool(user.withings_refresh_token),
+            'userid': user.withings_userid,
+            'connected_at': user.withings_connected_at.isoformat() if user.withings_connected_at else None,
+        },
+        'notes': {
+            'weight': 'Poids via Withings (balance). Pas via Health Connect / Apple Santé.',
+            'steps': 'Pas via Health hub et/ou Withings (montre / activité).',
+            'sleep_hours': 'Sommeil via Health hub et/ou Withings Sleep.',
+            'nutrition': 'Calories / macros via Health hub (ex. MyFitnessPal) uniquement.',
+        },
+    })
+
+
+@api_bp.put('/me/health-sync/prefs')
+@login_required
+def me_health_sync_prefs():
+    user, err = _require_athlete_self()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    prefs = user.set_health_sync_prefs(data.get('prefs') or data)
+    db.session.commit()
+    return jsonify({'prefs': prefs})
+
+
+@api_bp.get('/me/withings/status')
+@login_required
+def me_withings_status():
+    user, err = _require_athlete_self()
+    if err:
+        return err
+    from app.withings_oauth import withings_oauth_configured
+    return jsonify({
+        'configured': withings_oauth_configured(),
+        'connected': bool(user.withings_refresh_token),
+        'userid': user.withings_userid,
+        'connected_at': user.withings_connected_at.isoformat() if user.withings_connected_at else None,
+    })
+
+
+@api_bp.get('/me/withings/auth-url')
+@login_required
+def me_withings_auth_url():
+    user, err = _require_athlete_self()
+    if err:
+        return err
+    from app.withings_oauth import build_authorize_url, withings_oauth_configured
+    if not withings_oauth_configured():
+        return jsonify({
+            'error': 'Connexion Withings indisponible pour le moment.',
+            'code': 'WITHINGS_OAUTH_MISSING',
+        }), 503
+    try:
+        url = build_authorize_url(user.id)
+    except ValueError as exc:
+        return jsonify({'error': str(exc)}), 503
+    return jsonify({'url': url})
+
+
+@api_bp.get('/me/withings/callback')
+def me_withings_callback():
+    """Redirect Withings OAuth → stocke le refresh token → deep link app."""
+    from app.withings_oauth import exchange_code_for_tokens, parse_oauth_state
+    err = request.args.get('error')
+    if err:
+        return (
+            '<!doctype html><html><body style="font-family:sans-serif;padding:24px">'
+            f'<h2>Connexion Withings annulée</h2><p>{err}</p>'
+            '<p><a href="farmness://withings-connected?ok=0">Retour à l’app</a></p>'
+            '</body></html>'
+        ), 400
+
+    code = request.args.get('code')
+    state = request.args.get('state')
+    if not code or not state:
+        return jsonify({'error': 'code/state manquants'}), 400
+    try:
+        user_id = parse_oauth_state(state)
+    except Exception:
+        return jsonify({'error': 'state invalide ou expiré'}), 400
+
+    user = User.query.get(user_id)
+    if not user or user.role != 'athlete':
+        return jsonify({'error': 'Utilisateur invalide'}), 400
+
+    try:
+        tokens = exchange_code_for_tokens(code)
+        refresh = tokens.get('refresh_token') or user.withings_refresh_token
+        if not refresh:
+            return (
+                '<!doctype html><html><body style="font-family:sans-serif;padding:24px">'
+                '<h2>Pas de refresh token Withings</h2>'
+                '<p>Réessaie la connexion depuis Farmness.</p>'
+                '<p><a href="farmness://withings-connected?ok=0">Retour à l’app</a></p>'
+                '</body></html>'
+            ), 400
+        user.withings_refresh_token = refresh
+        userid = tokens.get('userid')
+        if userid is not None:
+            user.withings_userid = str(userid)
+        user.withings_connected_at = datetime.utcnow()
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        return (
+            '<!doctype html><html><body style="font-family:sans-serif;padding:24px">'
+            f'<h2>Erreur Withings</h2><p>{exc}</p>'
+            '<p><a href="farmness://withings-connected?ok=0">Retour à l’app</a></p>'
+            '</body></html>'
+        ), 502
+
+    return (
+        '<!doctype html><html><body style="font-family:sans-serif;padding:24px;text-align:center">'
+        '<h2>Withings connecté</h2>'
+        '<p>Tu peux fermer cette page et revenir dans Farmness.</p>'
+        '<script>location.href="farmness://withings-connected?ok=1";</script>'
+        '<p><a href="farmness://withings-connected?ok=1">Ouvrir l’app</a></p>'
+        '</body></html>'
+    )
+
+
+@api_bp.delete('/me/withings')
+@login_required
+def me_withings_disconnect():
+    user, err = _require_athlete_self()
+    if err:
+        return err
+    user.withings_refresh_token = None
+    user.withings_userid = None
+    user.withings_connected_at = None
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@api_bp.post('/me/withings/sync')
+@login_required
+def me_withings_sync():
+    """Importe poids / pas / sommeil Withings dans le journal (fill-null selon prefs)."""
+    user, err = _require_athlete_self()
+    if err:
+        return err
+    data = request.get_json(silent=True) or {}
+    days = max(1, min(int(data.get('days') or 30), 90))
+    end = date.today()
+    start = end - timedelta(days=days - 1)
+    prefs = user.get_health_sync_prefs()
+
+    try:
+        access = _ensure_withings_access(user)
+    except RuntimeError as exc:
+        code = str(exc)
+        if code == 'WITHINGS_NOT_CONFIGURED':
+            return jsonify({'error': 'Withings non configuré côté serveur.', 'code': code}), 503
+        if code == 'WITHINGS_NOT_CONNECTED':
+            return jsonify({'error': 'Withings non connecté.', 'code': code}), 401
+        return jsonify({'error': 'Impossible de rafraîchir le token Withings.', 'code': code}), 502
+
+    from app.withings_oauth import build_journal_snapshots
+    try:
+        snapshots = build_journal_snapshots(access, start=start, end=end, prefs=prefs)
+    except Exception:
+        current_app.logger.exception('withings sync fetch failed')
+        return jsonify({'error': 'Impossible de lire les données Withings. Réessaie plus tard.'}), 502
+
+    imported_days = 0
+    imported_fields = 0
+    for day_iso, fields in snapshots.items():
+        entry_date = _parse_date(day_iso)
+        if not entry_date:
+            continue
+        entry = JournalEntry.query.filter_by(athlete_id=user.id, entry_date=entry_date).first()
+        if not entry:
+            entry = JournalEntry(athlete_id=user.id, entry_date=entry_date)
+            db.session.add(entry)
+        day_touched = False
+        for field, value in fields.items():
+            if field not in BULK_IMPORT_FIELDS or value is None:
+                continue
+            if getattr(entry, field) is None:
+                setattr(entry, field, value)
+                imported_fields += 1
+                day_touched = True
+        if day_touched:
+            imported_days += 1
+
+    db.session.commit()
+    return jsonify({
+        'imported_days': imported_days,
+        'imported_fields': imported_fields,
+        'days_scanned': days,
+        'prefs': prefs,
+        'found_days': len(snapshots),
+    })
+
+
+
 # ------------------------------------------------------------ PERFORMANCE -
 
 @api_bp.get('/performance')
@@ -4584,9 +4821,143 @@ def performance_remarks():
             'exercise': e.exercise,
             'series_number': e.series_number,
             'notes': e.notes,
+            'kind': 'coach_remark' if e.series_number == COACH_REMARK_SERIES else 'series_note',
         }
         for e in entries
     ])
+
+
+
+@api_bp.get('/performance/exercise-personal-notes')
+@login_required
+def get_exercise_personal_notes():
+    """Notes perso athlète (réglages) pour une liste d'exercices — rappelées à chaque séance."""
+    athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
+    if athlete_id is None:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    raw = (request.args.get('exercises') or '').strip()
+    names = [n.strip() for n in raw.split(',') if n.strip()] if raw else []
+    q = AthleteExercisePersonalNote.query.filter_by(athlete_id=athlete_id)
+    if names:
+        q = q.filter(AthleteExercisePersonalNote.exercise.in_(names))
+    rows = q.all()
+    return jsonify({r.exercise: r.to_dict() for r in rows})
+
+
+@api_bp.put('/performance/exercise-personal-note')
+@login_required
+def put_exercise_personal_note():
+    """Crée / met à jour / efface (body vide) la note perso d'un exercice."""
+    data = request.get_json(silent=True) or {}
+    athlete_id = _scope_athlete_id(data.get('athlete_id'))
+    if athlete_id is None:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    if not _can_manage_athlete(athlete_id):
+        return _deny_manage(athlete_id)
+    exercise = (data.get('exercise') or '').strip()
+    if not exercise:
+        return jsonify({'error': 'exercise requis'}), 400
+    body = (data.get('body') or '').strip()[:2000]
+    row = AthleteExercisePersonalNote.query.filter_by(
+        athlete_id=athlete_id, exercise=exercise,
+    ).first()
+    if not body:
+        if row:
+            db.session.delete(row)
+            db.session.commit()
+        return jsonify({'athlete_id': athlete_id, 'exercise': exercise, 'body': '', 'updated_at': None})
+    if row is None:
+        row = AthleteExercisePersonalNote(athlete_id=athlete_id, exercise=exercise, body=body)
+        db.session.add(row)
+    else:
+        row.body = body
+        row.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify(row.to_dict())
+
+
+@api_bp.get('/performance/exercise-coach-remark')
+@login_required
+def get_exercise_coach_remark():
+    """Remarque au coach pour un exo + jour (visible Easy Bilan)."""
+    athlete_id = _scope_athlete_id(request.args.get('athlete_id'))
+    if athlete_id is None:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    exercise = (request.args.get('exercise') or '').strip()
+    if not exercise:
+        return jsonify({'error': 'exercise requis'}), 400
+    entry_date = _parse_date(request.args.get('date'), date.today())
+    entry = (PerformanceEntry.query
+             .filter_by(
+                 athlete_id=athlete_id,
+                 exercise=exercise,
+                 entry_date=entry_date,
+                 series_number=COACH_REMARK_SERIES,
+             )
+             .order_by(PerformanceEntry.id.desc())
+             .first())
+    return jsonify({
+        'exercise': exercise,
+        'date': entry_date.isoformat(),
+        'notes': (entry.notes or '') if entry else '',
+        'id': entry.id if entry else None,
+    })
+
+
+@api_bp.put('/performance/exercise-coach-remark')
+@login_required
+def put_exercise_coach_remark():
+    """Upsert remarque au coach (series_number=0). Body vide → suppression."""
+    data = request.get_json(silent=True) or {}
+    athlete_id = _scope_athlete_id(data.get('athlete_id'))
+    if athlete_id is None:
+        return jsonify({'error': 'athlete_id requis'}), 400
+    if not _can_manage_athlete(athlete_id):
+        return _deny_manage(athlete_id)
+    exercise = (data.get('exercise') or '').strip()
+    if not exercise:
+        return jsonify({'error': 'exercise requis'}), 400
+    entry_date = _parse_date(data.get('date'), date.today())
+    notes = (data.get('notes') or '').strip()[:2000]
+    session_id = data.get('program_session_id')
+    entry = (PerformanceEntry.query
+             .filter_by(
+                 athlete_id=athlete_id,
+                 exercise=exercise,
+                 entry_date=entry_date,
+                 series_number=COACH_REMARK_SERIES,
+             )
+             .order_by(PerformanceEntry.id.desc())
+             .first())
+    if not notes:
+        if entry:
+            db.session.delete(entry)
+            db.session.commit()
+        return jsonify({
+            'exercise': exercise, 'date': entry_date.isoformat(), 'notes': '', 'id': None,
+        })
+    if entry is None:
+        entry = PerformanceEntry(
+            athlete_id=athlete_id,
+            entry_date=entry_date,
+            program_session_id=session_id,
+            exercise=exercise,
+            series_number=COACH_REMARK_SERIES,
+            notes=notes,
+        )
+        db.session.add(entry)
+    else:
+        entry.notes = notes
+        if session_id is not None:
+            entry.program_session_id = session_id
+    db.session.commit()
+    return jsonify({
+        'exercise': exercise,
+        'date': entry_date.isoformat(),
+        'notes': entry.notes or '',
+        'id': entry.id,
+    })
+
 
 
 # ------------------------------------------------------- POINTS D'ATTENTION -
@@ -4763,6 +5134,7 @@ def _health_metrics_for_range(athlete_id, start, end):
         'kcals': _avg([j.kcals for j in journal]),
         'water_ml': _avg([j.water_ml for j in journal]),
         'sleep_hours': _avg([j.sleep_hours for j in journal]),
+        'steps': _avg([j.steps for j in journal]),
     }
 
 
@@ -4856,6 +5228,7 @@ def stats_weekly_comparison():
         health_row('kcals', 'Kcals'),
         health_row('water_ml', 'Eau (ml)'),
         health_row('sleep_hours', 'Sommeil (h)'),
+        health_row('steps', 'Pas'),
     ]
 
     return jsonify({
